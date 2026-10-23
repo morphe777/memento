@@ -6,6 +6,7 @@ export * from './seed.ts';
 export * from './seed-data.ts';
 export * from './services/board.ts';
 export * from './services/changes.ts';
+export * from './services/deletion.ts';
 export * from './services/jobs.ts';
 export * from './services/planning.ts';
 export * from './services/projects.ts';

@@ -441,6 +441,16 @@ export async function buildApp(opts: AppOptions) {
         async (req) => D.removeTaskDependency(ctx(req), req.params.id, req.params.dependsOnId),
       );
 
+      // ---------- Deletion (D-35): hard delete, journaled ----------
+      const del = (path: string, tagName: string, fn: (c: D.Ctx, id: string) => { ok: true }) =>
+        r.delete(path, { schema: { ...tag(tagName), params: D.idParam } }, async (req) =>
+          fn(ctx(req), req.params.id),
+        );
+      del('/tasks/:id', 'Tâches', D.deleteTask);
+      del('/projects/:id', 'Projets', D.deleteProject);
+      del('/objectives/:id', 'Objectifs', D.deleteObjective);
+      del('/meta-objectives/:id', 'Objectifs', D.deleteMetaObjective);
+
       // ---------- Resources ----------
       r.post('/resources', { schema: { ...tag('Ressources'), body: D.resourceCreate } }, async (req) =>
         D.createResource(ctx(req), req.body),

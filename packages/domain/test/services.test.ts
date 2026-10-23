@@ -9,9 +9,14 @@ import {
   completeProject,
   completeTask,
   createGroup,
+  createMetaObjective,
   createObjective,
   createProject,
   createTask,
+  deleteMetaObjective,
+  deleteObjective,
+  deleteProject,
+  deleteTask,
   generateReport,
   getExecution,
   getObjective,
@@ -21,6 +26,7 @@ import {
   listBoardTasks,
   listChanges,
   listDomains,
+  listProjectDependencies,
   listTasks,
   markReviewed,
   patchSettings,
@@ -449,6 +455,48 @@ describe('vues Tableau / Kanban des tâches (D-33)', () => {
     // Done before Monday: no longer on the board.
     ctx.setNow('2026-10-27T08:00:00.000Z');
     expect(col().Inbox).toBeUndefined();
+  });
+});
+
+describe('modèles de description et suppression (D-35)', () => {
+  it('applies the description template on every creation unless a description is given', () => {
+    const ctx = makeCtx();
+    patchSettings(ctx, {
+      'templates.task': 'T',
+      'templates.project': 'P',
+      'templates.objective': 'O',
+      'templates.meta_objective': 'M',
+    });
+    const g = lookups(ctx).group('Travaux').id;
+    expect(createTask(ctx, { title: 'a' }).description).toBe('T');
+    expect(createTask(ctx, { title: 'b', description: 'mine' }).description).toBe('mine');
+    expect(createProject(ctx, { title: 'p', groupIds: [g] }).description).toBe('P');
+    expect(createObjective(ctx, { title: 'o', deadline: '2026-12-20' }).description).toBe('O');
+    expect(createMetaObjective(ctx, { title: 'm', description: '  ' }).description).toBe('M');
+  });
+
+  it('deletes a task, a project with its tasks, an objective and a meta-objective, journaled', () => {
+    const ctx = makeCtx();
+    const { project: pv, tasks } = activeProject(ctx, 'Panneaux', 'Travaux', 3);
+    const { project: other } = activeProject(ctx, 'Autre', 'Travaux', 1);
+    addProjectDependency(ctx, other.id, pv.id);
+    setTaskInCurrentWeek(ctx, tasks[0].id, true);
+    deleteTask(ctx, tasks[2].id);
+    expect(listTasks(ctx, { projectId: pv.id })).toHaveLength(2);
+    const meta = createMetaObjective(ctx, { title: 'Autonomie' });
+    const o = createObjective(ctx, { title: 'Énergie', deadline: '2026-12-20', metaObjectiveId: meta.id });
+    updateProject(ctx, pv.id, { objectiveId: o.id });
+    deleteProject(ctx, pv.id);
+    expect(errCode(() => getProject(ctx, pv.id))).toBe('NotFoundError');
+    expect(listTasks(ctx).some((t) => t.projectId === pv.id)).toBe(false);
+    expect(listProjectDependencies(ctx, other.id)).toEqual([]);
+    updateProject(ctx, other.id, { objectiveId: o.id });
+    deleteMetaObjective(ctx, meta.id);
+    expect(getObjective(ctx, o.id).metaObjectiveId).toBeNull();
+    deleteObjective(ctx, o.id);
+    expect(getProject(ctx, other.id).objectiveId).toBeNull();
+    const deleted = listChanges(ctx, { actor: 'me' }).filter((c) => c.action === 'delete');
+    expect(deleted.map((c) => c.title).sort()).toEqual(['Autonomie', 'Panneaux', 'Panneaux 3', 'Énergie']);
   });
 });
 
