@@ -88,7 +88,11 @@ export const project = sqliteTable(
     startDate: text('start_date'),
     dueDate: text('due_date'),
     monthFlag: text('month_flag'), // YYYY-MM
-    previousMonthFlag: text('previous_month_flag'), // set at month end when an unfinished month project goes back to ready
+    previousMonthFlag: text('previous_month_flag'),
+    // D-53: project-level importance, independent of the domain weight (× 0.5 / 1 / 1.5 on V).
+    importance: text('importance', { enum: ['low', 'normal', 'high'] })
+      .notNull()
+      .default('normal'), // set at month end when an unfinished month project goes back to ready
     success: integer('success', { mode: 'boolean' }),
     completedAt: text('completed_at'),
     replannedAt: text('replanned_at'), // RB-16 baseline (trace kept in audit_log and frozen reports)

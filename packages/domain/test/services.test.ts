@@ -41,6 +41,7 @@ import {
   reorderTasks,
   replanProject,
   rollMonth,
+  scoreCandidates,
   search,
   seed,
   setObjectiveQuarter,
@@ -637,6 +638,24 @@ describe('D-48 Planifier le trimestre', () => {
     page = getQuarterPlanningPage(ctx, '2026-Q4');
     expect(page.chosen.find((o) => o.title === 'Batterie')!.unknownSize).toBe(1);
     expect(page.alerts.map((a) => a.code)).toContain('UNKNOWN_SIZE');
+  });
+});
+
+describe('D-53 importance d’un projet', () => {
+  it('multiplies the value: same domain, « haute » ranks above « basse »', () => {
+    const ctx = makeCtx('2026-10-30T08:00:00.000Z');
+    const { project: low, tasks: lt } = activeProject(ctx, 'Bas', 'Travaux', 1, { importance: 'low' });
+    const { project: high, tasks: ht } = activeProject(ctx, 'Haut', 'Travaux', 1, { importance: 'high' });
+    expect(getProject(ctx, low.id).importance).toBe('low');
+    const scores = new Map(
+      scoreCandidates(buildEngineInput(ctx, '2026-W45')).map((s) => [s.taskId, s.parts.V]),
+    );
+    expect(scores.get(ht[0].id)! / scores.get(lt[0].id)!).toBeCloseTo(3);
+    updateProject(ctx, high.id, { importance: 'normal' });
+    const after = new Map(
+      scoreCandidates(buildEngineInput(ctx, '2026-W45')).map((s) => [s.taskId, s.parts.V]),
+    );
+    expect(after.get(ht[0].id)! / after.get(lt[0].id)!).toBeCloseTo(2);
   });
 });
 

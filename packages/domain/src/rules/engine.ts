@@ -39,7 +39,11 @@ export interface EngineProject {
   replannedAt: string | null;
   replanDoneMin: number | null;
   blocked: boolean;
+  importance?: 'low' | 'normal' | 'high';
 }
+
+/** D-53: project importance multiplies the value V (a « basse » Santé project can rank below a « haute » Famille one). */
+export const IMPORTANCE_FACTOR = { low: 0.5, normal: 1, high: 1.5 } as const;
 
 export interface EngineTask {
   id: string;
@@ -169,7 +173,7 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   const weights = domainIds.map((id) => P.domainById.get(id)?.weight ?? 0);
   const rawV = weights.length ? weights[0] + 0.5 * weights.slice(1).reduce((a, b) => a + b, 0) : 0.5;
   const crit = project?.objectiveCriticality ?? 1;
-  const V = clamp01(rawV) * (crit / 3);
+  const V = clamp01(rawV) * (crit / 3) * IMPORTANCE_FACTOR[project?.importance ?? 'normal'];
   // U urgency: 1 if deadline ≤ 7 days from Monday, linear down to 0 at 30 days.
   const deadline = t.dueDate ?? project?.dueDate ?? null;
   let U = 0;
@@ -229,6 +233,7 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
     else if (key === 'U' && deadline)
       why = t.dueDate ? `Deadline ${frShort(deadline)}` : `Fin du projet le ${frShort(deadline)}`;
     else if (key === 'C') why = 'Suite logique : projet entamé';
+    else if (project?.importance === 'high') why = 'Projet d’importance haute';
     else why = primary ? `${primary.name} = priorité n°${primary.priorityRank}` : 'À caser quand tu peux';
   }
   return { taskId: t.id, score, parts, mandatory, why };
