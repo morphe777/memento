@@ -72,7 +72,7 @@ export const project = sqliteTable(
   {
     ...base,
     title: text('title').notNull(),
-    status: text('status', { enum: ['idea', 'active', 'paused', 'done', 'abandoned'] })
+    status: text('status', { enum: ['idea', 'ready', 'active', 'paused', 'done', 'abandoned'] })
       .notNull()
       .default('idea'),
     objectiveId: text('objective_id').references(() => objective.id),
@@ -86,6 +86,7 @@ export const project = sqliteTable(
     startDate: text('start_date'),
     dueDate: text('due_date'),
     monthFlag: text('month_flag'), // YYYY-MM
+    previousMonthFlag: text('previous_month_flag'), // set at month end when an unfinished month project goes back to ready
     success: integer('success', { mode: 'boolean' }),
     completedAt: text('completed_at'),
     replannedAt: text('replanned_at'), // RB-16 baseline (trace kept in audit_log and frozen reports)
