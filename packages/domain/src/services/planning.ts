@@ -133,6 +133,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
       replannedAt: p.replannedAt,
       replanDoneMin: p.replanDoneMin,
       blocked: blocked.has(p.id),
+      importance: p.importance,
     };
   });
   const activeIds = active.map((p) => p.id);
@@ -290,7 +291,7 @@ export function proposeWeek(ctx: Ctx, isoWeek: string) {
     const prev = shiftWeek(isoWeek, -1);
     if (parisDate(ctxNow(ctx)) > weekSunday(prev)) closeWeek(ctx, prev);
     const plan = getOrCreatePlan(ctx, isoWeek);
-    if (plan.status === 'validated') throw new DomainError('WEEK_ALREADY_VALIDATED', 'Semaine déjà validée.');
+    // D-52: no more validation step, so a (formerly) validated week can be recomputed too.
     const items = planItems(ctx, plan.id);
     // Engine suggestions are replaced; my choices, AI choices and carried-over tasks are kept.
     const keep = items.filter((i) => i.source !== 'engine' || (i.why ?? '').startsWith('Reportée'));

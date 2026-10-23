@@ -1,0 +1,1 @@
+ALTER TABLE `project` ADD `importance` text DEFAULT 'normal' NOT NULL;

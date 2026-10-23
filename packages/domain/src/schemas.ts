@@ -69,6 +69,7 @@ const projectFields = {
   successCriterion: z.string().max(500).optional(),
   startDate: date.nullable().optional(),
   dueDate: date.nullable().optional(),
+  importance: z.enum(['low', 'normal', 'high']).optional(),
 };
 export const quarterKey = z.string().regex(/^\d{4}-Q[1-4]$/);
 export const objectiveQuarterBody = z.object({ quarter: quarterKey });
