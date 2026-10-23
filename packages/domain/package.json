@@ -10,7 +10,8 @@
   },
   "scripts": {
     "seed": "tsx src/cli/seed.ts",
-    "demo": "tsx src/cli/demo.ts"
+    "demo": "tsx src/cli/demo.ts",
+    "demo-map": "tsx src/cli/demo-map.ts"
   },
   "dependencies": {
     "@memento/db": "workspace:*",

@@ -305,6 +305,16 @@ export async function buildApp(opts: AppOptions) {
         },
         async (req) => D.listObjectives(ctx(req), req.query),
       );
+      r.get(
+        '/objectives/map',
+        {
+          schema: {
+            ...tag('Objectifs'),
+            querystring: z.object({ includeClosed: z.enum(['true', 'false']).optional() }),
+          },
+        },
+        async (req) => D.getObjectivesMap(ctx(req), { includeClosed: req.query.includeClosed === 'true' }),
+      );
       r.get('/objectives/:id', { schema: { ...tag('Objectifs'), params: D.idParam } }, async (req) => {
         const c = ctx(req);
         return {

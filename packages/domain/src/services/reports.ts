@@ -246,6 +246,11 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     },
     focus,
     rhythm: { tier: rhythm, doneMin, budgetMin, bonus: done.filter((t) => t.isBonus).length },
+    // Context given when the weekly budget was adjusted (D-39): kept in the frozen report, readable by AI.
+    budgetAdjustment:
+      plan && plan.budgetMin !== s['budget.weekly_min']
+        ? { defaultMin: s['budget.weekly_min'], budgetMin, reason: plan.budgetReason ?? '' }
+        : null,
     avoidance: {
       count: avoided.length,
       tasks: avoided.map((t) => ({ title: t.title, postponeCount: t.postponeCount })),

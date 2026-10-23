@@ -136,7 +136,7 @@ export const weekItemsBody = z.object({
 });
 export const weekPatchBody = z.object({
   budgetMin: z.number().int().min(0).max(10_080).nullable(),
-  budgetReason: z.string().max(200).nullable().optional(),
+  budgetReason: z.string().max(2000).nullable().optional(),
 });
 
 export const reportListQuery = z.object({

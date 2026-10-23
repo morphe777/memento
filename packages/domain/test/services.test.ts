@@ -20,6 +20,7 @@ import {
   generateReport,
   getExecution,
   getObjective,
+  getObjectivesMap,
   getPlanningPage,
   getProject,
   getProjectReadiness,
@@ -339,6 +340,23 @@ describe('L3 planification', () => {
     c = inbox();
     expect(c.tasks).toHaveLength(4);
     expect(c.hiddenDueCount).toBe(0);
+  });
+
+  it('objectives map: lanes by meta-objective, quarters, ordered paths without abandoned projects', () => {
+    const ctx = makeCtx();
+    const meta = createMetaObjective(ctx, { title: 'Autonomie' });
+    const q4 = createObjective(ctx, { title: 'Q4', deadline: '2026-12-20', metaObjectiveId: meta.id });
+    const q1 = createObjective(ctx, { title: 'Q1', deadline: '2027-02-20', metaObjectiveId: meta.id });
+    createObjective(ctx, { title: 'Libre', deadline: '2026-12-01' });
+    const g = [lookups(ctx).group('Travaux').id];
+    const a = createProject(ctx, { title: 'A', groupIds: g, objectiveId: q4.id });
+    createProject(ctx, { title: 'B', groupIds: g, objectiveId: q4.id });
+    updateProject(ctx, a.id, { status: 'abandoned' });
+    const map = getObjectivesMap(ctx);
+    expect(map.quarters).toEqual(['2026-Q4', '2027-Q1']);
+    expect(map.lanes.map((l) => l.meta?.title ?? null)).toEqual(['Autonomie', null]);
+    expect(map.lanes[0].objectives.map((o) => o.id)).toEqual([q4.id, q1.id]);
+    expect(map.lanes[0].objectives[0].path.map((p) => p.title)).toEqual(['B']);
   });
 
   it('RB-02 readiness checklist lists what an idea still needs', () => {

@@ -492,3 +492,39 @@ export const recentProjects = (ctx: Ctx, limit = 10) =>
     ctx,
     ctx.db.select().from(project).orderBy(desc(project.lastTouchedAt)).limit(limit).all(),
   );
+
+const OPEN_OBJECTIVE = new Set(['active', 'paused']);
+
+/**
+ * « Carte » of Objectifs (V-01): one lane per meta-objective (plus « Sans méta-objectif »), one column per
+ * quarter, each objective with its ordered project path (abandoned projects left out). Ready to display.
+ */
+export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) {
+  const objectives = ctx.db
+    .select()
+    .from(objective)
+    .orderBy(asc(objective.deadline))
+    .all()
+    .filter((o) => f.includeClosed || OPEN_OBJECTIVE.has(o.status));
+  const metas = ctx.db.select().from(schema.metaObjective).orderBy(asc(schema.metaObjective.createdAt)).all();
+  const withPath = objectives.map((o) => ({
+    ...o,
+    path: getObjectivePath(ctx, o.id).filter((p) => p.status !== 'abandoned'),
+  }));
+  const lanes = [
+    ...metas
+      .filter((m) => f.includeClosed || m.status === 'active' || m.status === 'paused')
+      .map((m) => ({
+        meta: m as typeof m | null,
+        objectives: withPath.filter((o) => o.metaObjectiveId === m.id),
+      })),
+    {
+      meta: null,
+      objectives: withPath.filter(
+        (o) => !o.metaObjectiveId || !metas.some((m) => m.id === o.metaObjectiveId),
+      ),
+    },
+  ].filter((l) => l.meta || l.objectives.length);
+  const quarters = [...new Set(withPath.map((o) => o.quarter))].sort();
+  return { quarters, lanes };
+}
