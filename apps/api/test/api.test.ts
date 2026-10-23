@@ -79,6 +79,70 @@ describe('API L0 — auth', () => {
   });
 });
 
+describe('API — own account (Configuration › Compte)', () => {
+  it('renames the login and changes the password (current required, other sessions closed)', async () => {
+    const s = await setup();
+    const other = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'mehdi', password: PASSWORD },
+    });
+    const otherCookie = `memento_session=${other.cookies.find((c) => c.name === 'memento_session')!.value}`;
+    const h = { cookie: s.cookie };
+    const ren = await s.app.inject({
+      method: 'PATCH',
+      url: '/api/v1/auth/account',
+      headers: h,
+      payload: { login: 'mk' },
+    });
+    expect(ren.json()).toEqual({ login: 'mk' });
+    expect((await s.app.inject({ url: '/api/v1/auth/me', headers: h })).json().login).toBe('mk');
+    const bad = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password',
+      headers: h,
+      payload: { current: 'wrong', next: 'a brand new passphrase' },
+    });
+    expect(bad.statusCode).toBe(422);
+    const short = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password',
+      headers: h,
+      payload: { current: PASSWORD, next: 'short' },
+    });
+    expect(short.json().code).toBe('PASSWORD_TOO_SHORT');
+    const ok = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/password',
+      headers: h,
+      payload: { current: PASSWORD, next: 'a brand new passphrase' },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect((await s.app.inject({ url: '/api/v1/domains', headers: h })).statusCode).toBe(200);
+    expect(
+      (await s.app.inject({ url: '/api/v1/domains', headers: { cookie: otherCookie } })).statusCode,
+    ).toBe(401);
+    const relog = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'mk', password: 'a brand new passphrase' },
+    });
+    expect(relog.statusCode).toBe(200);
+  });
+
+  it('refuses account changes from an API token', async () => {
+    const s = await setup();
+    const t = createToken(s.db, 'bot', 'read_write');
+    const r = await s.app.inject({
+      method: 'PATCH',
+      url: '/api/v1/auth/account',
+      headers: { authorization: `Bearer ${t.token}` },
+      payload: { login: 'hacked' },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+});
+
 describe('API — tokens (AI / robots)', () => {
   it('bearer token acts as ai:<name>; read-only tokens cannot write; revoked tokens are refused', async () => {
     const s = await setup();
