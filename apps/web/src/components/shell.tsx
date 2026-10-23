@@ -31,6 +31,7 @@ const NAV: { section: string; items: { to: string; label: string }[] }[] = [
     items: [
       { to: '/objectifs', label: 'Objectifs' },
       { to: '/projets', label: 'Projets' },
+      { to: '/taches', label: 'Tâches' },
       { to: '/domaines', label: 'Domaines' },
       { to: '/idees', label: 'Idées' },
     ],
@@ -40,7 +41,6 @@ const NAV: { section: string; items: { to: string; label: string }[] }[] = [
     items: [
       { to: '/rapports', label: 'Rapports' },
       { to: '/a-revoir', label: 'À revoir' },
-      { to: '/configuration', label: 'Configuration' },
     ],
   },
 ];
@@ -87,14 +87,17 @@ export function AppShell({ children }: { children: ReactNode }) {
             className="flex justify-end px-4 pt-3"
             style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}
           >
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => setSearchOpen(true)}
-              aria-label="Rechercher"
-            >
-              Rechercher
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => setSearchOpen(true)}
+                aria-label="Rechercher"
+              >
+                Rechercher
+              </button>
+              <SettingsLink active={false} />
+            </div>
           </div>
         )}
         <main
@@ -152,8 +155,12 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
       </button>
       {NAV.map((s) => (
         <div key={s.section} className="flex flex-col gap-0.5">
-          <div className="label-caps px-2 pb-1" style={{ fontSize: 11 }}>
+          <div
+            className="flex items-center gap-2 px-2 pb-1.5 text-[11px] font-bold uppercase"
+            style={{ letterSpacing: '0.1em', color: 'var(--text)' }}
+          >
             {s.section}
+            <span aria-hidden className="flex-1" style={{ height: 1, background: 'var(--border)' }} />
           </div>
           {s.items.map((i) => {
             const active = path === i.to || path.startsWith(`${i.to}/`);
@@ -208,23 +215,31 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
           })}
         </div>
       ))}
-      <div className="mt-auto flex flex-col gap-2 px-2">
+      <div className="mt-auto flex flex-col gap-2.5 px-2">
         <ThemeSwitch />
-        <div className="flex items-center justify-between text-[12px]" style={{ color: 'var(--text-ghost)' }}>
-          <span>{me.data?.login}</span>
+        <div className="flex items-center gap-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          <span className="flex-1 min-w-0 truncate font-medium">{me.data?.login}</span>
+          <SettingsLink active={path.startsWith('/configuration')} />
           <button
             type="button"
-            className="border-0 bg-transparent cursor-pointer text-[12px]"
-            style={{ color: 'var(--text-faint)' }}
+            aria-label="Se déconnecter"
+            title="Se déconnecter"
+            className="icon-btn"
             onClick={() => logout.mutate(undefined)}
           >
-            Se déconnecter
+            <LogoutIcon />
           </button>
         </div>
       </div>
     </nav>
   );
 }
+
+const THEMES = [
+  { value: 'auto', label: 'Auto (suit l’appareil)', icon: <AutoIcon /> },
+  { value: 'light', label: 'Clair', icon: <SunIcon /> },
+  { value: 'dark', label: 'Sombre', icon: <MoonIcon /> },
+] as const;
 
 export function ThemeSwitch() {
   const settings = useSettings();
@@ -237,30 +252,93 @@ export function ThemeSwitch() {
       role="radiogroup"
       aria-label="Thème"
     >
-      {(
-        [
-          ['auto', 'Auto'],
-          ['light', 'Clair'],
-          ['dark', 'Sombre'],
-        ] as const
-      ).map(([v, l]) => (
+      {THEMES.map((t) => (
         <button
-          key={v}
+          key={t.value}
           type="button"
           role="radio"
-          aria-checked={value === v}
-          onClick={() => setTheme.mutate(v)}
-          className="flex-1 border-0 rounded-md text-[12px] cursor-pointer"
+          aria-checked={value === t.value}
+          aria-label={t.label}
+          title={t.label}
+          onClick={() => setTheme.mutate(t.value)}
+          className="flex-1 grid place-items-center border-0 rounded-md cursor-pointer"
           style={{
-            minHeight: 28,
-            background: value === v ? 'var(--surface)' : 'transparent',
-            color: value === v ? 'var(--text)' : 'var(--text-muted)',
+            minHeight: 30,
+            background: value === t.value ? 'var(--surface)' : 'transparent',
+            color: value === t.value ? 'var(--text)' : 'var(--text-faint)',
+            boxShadow: value === t.value ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
           }}
         >
-          {l}
+          {t.icon}
         </button>
       ))}
     </div>
+  );
+}
+
+function SettingsLink({ active }: { active: boolean }) {
+  return (
+    <Link
+      to="/configuration/$onglet"
+      params={{ onglet: 'budget' }}
+      aria-label="Configuration"
+      title="Configuration"
+      className="icon-btn hover:no-underline"
+      style={active ? { background: 'var(--bin)', color: 'var(--text)' } : undefined}
+    >
+      <CogIcon />
+    </Link>
+  );
+}
+
+const ICON = {
+  width: 16,
+  height: 16,
+  viewBox: '0 0 16 16',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 1.4,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const;
+
+function SunIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <circle cx="8" cy="8" r="3" />
+      <path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1" />
+    </svg>
+  );
+}
+function MoonIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <path d="M13.2 9.9A5.6 5.6 0 0 1 6.1 2.8a5.6 5.6 0 1 0 7.1 7.1Z" />
+    </svg>
+  );
+}
+function AutoIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <circle cx="8" cy="8" r="5.8" />
+      <path d="M8 2.2a5.8 5.8 0 0 1 0 11.6Z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+function CogIcon() {
+  return (
+    <svg {...ICON} width={17} height={17} aria-hidden>
+      <circle cx="8" cy="8" r="2.1" />
+      <path d="M6.9 1.6h2.2l.35 1.7 1.2.7 1.65-.55 1.1 1.9-1.3 1.15v1.4l1.3 1.15-1.1 1.9-1.65-.55-1.2.7-.35 1.7H6.9l-.35-1.7-1.2-.7-1.65.55-1.1-1.9 1.3-1.15v-1.4L2.6 5.35l1.1-1.9 1.65.55 1.2-.7Z" />
+    </svg>
+  );
+}
+function LogoutIcon() {
+  return (
+    <svg {...ICON} aria-hidden>
+      <path d="M6.5 2.5H4a1.5 1.5 0 0 0-1.5 1.5v8A1.5 1.5 0 0 0 4 13.5h2.5M10.5 11l3-3-3-3M13.5 8H6" />
+    </svg>
   );
 }
 

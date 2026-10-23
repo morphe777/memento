@@ -38,6 +38,7 @@
   --inverse-bg: #1a1a1a;
   --inverse-text: #ffffff;
   --focus: #2f6fdb;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%235f5f5a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: light;
 }
 
@@ -71,6 +72,7 @@
   --inverse-bg: #f2f2ee;
   --inverse-text: #121211;
   --focus: #6a9bf2;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%23b5b5ae' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 
@@ -139,9 +141,34 @@ textarea {
   min-height: 40px;
   box-sizing: border-box;
 }
+/* Own chevron, kept clear of the right edge. */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--chevron);
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 12px 8px;
+  padding-right: 40px;
+}
+/* Form fields fill their cell and never overflow it (e.g. date inputs in a narrow column). */
+.field > input:not([type="checkbox"]):not([type="color"]),
+.field > select {
+  width: 100%;
+  min-width: 0;
+}
+input[type="date"],
+input[type="time"],
+input[type="month"] {
+  min-width: 0;
+}
 textarea {
   min-height: 90px;
   resize: vertical;
+}
+.field > textarea {
+  width: 100%;
+  min-width: 0;
 }
 input[type="checkbox"] {
   min-height: auto;
@@ -284,6 +311,69 @@ input[type="checkbox"] {
   font-size: 13px;
   color: var(--text-muted);
   font-weight: 500;
+}
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  background: var(--bin);
+  color: var(--text);
+}
+@media (pointer: coarse) {
+  .icon-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+.info-tip {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex: none;
+  border-radius: 999px;
+  color: var(--text-ghost);
+  cursor: help;
+  vertical-align: middle;
+}
+.info-tip:hover,
+.info-tip[aria-expanded="true"] {
+  color: var(--text);
+}
+.info-pop {
+  position: absolute;
+  z-index: 70;
+  top: calc(100% + 6px);
+  left: -8px;
+  width: max-content;
+  max-width: min(320px, 80vw);
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: normal;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  cursor: default;
+}
+.info-pop.align-right {
+  left: auto;
+  right: -8px;
 }
 
 @media (pointer: coarse) {
