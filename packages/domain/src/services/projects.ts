@@ -11,6 +11,7 @@ import {
   GAP_LABELS,
   type PromotionGap,
   promotionGaps,
+  readiness,
   resolveProjectDomains,
 } from '../rules/projects.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
@@ -302,6 +303,10 @@ export function setProjectGroups(ctx: Ctx, id: string, groupIds: string[], prima
     return after;
   });
 }
+
+/** RB-02 checklist for the project page (« Pour devenir actif »). */
+export const getProjectReadiness = (ctx: Ctx, id: string) =>
+  readiness(promotionInput(ctx, getProjectRow(ctx, id)));
 
 /** RB-02: idea → active, or 422 with the list of gaps. */
 export function promoteProject(ctx: Ctx, id: string) {
