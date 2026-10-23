@@ -157,7 +157,7 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
           </Section>
           <Section
             title="Objectifs du trimestre"
-            info="Les objectifs actifs du trimestre et le nombre de projets qui les font avancer ce mois-ci. Un objectif sans projet ce mois-ci n'avance pas."
+            info="Les objectifs actifs du trimestre. Coché automatiquement dès qu'un projet du mois le fait avancer ; un objectif non coché n'avancera pas ce mois-ci."
           >
             {page.objectives.length === 0 && (
               <span className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
@@ -165,25 +165,28 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
               </span>
             )}
             {page.objectives.map((o) => (
-              <div key={o.id} className="flex flex-col gap-1">
-                <div className="flex justify-between gap-2 text-[14px]">
-                  <Link to="/objectifs/$id" params={{ id: o.id }} className="font-medium">
-                    {o.title}
-                  </Link>
-                  <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
-                    {fmtDate(o.deadline)}
+              <div key={o.id} className="flex gap-2.5 items-start">
+                <CheckDot ok={o.covered} />
+                <div className="flex-1 min-w-0 flex flex-col gap-1">
+                  <div className="flex justify-between gap-2 text-[14px]">
+                    <Link to="/objectifs/$id" params={{ id: o.id }} className="font-medium">
+                      {o.title}
+                    </Link>
+                    <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
+                      {fmtDate(o.deadline)}
+                    </span>
+                  </div>
+                  <span
+                    className="text-[12px]"
+                    style={{ color: o.monthProjects ? 'var(--text-muted)' : 'var(--late-text)' }}
+                  >
+                    {o.monthProjects
+                      ? `${o.monthProjects} projet${o.monthProjects > 1 ? 's' : ''} ce mois-ci`
+                      : 'Aucun projet ce mois-ci'}
+                    {o.readyProjects ? ` · ${o.readyProjects} prêt${o.readyProjects > 1 ? 's' : ''}` : ''} ·{' '}
+                    {o.progressPct} %
                   </span>
                 </div>
-                <span
-                  className="text-[12px]"
-                  style={{ color: o.monthProjects ? 'var(--text-muted)' : 'var(--late-text)' }}
-                >
-                  {o.monthProjects
-                    ? `${o.monthProjects} projet${o.monthProjects > 1 ? 's' : ''} ce mois-ci`
-                    : 'Aucun projet ce mois-ci'}
-                  {o.readyProjects ? ` · ${o.readyProjects} prêt${o.readyProjects > 1 ? 's' : ''}` : ''} ·{' '}
-                  {o.progressPct} %
-                </span>
               </div>
             ))}
           </Section>
@@ -294,5 +297,25 @@ function ProjectRow({
         </button>
       )}
     </div>
+  );
+}
+
+function CheckDot({ ok }: { ok: boolean }) {
+  return (
+    <span
+      role="img"
+      aria-label={ok ? 'Couvert ce mois-ci' : 'Pas couvert ce mois-ci'}
+      className="grid place-items-center rounded-full flex-none text-[11px]"
+      style={{
+        width: 18,
+        height: 18,
+        marginTop: 2,
+        background: ok ? 'var(--status-green)' : 'transparent',
+        border: ok ? 0 : '1.5px solid var(--late-bar)',
+        color: '#fff',
+      }}
+    >
+      {ok ? '✓' : ''}
+    </span>
   );
 }

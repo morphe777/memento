@@ -7,10 +7,19 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
 import { useSortSensors } from '../components/tasks.tsx';
-import { Empty, Field, InfoTip, Loading, PageHeader, Section, Tabs } from '../components/ui.tsx';
+import {
+  ConfirmDialog,
+  Empty,
+  Field,
+  InfoTip,
+  Loading,
+  PageHeader,
+  Section,
+  Tabs,
+} from '../components/ui.tsx';
 import { ApiError, del, get, patch, post } from '../lib/api.ts';
 import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
-import { useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
 import type { Change, Domain, Settings } from '../lib/types.ts';
 
 // ---------- À revoir ----------
@@ -246,6 +255,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ui.breadcrumb',
       'ui.show_recalculate',
       'inbox.recurring_horizon_days',
+      'ui.projects_default_view',
     ],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
     alertes: [
@@ -256,6 +266,8 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'report.rhythm_low_pct',
       'report.rhythm_high_pct',
       'ideas.purge_after_months',
+      'month.max_projects',
+      'quarter.max_objectives',
     ],
     planning: ['schedule.week_plan', 'schedule.reports'],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
@@ -268,7 +280,6 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
         <>
           <Field
             label="Budget hebdo par défaut (heures)"
-            hint="CH-11 · surcharge ponctuelle dans Planifier › Budget"
             info="Le plafond d'heures que le moteur remplit chaque lundi avec les tâches « Semaine ». Le Bonus n'en fait pas partie. Pour une semaine particulière (vacances, semaine chargée), change le budget dans Planifier sans toucher à cette valeur."
           >
             <input
@@ -277,6 +288,24 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               value={s['budget.weekly_min'] / 60}
               onChange={(e) => setS({ ...s, 'budget.weekly_min': Math.round(Number(e.target.value) * 60) })}
             />
+          </Field>
+          <Field
+            label="Vue par défaut de la page Projets"
+            info="La vue qui s'ouvre quand tu cliques sur Projets. Tu peux toujours changer de vue sur la page."
+          >
+            <select
+              value={s['ui.projects_default_view']}
+              onChange={(e) =>
+                setS({
+                  ...s,
+                  'ui.projects_default_view': e.target.value as Settings['ui.projects_default_view'],
+                })
+              }
+            >
+              <option value="tree">Arborescence</option>
+              <option value="list">Liste</option>
+              <option value="kanban">Kanban</option>
+            </select>
           </Field>
           <Field
             label="Inbox : récurrentes « plus tard » au-delà de (jours)"
@@ -420,6 +449,18 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             {num('report.rhythm_high_pct')}
           </Field>
           <Field
+            label="Mois : projets en même temps (au-delà, alerte)"
+            info="Planifier › Mois alerte quand plus de projets du mois que ce nombre sont menés de front : au-delà, l'effort se disperse."
+          >
+            {num('month.max_projects')}
+          </Field>
+          <Field
+            label="Trimestre : objectifs en même temps (au-delà, alerte)"
+            info="Planifier › Trimestre alerte quand le trimestre compte plus d'objectifs ouverts que ce nombre."
+          >
+            {num('quarter.max_objectives')}
+          </Field>
+          <Field
             label="Idées : proposer à la purge après (mois)"
             info="Âge à partir duquel une idée jamais promue sera proposée à l'abandon lors de la revue trimestrielle (pas encore actif en v0.1)."
           >
@@ -508,9 +549,12 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               figure (ni mot de passe, ni session, ni jeton).
             </InfoTip>
           </span>
-          <a className="btn self-start hover:no-underline" href="/api/v1/export" download>
-            Exporter toutes les données (JSON)
-          </a>
+          <div className="flex flex-wrap gap-2">
+            <a className="btn hover:no-underline" href="/api/v1/export" download>
+              Exporter toutes les données (JSON)
+            </a>
+            <ImportButton />
+          </div>
         </div>
       )}
     </Section>
@@ -583,7 +627,7 @@ function DomainsConfig() {
       <Section
         title="Domaines de vie"
         aside="glisser pour changer l'ordre de priorité"
-        info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
+        info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. La description dit ce qui entre dans le domaine : l'IA s'en sert pour classer les projets. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
       >
         <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
           Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
@@ -655,9 +699,17 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
     weight: d.weight,
     colorLight: d.colorLight,
     colorDark: d.colorDark,
+    description: d.description,
   });
   useEffect(
-    () => setF({ name: d.name, weight: d.weight, colorLight: d.colorLight, colorDark: d.colorDark }),
+    () =>
+      setF({
+        name: d.name,
+        weight: d.weight,
+        colorLight: d.colorLight,
+        colorDark: d.colorDark,
+        description: d.description,
+      }),
     [d],
   );
   return (
@@ -708,6 +760,13 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
       >
         {d.archived ? 'Désarchiver' : 'Archiver'}
       </button>
+      <textarea
+        value={f.description}
+        onChange={(e) => setF({ ...f, description: e.target.value })}
+        aria-label={`Description du domaine ${d.name}`}
+        placeholder="Ce qui entre dans ce domaine, et ce qui n'y entre pas (l'IA s'en sert pour classer les projets)."
+        style={{ flex: '1 1 100%', minHeight: 64, fontSize: 14 }}
+      />
     </>
   );
 }
@@ -904,6 +963,68 @@ function AccessConfig() {
         </button>
       </form>
     </Section>
+  );
+}
+
+/** D-50: restore an export. Replaces all business data after confirmation; a SQLite backup is taken first. */
+function ImportButton() {
+  const qc = useQueryClient();
+  const [file, setFile] = useState<{ name: string; data: unknown } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    if (!file) return;
+    setBusy(true);
+    try {
+      const r = await post<{ counts: Record<string, number>; backup: string | null }>('/import', file.data);
+      toast(
+        `Import terminé : ${r.counts.project ?? 0} projets, ${r.counts.task ?? 0} tâches.${r.backup ? ` Sauvegarde : data/${r.backup}` : ''}`,
+      );
+      setFile(null);
+      await qc.invalidateQueries();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Import impossible', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <label className="btn cursor-pointer">
+        Importer une sauvegarde…
+        <input
+          type="file"
+          accept="application/json,.json"
+          className="sr-only"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            try {
+              setFile({ name: f.name, data: JSON.parse(await f.text()) });
+            } catch {
+              toast('Fichier illisible : un export Mémento (.json) est attendu.', 'error');
+            }
+          }}
+        />
+      </label>
+      <ConfirmDialog
+        open={!!file}
+        title="Remplacer toutes les données ?"
+        confirmLabel="Importer et remplacer"
+        busy={busy}
+        onClose={() => setFile(null)}
+        onConfirm={run}
+      >
+        <p className="m-0">
+          Toutes les données actuelles (domaines, objectifs, projets, tâches, plans, rapports, réglages,
+          journal) seront remplacées par celles de « {file?.name} ».
+        </p>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Une copie de la base actuelle est faite juste avant, dans le dossier data/. Ton compte et tes jetons
+          d'accès ne changent pas.
+        </p>
+      </ConfirmDialog>
+    </>
   );
 }
 

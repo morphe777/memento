@@ -688,11 +688,15 @@ export function ObjectivePage({ id }: { id: string }) {
   );
 }
 
+const STATUS_ORDER: Record<string, number> = { active: 0, ready: 1, paused: 2, idea: 3 };
+const byStatus = (a: Project, b: Project) =>
+  (STATUS_ORDER[a.status] ?? 9) - (STATUS_ORDER[b.status] ?? 9) || a.title.localeCompare(b.title);
+
 export function DomainsPage() {
   const dl = useDomainLookup();
   const projects = useQuery({
-    queryKey: ['projects', 'active'],
-    queryFn: () => get<Project[]>('/projects?status=active,paused'),
+    queryKey: ['projects', 'domains-overview'],
+    queryFn: () => get<Project[]>('/projects?status=active,ready,paused,idea'),
   });
   return (
     <div className="flex flex-col gap-6">
@@ -700,28 +704,41 @@ export function DomainsPage() {
         <Breadcrumb items={[{ label: 'Domaines' }]} />
         <PageHeader eyebrow="Par ordre de priorité" title="Domaines de vie" />
       </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))' }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
         {dl.domains
           .filter((d) => !d.archived)
           .map((d) => {
-            const ps = (projects.data ?? []).filter((p) => p.domainIds.includes(d.id));
-            const main = ps.filter((p) => p.domainIds[0] === d.id).length;
+            const ps = (projects.data ?? []).filter((p) => p.domainIds[0] === d.id);
+            const n = (st: string) => ps.filter((p) => p.status === st).length;
             return (
               <Link
                 key={d.id}
                 to="/domaines/$id"
                 params={{ id: d.id }}
-                className="card flex flex-col gap-2 hover:no-underline"
-                style={{ padding: '16px 18px', borderTop: `3px solid ${dl.colorOf(d)}` }}
+                className="card flex flex-col gap-2.5 hover:no-underline"
+                style={{ padding: '18px 20px', borderTop: `4px solid ${dl.colorOf(d)}` }}
               >
-                <span className="flex items-center gap-2">
+                <span className="flex items-baseline gap-2">
                   <span className="mono text-[12px]" style={{ color: 'var(--text-faint)' }}>
                     #{d.priorityRank}
                   </span>
-                  <span className="text-[17px] font-semibold">{d.name}</span>
+                  <span className="text-[18px] font-semibold">{d.name}</span>
                 </span>
-                <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-                  {main} projet(s) principal · {ps.length - main} connexe(s)
+                <span
+                  className="text-[14px] leading-relaxed"
+                  style={{
+                    color: d.description ? 'var(--text-2)' : 'var(--text-ghost)',
+                    display: '-webkit-box',
+                    WebkitLineClamp: 4,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {d.description || 'Pas encore de description.'}
+                </span>
+                <span className="text-[13px] mt-auto" style={{ color: 'var(--text-faint)' }}>
+                  {n('active')} actif{n('active') > 1 ? 's' : ''} · {n('ready')} prêt
+                  {n('ready') > 1 ? 's' : ''} · {n('idea')} idée{n('idea') > 1 ? 's' : ''}
                 </span>
               </Link>
             );
@@ -730,28 +747,31 @@ export function DomainsPage() {
     </div>
   );
 }
-
-/** V-15: all projects touching the domain; related ones (other primary) dimmed with their primary colour edge. */
 export function DomainPage({ id }: { id: string }) {
   const dl = useDomainLookup();
   const d = dl.get(id);
   const projects = useQuery({
     queryKey: ['projects', 'domain', id],
-    queryFn: () => get<Project[]>(`/projects?domainId=${id}&status=idea,active,paused`),
+    queryFn: () => get<Project[]>(`/projects?domainId=${id}&status=idea,ready,active,paused`),
+  });
+  const saveDescription = useAction((description: string) => patch(`/domains/${id}`, { description }), {
+    toast: 'Description enregistrée.',
   });
   if (!d) return <Loading />;
   const list = projects.data ?? [];
-  const own = list.filter((p) => p.domainIds[0] === id);
-  const related = list.filter((p) => p.domainIds[0] !== id);
+  // Always active first, then ready, paused, and ideas last.
+  const own = list.filter((p) => p.domainIds[0] === id).sort(byStatus);
+  const related = list.filter((p) => p.domainIds[0] !== id).sort(byStatus);
   const row = (p: Project, rel?: boolean) => (
     <Link
+      key={p.id}
       to="/projets/$id"
       params={{ id: p.id }}
       className="flex items-center gap-3 hover:no-underline"
       style={{
         padding: '10px 16px',
         borderBottom: '1px solid var(--divider)',
-        opacity: rel ? 0.6 : 1,
+        opacity: rel || p.status === 'idea' ? 0.65 : 1,
         borderLeft: rel ? `3px solid ${dl.color(p.domainIds[0])}` : '3px solid transparent',
       }}
     >
@@ -773,6 +793,13 @@ export function DomainPage({ id }: { id: string }) {
         <Breadcrumb items={[{ label: 'Domaines', to: '/domaines' }, { label: d.name }]} />
         <PageHeader eyebrow={`Priorité n°${d.priorityRank} · poids ${d.weight}`} title={d.name} />
       </div>
+      <DescriptionBlock
+        text={d.description}
+        lines={6}
+        saving={saveDescription.isPending}
+        emptyLabel="Pas encore de description : ce qui entre dans ce domaine, et ce qui n'y entre pas. L'IA s'en sert pour classer les projets."
+        onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
+      />
       <section className="card overflow-hidden">
         <div className="h2" style={{ padding: '14px 16px', borderBottom: '1px solid var(--divider-2)' }}>
           Projets {d.name} · {own.length}
@@ -997,4 +1024,13 @@ function ObjectivesMapView({
       </div>
     </div>
   );
+}
+
+/** « + Objectif » from Planifier › Trimestre: same creation drawer as on the Objectifs page. */
+export function ObjectivePanelForQuarter({ onClose }: { onClose: () => void }) {
+  const metas = useQuery({
+    queryKey: ['meta-objectives'],
+    queryFn: () => get<MetaObjective[]>('/meta-objectives'),
+  });
+  return <ObjectivePanel open onClose={onClose} metas={metas.data ?? []} />;
 }

@@ -498,10 +498,9 @@ input[type="checkbox"] {
   color: var(--text);
 }
 .info-pop {
-  position: absolute;
-  z-index: 70;
-  top: calc(100% + 6px);
-  left: -8px;
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
   width: max-content;
   max-width: min(320px, 80vw);
   padding: 10px 12px;
@@ -516,10 +515,6 @@ input[type="checkbox"] {
   white-space: normal;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   cursor: default;
-}
-.info-pop.align-right {
-  left: auto;
-  right: -8px;
 }
 
 @media (pointer: coarse) {

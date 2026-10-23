@@ -11,9 +11,9 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 
 ## En attente de ta réponse (structurant)
 
-- **Q-C · Objectifs du trimestre** : faut-il une planification du trimestre (choisir les objectifs à suivre, comme le mois choisit les projets) ? Aujourd'hui « Planifier › Mois » montre seulement les objectifs du trimestre et ce qui les fait avancer.
-- **Q-D · Import** : l'export JSON existe ; faut-il un import (restauration) depuis ce fichier ?
-- **Corrélation santé / productivité** : mise de côté. Mémento reste fournisseur de données via l'API (rapports, plans de semaine et leur contexte, tâches, journal).
+- **Q-E · Priorité propre à un projet** (proposition) : ajouter sur chaque projet une **importance** Basse / Normale / Haute (×0,5 / ×1 / ×1,5 sur la valeur V du score), indépendante du domaine. Un projet Santé « basse » peut ainsi passer après un projet Famille « haute ». Par défaut Normale ; l'objectif garde sa criticité. Visible dans la fiche et dans Planifier.
+- **Q-F · Page Expériences** (proposition) : une page « Expériences » avec la cible (ex. 2 sur 4 semaines), les expériences vécues (souvenirs, avec date et note facultative), celles prévues, et une réserve d'idées d'expériences. À décider après quelques semaines d'usage du badge Expérience.
+- **Corrélation santé / productivité** : mise de côté. Mémento reste fournisseur de données via l'API.
 
 ## À valider sur l'usage (v0.1)
 
