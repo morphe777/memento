@@ -271,6 +271,7 @@ export const session = sqliteTable('session', {
     .references(() => appUser.id),
   createdAt: text('created_at').notNull().default(now),
   expiresAt: text('expires_at').notNull(),
+  previousSeenAt: text('previous_seen_at'), // user's previous visit, for "À revoir · depuis ma dernière visite"
 });
 
 // Worker bookkeeping: one row per executed scheduled job and period (idempotence).

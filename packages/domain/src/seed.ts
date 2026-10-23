@@ -11,7 +11,10 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
     SEED_DOMAINS.forEach((d, i) => {
       const exists = ctx.db.select().from(schema.domain).where(eq(schema.domain.name, d.name)).get();
       if (!exists) {
-        ctx.db.insert(schema.domain).values({ id: newId(), ...d, priorityRank: i + 1, weight: defaultWeight(i + 1) }).run();
+        ctx.db
+          .insert(schema.domain)
+          .values({ id: newId(), ...d, priorityRank: i + 1, weight: defaultWeight(i + 1) })
+          .run();
         domains++;
       }
     });
@@ -19,9 +22,16 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
       const dom = ctx.db.select().from(schema.domain).where(eq(schema.domain.name, domainName)).get();
       if (!dom) continue;
       for (const name of names) {
-        const exists = ctx.db.select().from(schema.group).where(eq(schema.group.nameKey, name.toLowerCase())).get();
+        const exists = ctx.db
+          .select()
+          .from(schema.group)
+          .where(eq(schema.group.nameKey, name.toLowerCase()))
+          .get();
         if (!exists) {
-          ctx.db.insert(schema.group).values({ id: newId(), name, nameKey: name.toLowerCase(), domainId: dom.id }).run();
+          ctx.db
+            .insert(schema.group)
+            .values({ id: newId(), name, nameKey: name.toLowerCase(), domainId: dom.id })
+            .run();
           groups++;
         }
       }

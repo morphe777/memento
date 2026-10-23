@@ -39,14 +39,25 @@ function groupDomainsOf(ctx: Ctx, groupIds: string[]) {
 }
 
 const projectGroupIds = (ctx: Ctx, id: string) =>
-  ctx.db.select({ g: projectGroup.groupId }).from(projectGroup).where(eq(projectGroup.projectId, id)).all().map((r) => r.g);
+  ctx.db
+    .select({ g: projectGroup.groupId })
+    .from(projectGroup)
+    .where(eq(projectGroup.projectId, id))
+    .all()
+    .map((r) => r.g);
 
 /** Serialized project: row + groups, domains (primary first), task stats. */
 export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const links = ctx.db
-    .select({ projectId: projectGroup.projectId, groupId: group.id, groupName: group.name, domainId: domain.id, rank: domain.priorityRank })
+    .select({
+      projectId: projectGroup.projectId,
+      groupId: group.id,
+      groupName: group.name,
+      domainId: domain.id,
+      rank: domain.priorityRank,
+    })
     .from(projectGroup)
     .innerJoin(group, eq(group.id, projectGroup.groupId))
     .innerJoin(domain, eq(domain.id, group.domainId))
@@ -67,12 +78,20 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
   const objectives = ctx.db
     .select({ id: objective.id, title: objective.title })
     .from(objective)
-    .where(inArray(objective.id, rows.map((r) => r.objectiveId).filter((x): x is string => !!x)))
+    .where(
+      inArray(
+        objective.id,
+        rows.map((r) => r.objectiveId).filter((x): x is string => !!x),
+      ),
+    )
     .all();
   return rows.map((r) => {
     const mine = links.filter((l) => l.projectId === r.id);
     const domainRanks = new Map(mine.map((l) => [l.domainId, l.rank]));
-    const others = [...domainRanks].sort((a, b) => a[1] - b[1]).map(([id]) => id).filter((id) => id !== r.primaryDomainId);
+    const others = [...domainRanks]
+      .sort((a, b) => a[1] - b[1])
+      .map(([id]) => id)
+      .filter((id) => id !== r.primaryDomainId);
     const st = stats.filter((s) => s.projectId === r.id);
     const by = (s: string) => st.find((x) => x.status === s);
     return {
@@ -125,17 +144,25 @@ export function recomputeProjectDomains(ctx: Ctx, id: string, requestedPrimary?:
   const keep = requestedPrimary ?? (doms.some((d) => d.id === p.primaryDomainId) ? p.primaryDomainId : null);
   const { primaryDomainId } = resolveProjectDomains(doms, keep);
   if (primaryDomainId !== p.primaryDomainId) {
-    ctx.db.update(project).set({ primaryDomainId, updatedAt: ctxNowIso(ctx) }).where(eq(project.id, id)).run();
+    ctx.db
+      .update(project)
+      .set({ primaryDomainId, updatedAt: ctxNowIso(ctx) })
+      .where(eq(project.id, id))
+      .run();
     // RB-13: domain change is journaled; frozen reports are untouched.
     audit(ctx, 'project', id, 'domain_change', { primaryDomainId: p.primaryDomainId }, { primaryDomainId });
   }
 }
 
 function promotionInput(ctx: Ctx, p: ProjectRow) {
-  const tasks = ctx.db.select({ durationMin: task.durationMin, status: task.status }).from(task).where(eq(task.projectId, p.id)).all();
+  const tasks = ctx.db
+    .select({ durationMin: task.durationMin, status: task.status })
+    .from(task)
+    .where(eq(task.projectId, p.id))
+    .all();
   return {
     successCriterion: p.successCriterion,
-    startDate: p.replannedAt && p.startDate ? (p.replannedAt > p.startDate ? p.replannedAt : p.startDate) : p.startDate,
+    startDate: p.replannedAt && p.startDate && p.replannedAt > p.startDate ? p.replannedAt : p.startDate,
     dueDate: p.dueDate,
     groupCount: projectGroupIds(ctx, p.id).length,
     tasks,
@@ -172,8 +199,17 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
   return tx(ctx, () => {
     const { groupIds, primaryDomainId: requested, ...fields } = input;
     const { primaryDomainId } = resolveProjectDomains(groupDomainsOf(ctx, groupIds), requested); // RB-04
-    if (fields.objectiveId) assertFound(ctx.db.select().from(objective).where(eq(objective.id, fields.objectiveId)).get(), 'objective', fields.objectiveId);
-    if (fields.monthFlag) throw new DomainError('MONTH_FLAG_REQUIRES_TASKS', 'Ajoute des tâches avant de cocher « projet du mois ».');
+    if (fields.objectiveId)
+      assertFound(
+        ctx.db.select().from(objective).where(eq(objective.id, fields.objectiveId)).get(),
+        'objective',
+        fields.objectiveId,
+      );
+    if (fields.monthFlag)
+      throw new DomainError(
+        'MONTH_FLAG_REQUIRES_TASKS',
+        'Ajoute des tâches avant de cocher « projet du mois ».',
+      );
     const id = newId();
     ctx.db
       .insert(project)
@@ -186,7 +222,8 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
         positionInObjective: nextPositionInObjective(ctx, fields.objectiveId),
       })
       .run();
-    for (const g of [...new Set(groupIds)]) ctx.db.insert(projectGroup).values({ projectId: id, groupId: g }).run();
+    for (const g of [...new Set(groupIds)])
+      ctx.db.insert(projectGroup).values({ projectId: id, groupId: g }).run();
     const after = getProject(ctx, id);
     audit(ctx, 'project', id, 'create', null, after);
     return after;
@@ -197,13 +234,29 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
   return tx(ctx, () => {
     const before = getProject(ctx, id);
     if (patch.status !== undefined) assertStatusTransition(before.status, patch.status);
-    if (patch.primaryDomainId) resolveProjectDomains(groupDomainsOf(ctx, before.groupIds), patch.primaryDomainId);
+    if (patch.primaryDomainId)
+      resolveProjectDomains(groupDomainsOf(ctx, before.groupIds), patch.primaryDomainId);
     if (patch.monthFlag) {
-      assertCanFlagMonth(ctx.db.select({ durationMin: task.durationMin, status: task.status }).from(task).where(eq(task.projectId, id)).all()); // RB-08
+      assertCanFlagMonth(
+        ctx.db
+          .select({ durationMin: task.durationMin, status: task.status })
+          .from(task)
+          .where(eq(task.projectId, id))
+          .all(),
+      ); // RB-08
     }
-    const set: Partial<typeof project.$inferInsert> = { ...patch, updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) };
+    const set: Partial<typeof project.$inferInsert> = {
+      ...patch,
+      updatedAt: ctxNowIso(ctx),
+      lastTouchedAt: ctxNowIso(ctx),
+    };
     if (patch.objectiveId !== undefined && patch.objectiveId !== before.objectiveId) {
-      if (patch.objectiveId) assertFound(ctx.db.select().from(objective).where(eq(objective.id, patch.objectiveId)).get(), 'objective', patch.objectiveId);
+      if (patch.objectiveId)
+        assertFound(
+          ctx.db.select().from(objective).where(eq(objective.id, patch.objectiveId)).get(),
+          'objective',
+          patch.objectiveId,
+        );
       set.positionInObjective = nextPositionInObjective(ctx, patch.objectiveId);
     }
     if (patch.status === 'active' && before.status === 'done') {
@@ -213,7 +266,14 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
     ctx.db.update(project).set(set).where(eq(project.id, id)).run();
     assertActiveInvariant(ctx, id);
     const after = getProject(ctx, id);
-    audit(ctx, 'project', id, patch.status && patch.status !== before.status ? `status_${patch.status}` : 'update', before, after);
+    audit(
+      ctx,
+      'project',
+      id,
+      patch.status && patch.status !== before.status ? `status_${patch.status}` : 'update',
+      before,
+      after,
+    );
     refreshObjectiveProgress(ctx, before.objectiveId);
     if (after.objectiveId !== before.objectiveId) refreshObjectiveProgress(ctx, after.objectiveId);
     return after;
@@ -225,10 +285,18 @@ export function setProjectGroups(ctx: Ctx, id: string, groupIds: string[], prima
     const before = getProject(ctx, id);
     resolveProjectDomains(groupDomainsOf(ctx, groupIds), primaryDomainId); // validates before writing
     ctx.db.delete(projectGroup).where(eq(projectGroup.projectId, id)).run();
-    for (const g of [...new Set(groupIds)]) ctx.db.insert(projectGroup).values({ projectId: id, groupId: g }).run();
+    for (const g of [...new Set(groupIds)])
+      ctx.db.insert(projectGroup).values({ projectId: id, groupId: g }).run();
     recomputeProjectDomains(ctx, id, primaryDomainId);
     const after = getProject(ctx, id);
-    audit(ctx, 'project', id, 'groups', { groupIds: before.groupIds, domainIds: before.domainIds }, { groupIds: after.groupIds, domainIds: after.domainIds });
+    audit(
+      ctx,
+      'project',
+      id,
+      'groups',
+      { groupIds: before.groupIds, domainIds: before.domainIds },
+      { groupIds: after.groupIds, domainIds: after.domainIds },
+    );
     return after;
   });
 }
@@ -238,7 +306,10 @@ export function promoteProject(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getProject(ctx, id);
     if (before.status !== 'idea' && before.status !== 'paused') {
-      throw new DomainError('INVALID_STATUS_TRANSITION', 'Seule une idée (ou un projet en pause) peut être activée.');
+      throw new DomainError(
+        'INVALID_STATUS_TRANSITION',
+        'Seule une idée (ou un projet en pause) peut être activée.',
+      );
     }
     const gaps = promotionGaps(promotionInput(ctx, getProjectRow(ctx, id)));
     if (gaps.length) {
@@ -248,7 +319,11 @@ export function promoteProject(ctx: Ctx, id: string) {
         gaps.map((g) => ({ code: g, label: GAP_LABELS[g] })),
       );
     }
-    ctx.db.update(project).set({ status: 'active', updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) }).where(eq(project.id, id)).run();
+    ctx.db
+      .update(project)
+      .set({ status: 'active', updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) })
+      .where(eq(project.id, id))
+      .run();
     const after = getProject(ctx, id);
     audit(ctx, 'project', id, 'promote', before, after);
     refreshObjectiveProgress(ctx, after.objectiveId);
@@ -262,11 +337,21 @@ export function completeProject(ctx: Ctx, id: string, success: unknown) {
   return tx(ctx, () => {
     const before = getProject(ctx, id);
     if (before.status !== 'active' && before.status !== 'paused') {
-      throw new DomainError('INVALID_STATUS_TRANSITION', 'Seul un projet actif ou en pause peut être terminé.');
+      throw new DomainError(
+        'INVALID_STATUS_TRANSITION',
+        'Seul un projet actif ou en pause peut être terminé.',
+      );
     }
     ctx.db
       .update(project)
-      .set({ status: 'done', success, completedAt: ctxNowIso(ctx), monthFlag: before.monthFlag, updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) })
+      .set({
+        status: 'done',
+        success,
+        completedAt: ctxNowIso(ctx),
+        monthFlag: before.monthFlag,
+        updatedAt: ctxNowIso(ctx),
+        lastTouchedAt: ctxNowIso(ctx),
+      })
       .where(eq(project.id, id))
       .run();
     const after = getProject(ctx, id);
@@ -281,10 +366,22 @@ export function reorderProjects(ctx: Ctx, objectiveId: string, ids: string[]) {
   return tx(ctx, () => {
     ids.forEach((id, i) => {
       const p = getProjectRow(ctx, id);
-      if (p.objectiveId !== objectiveId) throw new DomainError('NOT_IN_OBJECTIVE', `« ${p.title} » n'est pas dans cet objectif.`);
+      if (p.objectiveId !== objectiveId)
+        throw new DomainError('NOT_IN_OBJECTIVE', `« ${p.title} » n'est pas dans cet objectif.`);
       if (p.positionInObjective !== i + 1) {
-        ctx.db.update(project).set({ positionInObjective: i + 1, updatedAt: ctxNowIso(ctx) }).where(eq(project.id, id)).run();
-        audit(ctx, 'project', id, 'reorder', { positionInObjective: p.positionInObjective }, { positionInObjective: i + 1 });
+        ctx.db
+          .update(project)
+          .set({ positionInObjective: i + 1, updatedAt: ctxNowIso(ctx) })
+          .where(eq(project.id, id))
+          .run();
+        audit(
+          ctx,
+          'project',
+          id,
+          'reorder',
+          { positionInObjective: p.positionInObjective },
+          { positionInObjective: i + 1 },
+        );
       }
     });
     return getObjectivePath(ctx, objectiveId);
@@ -298,7 +395,12 @@ export function replanProject(ctx: Ctx, id: string, dueDate?: string) {
     const today = parisDate(ctxNow(ctx));
     ctx.db
       .update(project)
-      .set({ replannedAt: today, replanDoneMin: before.taskStats.doneMin, dueDate: dueDate ?? before.dueDate, updatedAt: ctxNowIso(ctx) })
+      .set({
+        replannedAt: today,
+        replanDoneMin: before.taskStats.doneMin,
+        dueDate: dueDate ?? before.dueDate,
+        updatedAt: ctxNowIso(ctx),
+      })
       .where(eq(project.id, id))
       .run();
     assertActiveInvariant(ctx, id);
@@ -312,9 +414,17 @@ export function addProjectDependency(ctx: Ctx, id: string, dependsOnId: string) 
   return tx(ctx, () => {
     getProjectRow(ctx, id);
     getProjectRow(ctx, dependsOnId);
-    const edges = ctx.db.select().from(projectDependency).all().map((e) => ({ from: e.projectId, to: e.dependsOnProjectId }));
+    const edges = ctx.db
+      .select()
+      .from(projectDependency)
+      .all()
+      .map((e) => ({ from: e.projectId, to: e.dependsOnProjectId }));
     assertNoCycle(edges, id, dependsOnId); // RB-07
-    ctx.db.insert(projectDependency).values({ projectId: id, dependsOnProjectId: dependsOnId }).onConflictDoNothing().run();
+    ctx.db
+      .insert(projectDependency)
+      .values({ projectId: id, dependsOnProjectId: dependsOnId })
+      .onConflictDoNothing()
+      .run();
     audit(ctx, 'project', id, 'dependency_add', null, { dependsOnProjectId: dependsOnId });
     return listProjectDependencies(ctx, id);
   });
@@ -332,7 +442,12 @@ export function removeProjectDependency(ctx: Ctx, id: string, dependsOnId: strin
 }
 
 export const listProjectDependencies = (ctx: Ctx, id: string) =>
-  ctx.db.select().from(projectDependency).where(eq(projectDependency.projectId, id)).all().map((d) => d.dependsOnProjectId);
+  ctx.db
+    .select()
+    .from(projectDependency)
+    .where(eq(projectDependency.projectId, id))
+    .all()
+    .map((d) => d.dependsOnProjectId);
 
 /** V-02: ordered path of an objective's projects with prerequisites and blocked state. */
 export function getObjectivePath(ctx: Ctx, objectiveId: string) {
@@ -353,11 +468,20 @@ export function getObjectivePath(ctx: Ctx, objectiveId: string) {
 
 /** Ideas view (DM-90): sorted by age, oldest first. */
 export function listIdeas(ctx: Ctx, f: { groupId?: string; domainId?: string } = {}) {
-  const rows = ctx.db.select().from(project).where(eq(project.status, 'idea')).orderBy(asc(project.createdAt)).all();
+  const rows = ctx.db
+    .select()
+    .from(project)
+    .where(eq(project.status, 'idea'))
+    .orderBy(asc(project.createdAt))
+    .all();
   return serializeProjects(ctx, rows).filter(
-    (p) => (!f.groupId || p.groupIds.includes(f.groupId)) && (!f.domainId || p.domainIds.includes(f.domainId)),
+    (p) =>
+      (!f.groupId || p.groupIds.includes(f.groupId)) && (!f.domainId || p.domainIds.includes(f.domainId)),
   );
 }
 
 export const recentProjects = (ctx: Ctx, limit = 10) =>
-  serializeProjects(ctx, ctx.db.select().from(project).orderBy(desc(project.lastTouchedAt)).limit(limit).all());
+  serializeProjects(
+    ctx,
+    ctx.db.select().from(project).orderBy(desc(project.lastTouchedAt)).limit(limit).all(),
+  );

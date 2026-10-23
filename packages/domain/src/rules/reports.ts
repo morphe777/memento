@@ -21,7 +21,8 @@ export function focusOf(tasks: DoneTask[]): Focus {
   const work = tasks.filter((t) => !t.isExperience);
   const total = work.reduce((s, t) => s + t.durationMin, 0);
   if (total === 0) return 'Rien de fait';
-  const share = (b: DoneTask['bucket']) => work.filter((t) => t.bucket === b).reduce((s, t) => s + t.durationMin, 0) / total;
+  const share = (b: DoneTask['bucket']) =>
+    work.filter((t) => t.bucket === b).reduce((s, t) => s + t.durationMin, 0) / total;
   if (share('objective') >= 0.5) return 'Cap tenu';
   if (share('inbox') >= 0.5) return 'Semaine Inbox';
   if (share('none') >= 0.5) return 'Dispersé';
@@ -67,17 +68,27 @@ export function globalIndicator(i: GlobalInput): { light: Light; title: string; 
   }
   const good: string[] = [];
   const bad: string[] = [];
-  (i.focus === 'Cap tenu' ? good : bad).push(i.focus === 'Cap tenu' ? 'cap tenu' : `focus ${i.focus.toLowerCase()}`);
+  (i.focus === 'Cap tenu' ? good : bad).push(
+    i.focus === 'Cap tenu' ? 'cap tenu' : `focus ${i.focus.toLowerCase()}`,
+  );
   (i.rhythm === 'OK' ? good : bad).push(i.rhythm === 'OK' ? 'rythme OK' : `rythme ${i.rhythm.toLowerCase()}`);
   if (i.experiencesWindow >= i.experienceTarget) good.push('expériences au rendez-vous');
-  else bad.push(i.experiencesWindow === 0 ? 'aucune expérience sur la période' : `${i.experiencesWindow} / ${i.experienceTarget} expériences`);
+  else
+    bad.push(
+      i.experiencesWindow === 0
+        ? 'aucune expérience sur la période'
+        : `${i.experiencesWindow} / ${i.experienceTarget} expériences`,
+    );
   if (i.healthMin > 0) good.push('santé présente');
   else bad.push('rien pour la santé');
   if (i.familyMin > 0) good.push('famille présente');
   else bad.push('rien pour la famille');
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  if (bad.length === 0) return { light: 'green', title: 'Bonne semaine', sentence: `${cap(good.join(', '))}.` };
-  const sentence = good.length ? `${cap(good.slice(0, 2).join(' et '))}, mais ${bad.join(', ')}.` : `${cap(bad.join(', '))}.`;
+  if (bad.length === 0)
+    return { light: 'green', title: 'Bonne semaine', sentence: `${cap(good.join(', '))}.` };
+  const sentence = good.length
+    ? `${cap(good.slice(0, 2).join(' et '))}, mais ${bad.join(', ')}.`
+    : `${cap(bad.join(', '))}.`;
   return { light: 'orange', title: 'Semaine correcte', sentence };
 }
 

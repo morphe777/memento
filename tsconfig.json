@@ -15,5 +15,12 @@
     "noUncheckedIndexedAccess": false,
     "types": ["node"]
   },
-  "include": ["apps/*/src", "packages/*/src", "apps/*/test", "packages/*/test", "apps/web/vite.config.ts", "vitest.config.ts"]
+  "include": [
+    "apps/*/src",
+    "packages/*/src",
+    "apps/*/test",
+    "packages/*/test",
+    "apps/web/vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

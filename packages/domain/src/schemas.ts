@@ -12,7 +12,13 @@ export const isoWeekParam = z.object({ isoWeek: z.string().regex(/^\d{4}-W\d{2}$
 
 export const domainCreate = z.object({ name: title, colorLight: color, colorDark: color });
 export const domainPatch = z
-  .object({ name: title, colorLight: color, colorDark: color, weight: z.number().min(0).max(1), archived: z.boolean() })
+  .object({
+    name: title,
+    colorLight: color,
+    colorDark: color,
+    weight: z.number().min(0).max(1),
+    archived: z.boolean(),
+  })
   .partial();
 export const reorderBody = z.object({ ids: z.array(uuid).min(1) });
 
@@ -37,7 +43,10 @@ export const objectiveCreate = z.object({
   smartTarget: z.string().max(200).optional(),
   smartCurrent: z.string().max(200).optional(),
   deadline: date,
-  quarter: z.string().regex(/^\d{4}-Q[1-4]$/).optional(),
+  quarter: z
+    .string()
+    .regex(/^\d{4}-Q[1-4]$/)
+    .optional(),
   criticality: z.number().int().min(1).max(3).optional(),
   status: objectiveStatus.optional(),
 });
@@ -54,12 +63,22 @@ const projectFields = {
   successCriterion: z.string().max(500).optional(),
   startDate: date.nullable().optional(),
   dueDate: date.nullable().optional(),
-  monthFlag: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
+  monthFlag: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .nullable()
+    .optional(),
 };
 /** RB-01 + decision D-04: an idea needs a title and at least one group. */
-export const projectCreate = z.object({ ...projectFields, groupIds: z.array(uuid).min(1, 'Au moins un groupe') });
+export const projectCreate = z.object({
+  ...projectFields,
+  groupIds: z.array(uuid).min(1, 'Au moins un groupe'),
+});
 export const projectPatch = z.object({ ...projectFields, status: projectStatus }).partial();
-export const projectGroupsBody = z.object({ groupIds: z.array(uuid).min(1), primaryDomainId: uuid.nullable().optional() });
+export const projectGroupsBody = z.object({
+  groupIds: z.array(uuid).min(1),
+  primaryDomainId: uuid.nullable().optional(),
+});
 export const projectCompleteBody = z.object({ success: z.boolean() });
 export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });
 export const projectReplanBody = z.object({ dueDate: date.optional() });
@@ -67,7 +86,10 @@ export const projectListQuery = z.object({
   status: z.string().optional(), // comma-separated
   groupId: uuid.optional(),
   domainId: uuid.optional(),
-  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  month: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
   objectiveId: uuid.optional(),
 });
 
@@ -82,8 +104,15 @@ const taskFields = {
   recurrenceRule: z.string().max(500).nullable().optional(),
   domainId: uuid.nullable().optional(),
 };
-export const taskCreate = z.object({ ...taskFields, projectId: uuid.nullable().optional(), position: z.number().int().optional() });
-export const taskBatchCreate = z.object({ projectId: uuid.nullable().optional(), tasks: z.array(z.object(taskFields)).min(1).max(100) });
+export const taskCreate = z.object({
+  ...taskFields,
+  projectId: uuid.nullable().optional(),
+  position: z.number().int().optional(),
+});
+export const taskBatchCreate = z.object({
+  projectId: uuid.nullable().optional(),
+  tasks: z.array(z.object(taskFields)).min(1).max(100),
+});
 export const taskPatch = z.object({ ...taskFields, status: z.enum(['todo', 'cancelled']) }).partial();
 export const taskMoveBody = z.object({ projectId: uuid.nullable(), position: z.number().int().optional() });
 export const taskReorderBody = z.object({ projectId: uuid.nullable(), ids: z.array(uuid).min(1) });

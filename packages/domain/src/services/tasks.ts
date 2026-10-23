@@ -27,23 +27,44 @@ function nextPosition(ctx: Ctx, projectId: string | null) {
 }
 
 function touchProject(ctx: Ctx, projectId: string | null) {
-  if (projectId) ctx.db.update(project).set({ lastTouchedAt: ctxNowIso(ctx) }).where(eq(project.id, projectId)).run();
+  if (projectId)
+    ctx.db
+      .update(project)
+      .set({ lastTouchedAt: ctxNowIso(ctx) })
+      .where(eq(project.id, projectId))
+      .run();
 }
 
-function checkTaskFields(ctx: Ctx, f: { durationMin?: number | null; recurrenceRule?: string | null; domainId?: string | null }, projectId: string | null) {
+function checkTaskFields(
+  ctx: Ctx,
+  f: { durationMin?: number | null; recurrenceRule?: string | null; domainId?: string | null },
+  projectId: string | null,
+) {
   checkTaskDuration(f.durationMin); // RB-03
   checkRecurrenceRule(f.recurrenceRule);
   if (f.recurrenceRule && projectId) {
     throw new DomainError('RECURRENCE_INBOX_ONLY', 'La récurrence est réservée aux tâches Inbox (DM-41).');
   }
-  if (f.domainId) assertFound(ctx.db.select().from(domain).where(eq(domain.id, f.domainId)).get(), 'domain', f.domainId);
+  if (f.domainId)
+    assertFound(ctx.db.select().from(domain).where(eq(domain.id, f.domainId)).get(), 'domain', f.domainId);
 }
 
 /** Tasks of the current week plan count as "chosen" for RB-06 display. */
 function currentChosen(ctx: Ctx): Set<string> {
-  const plan = ctx.db.select().from(weekPlan).where(eq(weekPlan.isoWeek, currentWeek(ctxNow(ctx)))).get();
+  const plan = ctx.db
+    .select()
+    .from(weekPlan)
+    .where(eq(weekPlan.isoWeek, currentWeek(ctxNow(ctx))))
+    .get();
   if (!plan) return new Set();
-  return new Set(ctx.db.select({ t: weekPlanItem.taskId }).from(weekPlanItem).where(eq(weekPlanItem.weekPlanId, plan.id)).all().map((r) => r.t));
+  return new Set(
+    ctx.db
+      .select({ t: weekPlanItem.taskId })
+      .from(weekPlanItem)
+      .where(eq(weekPlanItem.weekPlanId, plan.id))
+      .all()
+      .map((r) => r.t),
+  );
 }
 
 /** Tasks with RB-06 availability (`locked` = waiting for a previous task or prerequisite). */
@@ -54,7 +75,11 @@ export function listTasks(ctx: Ctx, f: { projectId?: string | 'inbox'; status?: 
     .from(task)
     .where(
       and(
-        f.projectId === 'inbox' ? isNull(task.projectId) : f.projectId ? eq(task.projectId, f.projectId) : undefined,
+        f.projectId === 'inbox'
+          ? isNull(task.projectId)
+          : f.projectId
+            ? eq(task.projectId, f.projectId)
+            : undefined,
         statuses?.length ? inArray(task.status, statuses) : undefined,
       ),
     )
@@ -63,7 +88,9 @@ export function listTasks(ctx: Ctx, f: { projectId?: string | 'inbox'; status?: 
   const deps = ctx.db.select().from(taskDependency).all();
   const chosen = currentChosen(ctx);
   const projectIds = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
-  const projects = projectIds.length ? ctx.db.select().from(project).where(inArray(project.id, projectIds)).all() : [];
+  const projects = projectIds.length
+    ? ctx.db.select().from(project).where(inArray(project.id, projectIds)).all()
+    : [];
   const available = new Set<string>();
   for (const p of projects) {
     const all = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all();
@@ -133,8 +160,13 @@ export function completeTask(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
     if (before.status === 'done') return { task: getTask(ctx, id), next: null };
-    if (before.status === 'cancelled') throw new DomainError('TASK_CANCELLED', 'Tâche annulée : réactive-la d’abord.');
-    ctx.db.update(task).set({ status: 'done', doneAt: ctxNowIso(ctx), updatedAt: ctxNowIso(ctx) }).where(eq(task.id, id)).run();
+    if (before.status === 'cancelled')
+      throw new DomainError('TASK_CANCELLED', 'Tâche annulée : réactive-la d’abord.');
+    ctx.db
+      .update(task)
+      .set({ status: 'done', doneAt: ctxNowIso(ctx), updatedAt: ctxNowIso(ctx) })
+      .where(eq(task.id, id))
+      .run();
     touchProject(ctx, before.projectId);
     audit(ctx, 'task', id, 'complete', before, getTaskRow(ctx, id));
     let next = null;
@@ -163,7 +195,11 @@ export function uncompleteTask(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
     if (before.status !== 'done') return getTask(ctx, id);
-    ctx.db.update(task).set({ status: 'todo', doneAt: null, updatedAt: ctxNowIso(ctx) }).where(eq(task.id, id)).run();
+    ctx.db
+      .update(task)
+      .set({ status: 'todo', doneAt: null, updatedAt: ctxNowIso(ctx) })
+      .where(eq(task.id, id))
+      .run();
     audit(ctx, 'task', id, 'uncomplete', before, getTaskRow(ctx, id));
     return getTask(ctx, id);
   });
@@ -174,9 +210,14 @@ export function reorderTasks(ctx: Ctx, projectId: string | null, ids: string[]) 
   return tx(ctx, () => {
     ids.forEach((id, i) => {
       const t = getTaskRow(ctx, id);
-      if (t.projectId !== projectId) throw new DomainError('NOT_IN_PROJECT', `« ${t.title} » n'est pas dans cette liste.`);
+      if (t.projectId !== projectId)
+        throw new DomainError('NOT_IN_PROJECT', `« ${t.title} » n'est pas dans cette liste.`);
       if (t.position !== i + 1) {
-        ctx.db.update(task).set({ position: i + 1, updatedAt: ctxNowIso(ctx) }).where(eq(task.id, id)).run();
+        ctx.db
+          .update(task)
+          .set({ position: i + 1, updatedAt: ctxNowIso(ctx) })
+          .where(eq(task.id, id))
+          .run();
         audit(ctx, 'task', id, 'reorder', { position: t.position }, { position: i + 1 });
       }
     });
@@ -215,9 +256,17 @@ export function addTaskDependency(ctx: Ctx, id: string, dependsOnId: string) {
   return tx(ctx, () => {
     getTaskRow(ctx, id);
     getTaskRow(ctx, dependsOnId);
-    const edges = ctx.db.select().from(taskDependency).all().map((e) => ({ from: e.taskId, to: e.dependsOnTaskId }));
+    const edges = ctx.db
+      .select()
+      .from(taskDependency)
+      .all()
+      .map((e) => ({ from: e.taskId, to: e.dependsOnTaskId }));
     assertNoCycle(edges, id, dependsOnId); // RB-07
-    ctx.db.insert(taskDependency).values({ taskId: id, dependsOnTaskId: dependsOnId }).onConflictDoNothing().run();
+    ctx.db
+      .insert(taskDependency)
+      .values({ taskId: id, dependsOnTaskId: dependsOnId })
+      .onConflictDoNothing()
+      .run();
     audit(ctx, 'task', id, 'dependency_add', null, { dependsOnTaskId: dependsOnId });
     return getTask(ctx, id);
   });
@@ -225,7 +274,10 @@ export function addTaskDependency(ctx: Ctx, id: string, dependsOnId: string) {
 
 export function removeTaskDependency(ctx: Ctx, id: string, dependsOnId: string) {
   return tx(ctx, () => {
-    ctx.db.delete(taskDependency).where(and(eq(taskDependency.taskId, id), eq(taskDependency.dependsOnTaskId, dependsOnId))).run();
+    ctx.db
+      .delete(taskDependency)
+      .where(and(eq(taskDependency.taskId, id), eq(taskDependency.dependsOnTaskId, dependsOnId)))
+      .run();
     audit(ctx, 'task', id, 'dependency_remove', { dependsOnTaskId: dependsOnId }, null);
     return getTask(ctx, id);
   });

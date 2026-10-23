@@ -79,7 +79,10 @@ export function patchSettings(ctx: Ctx, patch: unknown): Settings {
       ctx.db
         .insert(schema.setting)
         .values({ key, value })
-        .onConflictDoUpdate({ target: schema.setting.key, set: { value, updatedAt: new Date().toISOString() } })
+        .onConflictDoUpdate({
+          target: schema.setting.key,
+          set: { value, updatedAt: new Date().toISOString() },
+        })
         .run();
     }
     const after = getSettings(ctx);

@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { computeDiff } from '../src/context.ts';
+import type { DomainError } from '../src/errors.ts';
 import {
   assertCompletion,
   assertStatusTransition,
@@ -25,19 +27,9 @@ import {
   rhythmOf,
   wouldCreateCycle,
 } from '../src/rules/index.ts';
-import { DomainError } from '../src/errors.ts';
-import { computeDiff } from '../src/context.ts';
-import { DEFAULT_SETTINGS, settingsSchema } from '../src/settings.ts';
 import { defaultWeight, SEED_DOMAINS } from '../src/seed-data.ts';
-import {
-  fmtMin,
-  frWeekRange,
-  isoWeekOf,
-  quarterEnd,
-  quarterOf,
-  shiftWeek,
-  weekMonday,
-} from '../src/time.ts';
+import { DEFAULT_SETTINGS, settingsSchema } from '../src/settings.ts';
+import { fmtMin, frWeekRange, isoWeekOf, quarterEnd, quarterOf, shiftWeek, weekMonday } from '../src/time.ts';
 
 const code = (fn: () => unknown) => {
   try {
@@ -91,7 +83,9 @@ describe('seed & settings (L0)', () => {
 
 describe('RB-15 audit diff', () => {
   it('keeps only changed fields', () => {
-    expect(computeDiff({ a: 1, b: 2, updatedAt: 'x' }, { a: 1, b: 3, updatedAt: 'y' })).toEqual({ b: [2, 3] });
+    expect(computeDiff({ a: 1, b: 2, updatedAt: 'x' }, { a: 1, b: 3, updatedAt: 'y' })).toEqual({
+      b: [2, 3],
+    });
     expect(computeDiff(null, { a: 1 })).toEqual({ a: [null, 1] });
   });
 });
@@ -106,19 +100,18 @@ describe('RB-02 promotion', () => {
   };
   it('accepts a complete project', () => expect(promotionGaps(ok)).toEqual([]));
   it('lists every gap (idea without task → TASK_MISSING)', () => {
-    expect(promotionGaps({ ...ok, successCriterion: ' ', groupCount: 0, tasks: [], startDate: null })).toEqual([
-      'SUCCESS_CRITERION_MISSING',
-      'GROUP_MISSING',
-      'TASK_MISSING',
-      'DATES_MISSING',
-    ]);
+    expect(
+      promotionGaps({ ...ok, successCriterion: ' ', groupCount: 0, tasks: [], startDate: null }),
+    ).toEqual(['SUCCESS_CRITERION_MISSING', 'GROUP_MISSING', 'TASK_MISSING', 'DATES_MISSING']);
   });
   it('refuses projects longer than 31 days (DM-23)', () => {
     expect(promotionGaps({ ...ok, dueDate: '2026-12-03' })).toEqual(['PROJECT_TOO_LONG']);
     expect(promotionGaps({ ...ok, dueDate: '2026-12-02' })).toEqual([]);
   });
   it('requires durations on all tasks', () => {
-    expect(promotionGaps({ ...ok, tasks: [{ durationMin: null, status: 'todo' }] })).toEqual(['TASK_DURATION_MISSING']);
+    expect(promotionGaps({ ...ok, tasks: [{ durationMin: null, status: 'todo' }] })).toEqual([
+      'TASK_DURATION_MISSING',
+    ]);
   });
 });
 
@@ -126,7 +119,8 @@ describe('RB-03 task duration', () => {
   it('accepts 30/60/120 and null', () => {
     for (const d of [30, 60, 120, null]) expect(code(() => checkTaskDuration(d))).toBeNull();
   });
-  it('refuses > 120 with split message', () => expect(code(() => checkTaskDuration(240))).toBe('TASK_TOO_LONG'));
+  it('refuses > 120 with split message', () =>
+    expect(code(() => checkTaskDuration(240))).toBe('TASK_TOO_LONG'));
   it('refuses other values', () => expect(code(() => checkTaskDuration(45))).toBe('INVALID_DURATION'));
 });
 
@@ -139,11 +133,16 @@ describe('RB-04 project domains', () => {
     });
   });
   it('honours a chosen primary among deduced domains', () => {
-    expect(resolveProjectDomains([d('maison', 6), d('secu', 5)], 'maison').domainIds).toEqual(['maison', 'secu']);
+    expect(resolveProjectDomains([d('maison', 6), d('secu', 5)], 'maison').domainIds).toEqual([
+      'maison',
+      'secu',
+    ]);
   });
   it('refuses a primary outside the groups, > 3 domains, and no group', () => {
     expect(code(() => resolveProjectDomains([d('a', 1)], 'b'))).toBe('PRIMARY_DOMAIN_INVALID');
-    expect(code(() => resolveProjectDomains([d('a', 1), d('b', 2), d('c', 3), d('e', 4)]))).toBe('TOO_MANY_DOMAINS');
+    expect(code(() => resolveProjectDomains([d('a', 1), d('b', 2), d('c', 3), d('e', 4)]))).toBe(
+      'TOO_MANY_DOMAINS',
+    );
     expect(code(() => resolveProjectDomains([]))).toBe('GROUP_REQUIRED');
   });
 });
@@ -157,7 +156,11 @@ describe('RB-05 objective deadline', () => {
 });
 
 describe('RB-06 availability', () => {
-  const t = (id: string, position: number, extra: Partial<{ isFree: boolean; status: 'todo' | 'done' | 'cancelled' }> = {}) => ({
+  const t = (
+    id: string,
+    position: number,
+    extra: Partial<{ isFree: boolean; status: 'todo' | 'done' | 'cancelled' }> = {},
+  ) => ({
     id,
     position,
     isFree: false,
@@ -180,7 +183,9 @@ describe('RB-06 availability', () => {
   });
   it('explicit prerequisites must be done', () => {
     const tasks = [t('b', 2, { isFree: true }), t('c', 3, { isFree: true })];
-    expect([...availableTaskIds(tasks, 'parallel', new Set(), [{ taskId: 'c', dependsOnTaskId: 'b' }])]).toEqual(['b']);
+    expect([
+      ...availableTaskIds(tasks, 'parallel', new Set(), [{ taskId: 'c', dependsOnTaskId: 'b' }]),
+    ]).toEqual(['b']);
   });
   it('objective path: a project waits for the active one before it (D-12)', () => {
     const p = (id: string, pos: number, status: string, isFree = false) => ({
@@ -190,7 +195,10 @@ describe('RB-06 availability', () => {
       isFree,
       status,
     });
-    const blocked = blockedProjectIds([p('a', 1, 'active'), p('b', 2, 'active'), p('c', 3, 'active', true)], []);
+    const blocked = blockedProjectIds(
+      [p('a', 1, 'active'), p('b', 2, 'active'), p('c', 3, 'active', true)],
+      [],
+    );
     expect([...blocked]).toEqual(['b']);
   });
 });
@@ -211,7 +219,12 @@ describe('RB-08 month flag', () => {
   it('needs tasks, all with duration', () => {
     expect(canFlagMonth([])).toBe(false);
     expect(canFlagMonth([{ durationMin: null, status: 'todo' }])).toBe(false);
-    expect(canFlagMonth([{ durationMin: 30, status: 'todo' }, { durationMin: null, status: 'cancelled' }])).toBe(true);
+    expect(
+      canFlagMonth([
+        { durationMin: 30, status: 'todo' },
+        { durationMin: null, status: 'cancelled' },
+      ]),
+    ).toBe(true);
   });
 });
 
@@ -303,7 +316,14 @@ describe('weekly indicators R-01 / R-04 / R-05', () => {
     expect(minutesByDomain([dt('objective', 60)])).toEqual({ d1: 60, d2: 60 });
   });
   it('global light', () => {
-    const g = { experiencesWindow: 2, experienceTarget: 2, healthMin: 60, familyMin: 60, rhythm: 'OK' as const, focus: 'Cap tenu' as const };
+    const g = {
+      experiencesWindow: 2,
+      experienceTarget: 2,
+      healthMin: 60,
+      familyMin: 60,
+      rhythm: 'OK' as const,
+      focus: 'Cap tenu' as const,
+    };
     expect(globalIndicator(g).light).toBe('green');
     expect(globalIndicator({ ...g, experiencesWindow: 0 }).light).toBe('orange');
     expect(globalIndicator({ ...g, experiencesWindow: 0, healthMin: 0 }).light).toBe('red');
@@ -320,8 +340,12 @@ describe('search ranking (F-04)', () => {
     ...extra,
   });
   it('exact > prefix > contains > labels > description', () => {
-    expect(relevance('sport', item('Sport'))).toBeGreaterThan(relevance('sport', item('Sportif du dimanche')));
-    expect(relevance('sport', item('Sportif'))).toBeGreaterThan(relevance('sport', item('Trouver un second sport')));
+    expect(relevance('sport', item('Sport'))).toBeGreaterThan(
+      relevance('sport', item('Sportif du dimanche')),
+    );
+    expect(relevance('sport', item('Sportif'))).toBeGreaterThan(
+      relevance('sport', item('Trouver un second sport')),
+    );
     expect(relevance('sport', item('X', { labels: 'Sport' }))).toBeGreaterThan(
       relevance('sport', item('Y', { description: 'sport' })),
     );
@@ -331,7 +355,10 @@ describe('search ranking (F-04)', () => {
     expect(relevance('photovoltaiqe', item('Panneaux photovoltaïques'))).toBeGreaterThan(0);
   });
   it('groups 5 per type', () => {
-    const r = rankResults('a', Array.from({ length: 8 }, (_, i) => item(`a${i}`)));
+    const r = rankResults(
+      'a',
+      Array.from({ length: 8 }, (_, i) => item(`a${i}`)),
+    );
     expect(r.project).toHaveLength(5);
   });
 });

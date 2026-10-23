@@ -1,5 +1,15 @@
 // Monday proposal engine (dossier de dev §6, Specs §4b). Pure and deterministic: same input = same output (Q-25).
-import { addDays, daysBetween, fmtMin, frDay, frShort, monthEnd, monthOf, weekMonday, weekSunday } from '../time.ts';
+import {
+  addDays,
+  daysBetween,
+  fmtMin,
+  frDay,
+  frShort,
+  monthEnd,
+  monthOf,
+  weekMonday,
+  weekSunday,
+} from '../time.ts';
 import { availableTaskIds } from './availability.ts';
 import { delayMin } from './delay.ts';
 import { budgetMinutes, budgetStatus } from './tasks.ts';
@@ -180,7 +190,8 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   if (project) {
     const since = addDays(P.monday, -14);
     C = (P.tasksByProject.get(project.id) ?? []).some(
-      (x) => x.status === 'done' && x.doneAt && x.doneAt.slice(0, 10) >= since && x.doneAt.slice(0, 10) < P.monday,
+      (x) =>
+        x.status === 'done' && x.doneAt && x.doneAt.slice(0, 10) >= since && x.doneAt.slice(0, 10) < P.monday,
     )
       ? 1
       : 0;
@@ -195,7 +206,10 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   // Why: one line from the dominant component (step 7).
   let why: string;
   if (mandatory && t.dueDate) {
-    why = t.dueDate < P.monday ? `En retard depuis le ${frShort(t.dueDate)}` : `Deadline ${frDay(t.dueDate)} ${frShort(t.dueDate)}`;
+    why =
+      t.dueDate < P.monday
+        ? `En retard depuis le ${frShort(t.dueDate)}`
+        : `Deadline ${frDay(t.dueDate)} ${frShort(t.dueDate)}`;
   } else if (t.isExperience && input.experiencesDone < input.experienceTarget) {
     why = `Expériences : ${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines`;
   } else {
@@ -252,7 +266,12 @@ export function propose(input: EngineInput): Proposal {
     .flatMap((g) => g.cards.flatMap((c) => c.tasks.filter((t) => !t.locked).map((t) => t.taskId)));
   const visible = new Set(visibleIds);
   const bonus = scored
-    .filter((s) => !weekIds.has(s.taskId) && visible.has(s.taskId) && !P.input.tasks.find((t) => t.id === s.taskId)?.isExperience)
+    .filter(
+      (s) =>
+        !weekIds.has(s.taskId) &&
+        visible.has(s.taskId) &&
+        !P.input.tasks.find((t) => t.id === s.taskId)?.isExperience,
+    )
     .slice(0, input.bonusCount)
     .map(({ taskId, score }) => ({ taskId, score, why: 'Bonus suggéré par le moteur' }));
   return { week, bonus };
@@ -360,14 +379,19 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
 
   const card = (p: EngineProject, visibleBase: number): { card: PageCard; best: number } => {
     const ptasks = P.tasksByProject.get(p.id) ?? [];
-    const pending = ptasks.filter((t) => t.status === 'todo').sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+    const pending = ptasks
+      .filter((t) => t.status === 'todo')
+      .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
     const avail = availableTaskIds(ptasks, p.sequenceMode, chosenSet, input.taskDeps);
     let k = Math.min(visibleBase, pending.length);
     // Chosen tasks always stay visible; next task appears when all visible ones are chosen.
     while (k < pending.length && pending.slice(0, k).every((t) => chosenSet.has(t.id))) k += 1;
     while (k < pending.length && pending.slice(k).some((t) => chosenSet.has(t.id))) k += 1;
     const visible = pending.slice(0, k);
-    const best = Math.max(0, ...pending.filter((t) => avail.has(t.id) || chosenSet.has(t.id)).map((t) => allScored(t).score));
+    const best = Math.max(
+      0,
+      ...pending.filter((t) => avail.has(t.id) || chosenSet.has(t.id)).map((t) => allScored(t).score),
+    );
     return {
       best,
       card: {
@@ -382,7 +406,9 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     };
   };
 
-  const eligible = input.projects.filter((p) => eligibleProject(p) && (P.tasksByProject.get(p.id) ?? []).some((t) => t.status === 'todo'));
+  const eligible = input.projects.filter(
+    (p) => eligibleProject(p) && (P.tasksByProject.get(p.id) ?? []).some((t) => t.status === 'todo'),
+  );
   const monthCards = eligible
     .filter((p) => p.monthFlag === P.month)
     .map((p) => {
@@ -395,14 +421,21 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
   // "À considérer aussi": other active projects, top N by best score; CH-05 guard-rails first; chosen kept.
   const guarded = new Set(
     input.domains
-      .filter((d) => (GUARDED_DOMAIN_NAMES as readonly string[]).includes(d.name) && !(input.guardDomainMinutes[d.id] > 0))
+      .filter(
+        (d) =>
+          (GUARDED_DOMAIN_NAMES as readonly string[]).includes(d.name) &&
+          !(input.guardDomainMinutes[d.id] > 0),
+      )
       .map((d) => d.id),
   );
   const others = eligible
     .filter((p) => p.monthFlag !== P.month)
     .map((p) => ({ p, ...card(p, 1), guard: p.domainIds.some((id) => guarded.has(id)) }))
     .filter((x) => x.card.tasks.some((t) => !t.locked || t.selection));
-  others.sort((a, b) => Number(b.guard) - Number(a.guard) || b.best - a.best || a.card.title.localeCompare(b.card.title));
+  others.sort(
+    (a, b) =>
+      Number(b.guard) - Number(a.guard) || b.best - a.best || a.card.title.localeCompare(b.card.title),
+  );
   const considered = others.filter(
     (x, i) => i < input.considerAlsoCount || x.guard || x.card.tasks.some((t) => t.selection),
   );
@@ -414,7 +447,17 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       hint: '',
       countLabel: `${inboxRows.length} tâche${inboxRows.length > 1 ? 's' : ''}`,
       cards: inboxRows.length
-        ? [{ projectId: null, title: 'Inbox', domainId: null, objectiveId: null, objectiveTitle: null, tasks: inboxRows, hidden: [] }]
+        ? [
+            {
+              projectId: null,
+              title: 'Inbox',
+              domainId: null,
+              objectiveId: null,
+              objectiveTitle: null,
+              tasks: inboxRows,
+              hidden: [],
+            },
+          ]
         : [],
     },
     {
@@ -437,26 +480,34 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
 }
 
 /** Live summary of a selection: budget (RB-09, RB-14), counts, alerts (§6), planned mix by primary domain. */
-export function summarize(
-  input: EngineInput,
-  chosen: Map<string, Selection>,
-): Omit<PlanningPage, 'groups'> {
+export function summarize(input: EngineInput, chosen: Map<string, Selection>): Omit<PlanningPage, 'groups'> {
   const P = prepare(input);
   const taskById = new Map(input.tasks.map((t) => [t.id, t]));
-  const weekTasks = [...chosen].filter(([, k]) => k === 'week').map(([id]) => taskById.get(id)).filter((t): t is EngineTask => !!t);
+  const weekTasks = [...chosen]
+    .filter(([, k]) => k === 'week')
+    .map(([id]) => taskById.get(id))
+    .filter((t): t is EngineTask => !!t);
   const plannedMin = budgetMinutes(weekTasks);
   const { overMin, remainingMin } = budgetStatus(plannedMin, input.budgetMin);
   const domainOfTask = (t: EngineTask): string | null =>
     t.projectId ? (P.projectById.get(t.projectId)?.domainIds[0] ?? null) : t.domainId;
   const mixMap = new Map<string | null, number>();
-  for (const t of weekTasks) mixMap.set(domainOfTask(t), (mixMap.get(domainOfTask(t)) ?? 0) + (t.durationMin ?? 0));
+  for (const t of weekTasks)
+    mixMap.set(domainOfTask(t), (mixMap.get(domainOfTask(t)) ?? 0) + (t.durationMin ?? 0));
   const orderedDomains = [...input.domains].sort((a, b) => a.priorityRank - b.priorityRank);
-  const mix = [...orderedDomains.map((d) => ({ domainId: d.id as string | null, minutes: mixMap.get(d.id) ?? 0 })), { domainId: null, minutes: mixMap.get(null) ?? 0 }];
+  const mix = [
+    ...orderedDomains.map((d) => ({ domainId: d.id as string | null, minutes: mixMap.get(d.id) ?? 0 })),
+    { domainId: null, minutes: mixMap.get(null) ?? 0 },
+  ];
   const experiences = weekTasks.filter((t) => t.isExperience).length;
 
   const alerts: Alert[] = [];
   if (overMin > 0) {
-    alerts.push({ level: 'warn', code: 'BUDGET_OVER', text: `Dépassement de ${fmtMin(overMin)} au-delà de ${fmtMin(input.budgetMin)}. Tu peux valider quand même.` });
+    alerts.push({
+      level: 'warn',
+      code: 'BUDGET_OVER',
+      text: `Dépassement de ${fmtMin(overMin)} au-delà de ${fmtMin(input.budgetMin)}. Tu peux valider quand même.`,
+    });
   }
   for (const name of GUARDED_DOMAIN_NAMES) {
     const d = input.domains.find((x) => x.name === name);
@@ -464,7 +515,10 @@ export function summarize(
       alerts.push({
         level: 'warn',
         code: `EMPTY_${name === 'Santé' ? 'HEALTH' : 'FAMILY'}`,
-        text: d.priorityRank === 1 ? `${name}, ta priorité n°1 : rien de prévu cette semaine.` : `${name} : rien de prévu cette semaine.`,
+        text:
+          d.priorityRank === 1
+            ? `${name}, ta priorité n°1 : rien de prévu cette semaine.`
+            : `${name} : rien de prévu cette semaine.`,
       });
     }
   }
@@ -476,12 +530,22 @@ export function summarize(
     });
   }
   const avoided = weekTasks.filter((t) => t.postponeCount >= 3);
-  for (const t of avoided) alerts.push({ level: 'warn', code: 'AVOIDANCE', text: `« ${t.title} » reportée ${t.postponeCount} fois.` });
-  if (alerts.length === 0) alerts.push({ level: 'ok', code: 'OK', text: 'Rien à signaler : semaine équilibrée.' });
+  for (const t of avoided)
+    alerts.push({
+      level: 'warn',
+      code: 'AVOIDANCE',
+      text: `« ${t.title} » reportée ${t.postponeCount} fois.`,
+    });
+  if (alerts.length === 0)
+    alerts.push({ level: 'ok', code: 'OK', text: 'Rien à signaler : semaine équilibrée.' });
 
   return {
     budget: { budgetMin: input.budgetMin, plannedMin, overMin, remainingMin },
-    counts: { week: weekTasks.length, experiences, bonus: [...chosen.values()].filter((k) => k === 'bonus').length },
+    counts: {
+      week: weekTasks.length,
+      experiences,
+      bonus: [...chosen.values()].filter((k) => k === 'bonus').length,
+    },
     alerts,
     mix,
   };

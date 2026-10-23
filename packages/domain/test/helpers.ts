@@ -1,7 +1,7 @@
 import { openDb, runMigrations } from '@memento/db';
 import type { Actor, Ctx } from '../src/context.ts';
-import { listDomains, listGroups } from '../src/services/referential.ts';
 import { seed } from '../src/seed.ts';
+import { listDomains, listGroups } from '../src/services/referential.ts';
 
 /** Fresh migrated + seeded in-memory database with a fixed clock (Friday 23 Oct 2026, 10:00 Paris). */
 export function makeCtx(at = '2026-10-23T08:00:00.000Z', actor: Actor = 'me') {

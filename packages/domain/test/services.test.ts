@@ -50,7 +50,13 @@ const errCode = (fn: () => unknown) => {
 };
 
 /** An active project with n tasks of 60 min. */
-function activeProject(ctx: ReturnType<typeof makeCtx>, title: string, groupName: string, n = 3, extra: Record<string, unknown> = {}) {
+function activeProject(
+  ctx: ReturnType<typeof makeCtx>,
+  title: string,
+  groupName: string,
+  n = 3,
+  extra: Record<string, unknown> = {},
+) {
   const { group } = lookups(ctx);
   const p = createProject(ctx, {
     title,
@@ -60,7 +66,9 @@ function activeProject(ctx: ReturnType<typeof makeCtx>, title: string, groupName
     dueDate: '2026-11-15',
     ...extra,
   });
-  const tasks = Array.from({ length: n }, (_, i) => createTask(ctx, { projectId: p.id, title: `${title} ${i + 1}`, durationMin: 60 }));
+  const tasks = Array.from({ length: n }, (_, i) =>
+    createTask(ctx, { projectId: p.id, title: `${title} ${i + 1}`, durationMin: 60 }),
+  );
   promoteProject(ctx, p.id);
   return { project: getProject(ctx, p.id), tasks };
 }
@@ -101,7 +109,13 @@ describe('L0 socle', () => {
       ),
     ).toBe('Error');
     expect(count()).toBe(before);
-    expect(ctx.db.select().from(schema.group).all().some((g) => g.name === 'Temp')).toBe(false);
+    expect(
+      ctx.db
+        .select()
+        .from(schema.group)
+        .all()
+        .some((g) => g.name === 'Temp'),
+    ).toBe(false);
   });
 });
 
@@ -146,11 +160,25 @@ describe('L1 référentiel', () => {
   it('RB-04 / RB-13: domains follow groups, primary defaults to highest priority, change is journaled', () => {
     const ctx = makeCtx();
     const { group, domain } = lookups(ctx);
-    const p = createProject(ctx, { title: 'Photovoltaïque', groupIds: [group('Travaux').id, group('Résilience').id] });
+    const p = createProject(ctx, {
+      title: 'Photovoltaïque',
+      groupIds: [group('Travaux').id, group('Résilience').id],
+    });
     expect(p.domainIds).toEqual([domain('Sécurité').id, domain('Maison').id]);
-    const p2 = setProjectGroups(ctx, p.id, [group('Travaux').id, group('Résilience').id], domain('Maison').id);
+    const p2 = setProjectGroups(
+      ctx,
+      p.id,
+      [group('Travaux').id, group('Résilience').id],
+      domain('Maison').id,
+    );
     expect(p2.primaryDomainId).toBe(domain('Maison').id);
-    expect(ctx.db.select().from(schema.auditLog).all().some((a) => a.action === 'domain_change' && a.entityId === p.id)).toBe(true);
+    expect(
+      ctx.db
+        .select()
+        .from(schema.auditLog)
+        .all()
+        .some((a) => a.action === 'domain_change' && a.entityId === p.id),
+    ).toBe(true);
     // A group moving to another domain recomputes its projects.
     updateGroup(ctx, group('Résilience').id, { domainId: domain('Santé').id });
     expect(getProject(ctx, p.id).domainIds).toContain(domain('Santé').id);
@@ -159,13 +187,18 @@ describe('L1 référentiel', () => {
   it('RB-05: objective deadline within its quarter', () => {
     const ctx = makeCtx();
     expect(createObjective(ctx, { title: 'POC IA', deadline: '2026-12-20' }).quarter).toBe('2026-Q4');
-    expect(errCode(() => createObjective(ctx, { title: 'X', deadline: '2027-01-10', quarter: '2026-Q4' }))).toBe('DEADLINE_AFTER_QUARTER');
+    expect(
+      errCode(() => createObjective(ctx, { title: 'X', deadline: '2027-01-10', quarter: '2026-Q4' })),
+    ).toBe('DEADLINE_AFTER_QUARTER');
   });
 
   it('RB-06: reordering changes availability', () => {
     const ctx = makeCtx();
     const { project, tasks } = activeProject(ctx, 'Sport', 'Sport');
-    const locked = () => listTasks(ctx, { projectId: project.id }).filter((t) => !t.locked).map((t) => t.title);
+    const locked = () =>
+      listTasks(ctx, { projectId: project.id })
+        .filter((t) => !t.locked)
+        .map((t) => t.title);
     expect(locked()).toEqual(['Sport 1']);
     reorderTasks(ctx, project.id, [tasks[2].id, tasks[0].id, tasks[1].id]);
     expect(locked()).toEqual(['Sport 3']);
@@ -190,14 +223,23 @@ describe('L1 référentiel', () => {
     const ctx = makeCtx();
     const { group } = lookups(ctx);
     const idea = createProject(ctx, { title: 'Jardin', groupIds: [group('Jardin').id] });
-    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe('MONTH_FLAG_REQUIRES_TASKS');
+    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe(
+      'MONTH_FLAG_REQUIRES_TASKS',
+    );
     createTask(ctx, { projectId: idea.id, title: 'Tailler', durationMin: null });
-    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe('MONTH_FLAG_REQUIRES_TASKS');
+    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe(
+      'MONTH_FLAG_REQUIRES_TASKS',
+    );
   });
 
   it('RB-11: completing a recurring Inbox task creates the next occurrence', () => {
     const ctx = makeCtx();
-    const t = createTask(ctx, { title: 'Déclaration d’impôts', durationMin: 120, dueDate: '2026-05-20', recurrenceRule: 'FREQ=YEARLY' });
+    const t = createTask(ctx, {
+      title: 'Déclaration d’impôts',
+      durationMin: 120,
+      dueDate: '2026-05-20',
+      recurrenceRule: 'FREQ=YEARLY',
+    });
     const r = completeTask(ctx, t.id);
     expect(r.next?.dueDate).toBe('2027-05-20');
     expect(r.next?.status).toBe('todo');
@@ -242,7 +284,11 @@ describe('L3 planification', () => {
     updateProject(ctx, pv.id, { monthFlag: '2026-11' });
     const { project: ia } = activeProject(ctx, 'POC RAG', 'IA', 3);
     activeProject(ctx, 'Firewall', 'Sécu digitale', 2);
-    const inbox = createTask(ctx, { title: 'Renouveler l’assurance', durationMin: 30, dueDate: '2026-11-05' });
+    const inbox = createTask(ctx, {
+      title: 'Renouveler l’assurance',
+      durationMin: 30,
+      dueDate: '2026-11-05',
+    });
     return { ctx, pv, ia, inbox };
   }
 
@@ -274,7 +320,9 @@ describe('L3 planification', () => {
   it('refuses a locked task (RB-06) and never blocks an overflow (RB-14)', () => {
     const { ctx, ia } = world();
     const tasks = listTasks(ctx, { projectId: ia.id });
-    expect(errCode(() => setWeekItems(ctx, '2026-W45', [{ taskId: tasks[1].id, kind: 'week' }]))).toBe('TASK_LOCKED');
+    expect(errCode(() => setWeekItems(ctx, '2026-W45', [{ taskId: tasks[1].id, kind: 'week' }]))).toBe(
+      'TASK_LOCKED',
+    );
     const many = listTasks(ctx).filter((t) => t.status === 'todo');
     const all = [];
     for (const t of many) {
@@ -291,8 +339,19 @@ describe('L3 planification', () => {
     const page = getPlanningPage(ctx, '2026-W45');
     expect(page.alerts.map((a) => a.code)).toEqual(['EMPTY_HEALTH', 'EMPTY_FAMILY', 'NO_EXPERIENCE']);
     const sport = activeProject(ctx, 'Escalade', 'Sport', 1);
-    const fam = createProject(ctx, { title: 'Balade', groupIds: [lookups(ctx).group('Sorties & activités famille').id], successCriterion: 'ok', startDate: '2026-11-01', dueDate: '2026-11-20' });
-    const exp = createTask(ctx, { projectId: fam.id, title: 'Pique-nique', durationMin: 120, isExperience: true });
+    const fam = createProject(ctx, {
+      title: 'Balade',
+      groupIds: [lookups(ctx).group('Sorties & activités famille').id],
+      successCriterion: 'ok',
+      startDate: '2026-11-01',
+      dueDate: '2026-11-20',
+    });
+    const exp = createTask(ctx, {
+      projectId: fam.id,
+      title: 'Pique-nique',
+      durationMin: 120,
+      isExperience: true,
+    });
     promoteProject(ctx, fam.id);
     const p2 = setWeekItems(ctx, '2026-W45', [
       { taskId: sport.tasks[0].id, kind: 'week' },
@@ -333,7 +392,9 @@ describe('L4 exécution', () => {
     expect(closeWeek(ctx, '2026-W44').carried).toBe(1);
     expect(closeWeek(ctx, '2026-W44').carried).toBe(0);
     const next = getPlanningPage(ctx, '2026-W45');
-    const row = next.groups.flatMap((g) => g.cards.flatMap((c) => c.tasks)).find((t) => t.taskId === tasks[0].id)!;
+    const row = next.groups
+      .flatMap((g) => g.cards.flatMap((c) => c.tasks))
+      .find((t) => t.taskId === tasks[0].id)!;
     expect(row.selection).toBe('week');
     expect(row.postponeCount).toBe(1);
   });
@@ -341,7 +402,13 @@ describe('L4 exécution', () => {
   it('RB-16 replan brings the month project back to the centre', () => {
     const ctx = makeCtx('2026-11-10T08:00:00.000Z');
     const { group } = lookups(ctx);
-    const p = createProject(ctx, { title: 'PV', groupIds: [group('Travaux').id], successCriterion: 'ok', startDate: '2026-11-01', dueDate: '2026-11-30' });
+    const p = createProject(ctx, {
+      title: 'PV',
+      groupIds: [group('Travaux').id],
+      successCriterion: 'ok',
+      startDate: '2026-11-01',
+      dueDate: '2026-11-30',
+    });
     for (let i = 0; i < 4; i++) createTask(ctx, { projectId: p.id, title: `t${i}`, durationMin: 120 });
     promoteProject(ctx, p.id);
     updateProject(ctx, p.id, { monthFlag: '2026-11' });
@@ -361,7 +428,11 @@ describe('L5 rapports', () => {
     ctx.setNow('2026-10-26T06:00:00.000Z');
     const { report, created } = generateReport(ctx, 'week', '2026-W43');
     expect(created).toBe(true);
-    const payload = report.payload as { tasksDone: { count: number }; rhythm: { doneMin: number }; global: { light: string } };
+    const payload = report.payload as {
+      tasksDone: { count: number };
+      rhythm: { doneMin: number };
+      global: { light: string };
+    };
     expect(payload.tasksDone.count).toBe(1);
     expect(payload.global.light).toBe('red');
     updateTask(ctx, t.id, { durationMin: 120 });
