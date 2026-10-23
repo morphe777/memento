@@ -607,8 +607,49 @@ function ProjectInfo({ p }: { p: ProjectDetail }) {
       </span>
     </div>
   );
+  const ready = p.readiness.every((r) => r.ok);
   return (
     <section className="card" style={{ padding: '6px 18px 8px' }}>
+      {(p.status === 'idea' || p.status === 'paused') && (
+        <div
+          className="flex flex-col gap-1.5"
+          style={{ padding: '12px 0', borderBottom: '1px solid var(--divider)' }}
+        >
+          <span className="label-caps flex items-center gap-1.5" style={{ fontSize: 11 }}>
+            Pour devenir actif
+            <InfoTip>
+              Une idée devient un projet actif avec « Promouvoir en projet », seulement quand tout est coché.
+              Un projet actif reste soumis aux mêmes règles, sauf « au moins une tâche ».
+            </InfoTip>
+          </span>
+          {p.readiness.map((r) => (
+            <span
+              key={r.code}
+              className="flex items-center gap-2 text-[14px]"
+              style={{ color: r.ok ? 'var(--text-faint)' : 'var(--text)' }}
+            >
+              <span
+                aria-hidden
+                className="grid place-items-center rounded-full flex-none text-[11px]"
+                style={{
+                  width: 18,
+                  height: 18,
+                  background: r.ok ? 'var(--status-green)' : 'transparent',
+                  border: r.ok ? 0 : '1.5px solid var(--late-bar)',
+                  color: '#fff',
+                }}
+              >
+                {r.ok ? '✓' : ''}
+              </span>
+              <span className="sr-only">{r.ok ? 'Fait :' : 'Manque :'}</span>
+              {r.label}
+            </span>
+          ))}
+          <span className="text-[12px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
+            {ready ? 'Prêt : tu peux le promouvoir.' : 'Complète via « Modifier » et la liste des tâches.'}
+          </span>
+        </div>
+      )}
       {row(
         'Avancement',
         <span className="flex flex-col gap-1.5">

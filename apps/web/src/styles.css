@@ -38,6 +38,9 @@
   --inverse-bg: #1a1a1a;
   --inverse-text: #ffffff;
   --focus: #2f6fdb;
+  --primary: #6b4fd8; /* violet accent of primary buttons (user request 23/10/2026) */
+  --primary-hover: #5a3fc4;
+  --primary-text: #ffffff;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%235f5f5a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: light;
 }
@@ -72,6 +75,9 @@
   --inverse-bg: #f2f2ee;
   --inverse-text: #121211;
   --focus: #6a9bf2;
+  --primary: #8b74f0;
+  --primary-hover: #9d89f4;
+  --primary-text: #ffffff;
   --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1.5 1.75 6 6.25l4.5-4.5' fill='none' stroke='%23b5b5ae' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
@@ -274,9 +280,15 @@ input[type="checkbox"] {
 }
 .btn-primary {
   border: 0;
-  background: var(--inverse-bg);
-  color: var(--inverse-text);
+  background: var(--primary);
+  color: var(--primary-text);
   font-weight: 600;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
 }
 .btn-sm {
   min-height: 36px;

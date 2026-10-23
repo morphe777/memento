@@ -59,10 +59,10 @@ export function ReviewPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <Breadcrumb items={[{ label: 'À revoir' }]} />
+        <Breadcrumb items={[{ label: 'Journal' }]} />
         <PageHeader
           eyebrow="Journal des créations et modifications · IA ou moi"
-          title="À revoir"
+          title="Journal"
           actions={
             <>
               <button
@@ -778,7 +778,7 @@ function AccessConfig() {
     <Section
       title="Jetons API / MCP"
       aside="IA et robots · secret affiché une seule fois, stocké haché"
-      info="Un jeton par agent (claude, n8n…) : ses changements apparaissent sous ai:<nom> dans « À revoir ». Lecture seule = consultation uniquement. Aucun jeton ne peut gérer les jetons, les réglages ni le compte. Révoquer coupe l'accès immédiatement."
+      info="Un jeton par agent (claude, n8n…) : ses changements apparaissent sous ai:<nom> dans le Journal. Lecture seule = consultation uniquement. Aucun jeton ne peut gérer les jetons, les réglages ni le compte. Révoquer coupe l'accès immédiatement."
     >
       {created && (
         <div className="card p-3 flex flex-col gap-2" style={{ background: 'var(--row-week)' }}>
