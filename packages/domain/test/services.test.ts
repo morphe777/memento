@@ -441,3 +441,27 @@ describe('L5 rapports', () => {
     expect((again.report.payload as typeof payload).rhythm.doneMin).toBe(30);
   });
 });
+
+describe('worker jobs (WF-01 to WF-03)', () => {
+  it('runs Monday jobs once at 07:00 Paris, with catch-up and idempotence', async () => {
+    const { runDueJobs } = await import('../src/services/jobs.ts');
+    const ctx = makeCtx('2026-11-02T05:30:00.000Z'); // Monday 06:30 Paris (CET)
+    const early = runDueJobs(ctx);
+    expect(early.week).toBeUndefined(); // not before 07:00
+    expect(early.month).toBe('done'); // 2nd of the month: catch-up of the October report
+    ctx.setNow('2026-11-02T06:05:00.000Z'); // 07:05 Paris
+    const r = runDueJobs(ctx);
+    expect(r.week).toBe('done');
+    expect(r.month).toBe('skipped');
+    expect(runDueJobs(ctx).week).toBe('skipped');
+    expect(getPlanningPage(ctx, '2026-W45').plan?.proposedAt).toBeTruthy();
+    expect(
+      ctx.db
+        .select()
+        .from(schema.report)
+        .all()
+        .map((x) => `${x.kind}:${x.periodKey}`)
+        .sort(),
+    ).toEqual(['month:2026-10', 'quarter:2026-Q3', 'week:2026-W44']);
+  });
+});
