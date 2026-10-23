@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ma semaine sur iPhone</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#2F6FDB}a:hover{color:#1F4FA8}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; box-sizing: border-box; font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A1A; background: #F6F6F3; display: flex; flex-direction: column">
+<div style="padding: 28px 20px 12px; display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5F5F5A">Semaine 44 · 26 oct – 1 nov</div>
+<h1 style="margin: 0; font-size: 28px; font-weight: 700">Ma semaine</h1>
+</div>
+<div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 0 20px 12px">
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5F5F5A">Budget</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 16px">4 h / 6 h</span>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5F5F5A">Fait</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 16px">1 h 30</span>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: #5F5F5A">Expé.</span>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 16px">0 / 2</span>
+</div>
+</div>
+<div style="flex: 1; min-height: 0; overflow: hidden; margin: 0 12px; background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; display: flex; flex-direction: column">
+<div style="padding: 12px 16px; font-size: 15px; font-weight: 600; border-bottom: 1px solid #EFEFEA">À faire · 4 tâches</div>
+<sc-for list="{{tasks}}" as="t" hint-placeholder-count="6">
+<div style="display: flex; gap: 12px; align-items: flex-start; padding: 12px 16px; border-bottom: 1px solid #F0F0EB; opacity: {{t.opacity}}">
+<button aria-label="Marquer comme fait" style="flex: none; width: 26px; height: 26px; border-radius: 7px; border: 2px solid {{t.color}}; background: {{t.checkBg}}; color: #FFFFFF; font-size: 15px; font-weight: 700; line-height: 1; padding: 0">{{t.mark}}</button>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px">
+<span style="font-size: 15px; font-weight: 600; text-decoration: {{t.deco}}">{{t.title}}</span>
+<span style="font-size: 12px; color: #5F5F5A">{{t.dn}} · {{t.why}}</span>
+</div>
+<span style="flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 12px; background: #F0F0EB; border-radius: 999px; padding: 3px 8px">{{t.dur}}</span>
+</div>
+</sc-for>
+<button style="display: flex; align-items: center; gap: 8px; padding: 14px 16px; min-height: 48px; background: #FAFAF8; border: 0; font-family: inherit; font-size: 14px; color: #6B6B66; text-align: left">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14"><path d="M5 3l4 4-4 4" fill="none" stroke="#6B6B66" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+Bonus · 3
+</button>
+</div>
+<nav aria-label="Navigation principale" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 8px 8px 24px; margin-top: 12px; background: #FFFFFF; border-top: 1px solid #E6E6E1">
+<button style="min-height: 48px; border: 0; background: transparent; font-family: inherit; font-size: 12px; font-weight: 600; color: #1A1A1A">Semaine</button>
+<button style="min-height: 48px; border: 0; background: transparent; font-family: inherit; font-size: 12px; color: #5F5F5A">Projets</button>
+<button style="min-height: 48px; border: 0; background: transparent; font-family: inherit; font-size: 12px; color: #5F5F5A">Idées</button>
+<button style="min-height: 48px; border: 0; background: transparent; font-family: inherit; font-size: 12px; color: #5F5F5A">Rapports</button>
+</nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const t = (title, dn, color, why, dur, done) => ({
+      title: title, dn: dn, color: color, why: why, dur: dur,
+      checkBg: done ? color : "#FFFFFF", mark: done ? "✓" : "", deco: done ? "line-through" : "none", opacity: done ? "0.5" : "1"
+    });
+    return {
+      tasks: [
+        t("Sortie vélo en famille", "Famille", "#D2691E", "Expérience", "2 h", false),
+        t("Comparer les 3 devis PV", "Maison", "#8A6448", "2 h de retard", "1 h", false),
+        t("Fiche du POC RAG", "Carrière", "#2F6FDB", "Suite logique", "1 h", false),
+        t("VLAN objets connectés", "Sécurité", "#6B5BC4", "Prérequis débloqué", "30 min", false),
+        t("Déposer le colis", "Inbox", "#7A7A75", "Deadline jeudi", "30 min", true),
+        t("Essai escalade", "Santé", "#2F8F62", "Priorité n°1", "1 h", true)
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

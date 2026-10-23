@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Ma semaine</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:#2F6FDB}a:hover{color:#1F4FA8}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A1A; background: #F6F6F3; min-height: 100vh; box-sizing: border-box; padding: 32px 24px">
+<div style="max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5F5F5A">Semaine 44 · 26 oct – 1 nov</div>
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.01em">Ma semaine</h1>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 12px">
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 12px; padding: 12px 16px; min-width: 150px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #5F5F5A">Budget</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 20px">{{plannedLabel}} <span style="color: #6B6B66; font-size: 14px">/ 6 h</span></div>
+<div style="font-size: 12px; color: #2F7A55">Dans le budget · hors expériences</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 12px; padding: 12px 16px; min-width: 170px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #5F5F5A">Fait</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 20px">{{doneLabel}}</div>
+<div style="height: 6px; background: #EDEDE8; border-radius: 999px; overflow: hidden">
+<div style="height: 6px; width: {{doneBarW}}; background: #1A1A1A; border-radius: 999px"></div>
+</div>
+</div>
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 12px; padding: 12px 16px; min-width: 150px; display: flex; flex-direction: column; gap: 6px">
+<div style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #5F5F5A">Expériences</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 20px">{{expLabel}} <span style="color: #6B6B66; font-size: 14px">/ 2</span></div>
+<div style="font-size: 12px; color: #5F5F5A">4 dernières semaines</div>
+</div>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<section style="flex: 999 1 640px; min-width: 0; background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; overflow: hidden">
+<div style="display: flex; justify-content: space-between; align-items: baseline; padding: 16px 20px; border-bottom: 1px solid #EFEFEA">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">À faire · {{remaining}} tâches</h2>
+<div style="font-size: 13px; color: #6B6B66">Proposé par le moteur, lundi 07:00</div>
+</div>
+<sc-for list="{{tasks}}" as="t" hint-placeholder-count="6">
+<div style="display: flex; gap: 14px; align-items: flex-start; padding: 14px 20px; border-bottom: 1px solid #F0F0EB; opacity: {{t.opacity}}">
+<button aria-label="Marquer comme fait" onClick="{{t.toggle}}" style="flex: none; width: 26px; height: 26px; margin-top: 1px; border-radius: 7px; border: 2px solid {{t.color}}; background: {{t.checkBg}}; color: #FFFFFF; font-size: 15px; font-weight: 700; line-height: 1; padding: 0; cursor: pointer">{{t.mark}}</button>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<span style="font-size: 16px; font-weight: 600; text-decoration: {{t.deco}}">{{t.title}}</span>
+<sc-if value="{{t.exp}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B2C05; background: linear-gradient(135deg, #FDF3CF 0%, {{expColor}} 50%, #F6E2A0 100%); border: 1px solid #B8892A; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); border-radius: 999px; padding: 2px 8px">Expérience</span>
+</sc-if>
+<sc-if value="{{t.isBonus}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: #5F5F5A; background: #EFEFEA; border-radius: 999px; padding: 2px 8px">Bonus</span>
+</sc-if>
+</div>
+<div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #5F5F5A">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: {{t.color}}; flex: none"></span>
+<span style="font-weight: 500; color: #3D3D39">{{t.dn}}</span>
+<span>·</span>
+<span>{{t.project}}</span>
+</div>
+<div style="font-size: 13px; color: #6B6B66">{{t.why}}</div>
+</div>
+<div style="flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 13px; background: #F0F0EB; border-radius: 999px; padding: 4px 10px">{{t.durLabel}}</div>
+</div>
+</sc-for>
+<button onClick="{{toggleBonus}}" aria-expanded="{{bonusExpanded}}" style="width: 100%; display: flex; align-items: center; gap: 10px; padding: 14px 20px; background: #FAFAF8; border: 0; border-top: 1px solid #F0F0EB; cursor: pointer; font-family: inherit; font-size: 14px; color: #6B6B66; text-align: left">
+<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" style="transform: rotate({{chevronRot}}); transition: transform 0.15s"><path d="M5 3l4 4-4 4" fill="none" stroke="#6B6B66" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+<span>Bonus · {{bonusCount}}</span>
+<span style="font-size: 12px; color: #8A8A84">seulement si j'ai du temps ou de l'énergie en plus</span>
+</button>
+<sc-if value="{{showBonus}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FAFAF8">
+<sc-for list="{{bonusOpen}}" as="b" hint-placeholder-count="3">
+<div style="display: flex; gap: 14px; align-items: center; padding: 12px 20px; border-top: 1px solid #F0F0EB">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: {{b.color}}; flex: none"></span>
+<div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 15px; color: #3D3D39">{{b.title}}</span>
+<span style="font-size: 12px; color: #6B6B66">{{b.dn}} · {{b.project}}</span>
+</div>
+<span style="flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: #5F5F5A">{{b.durLabel}}</span>
+<button onClick="{{b.pick}}" style="flex: none; min-height: 36px; padding: 0 14px; border-radius: 8px; border: 1px solid #D6D6D0; background: #FFFFFF; font-family: inherit; font-size: 13px; font-weight: 500; color: #1A1A1A; cursor: pointer">Fait</button>
+</div>
+</sc-for>
+</div>
+</sc-if>
+</section>
+
+<aside style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Projets du mois</h2>
+<span style="font-size: 12px; color: #6B6B66">centre = à l'heure</span>
+</div>
+<sc-for list="{{projects}}" as="p" hint-placeholder-count="3">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<div style="display: flex; justify-content: space-between; align-items: center; gap: 8px">
+<div style="display: flex; align-items: center; gap: 8px; min-width: 0">
+<span style="width: 8px; height: 8px; border-radius: 999px; background: {{p.color}}; flex: none"></span>
+<span style="font-size: 14px; font-weight: 500">{{p.name}}</span>
+</div>
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: {{p.labelColor}}">{{p.label}}</span>
+</div>
+<div style="position: relative; height: 10px; background: #F0F0EB; border-radius: 999px">
+<div style="position: absolute; top: 0; height: 10px; left: {{p.segLeft}}; width: {{p.segW}}; background: {{p.segColor}}; border-radius: 999px"></div>
+<div style="position: absolute; top: -3px; left: 50%; width: 2px; height: 16px; background: #1A1A1A; transform: translateX(-1px)"></div>
+</div>
+<div style="display: flex; justify-content: space-between; font-size: 11px; color: #8A8A84"><span>retard</span><span>avance</span></div>
+</div>
+</sc-for>
+<button style="align-self: flex-start; min-height: 40px; padding: 0 16px; border-radius: 8px; border: 1px solid #D6D6D0; background: #FFFFFF; font-family: inherit; font-size: 14px; font-weight: 500; color: #1A1A1A; cursor: pointer">Replanifier</button>
+</section>
+<section style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Domaines cette semaine</h2>
+<sc-for list="{{domainMix}}" as="d" hint-placeholder-count="5">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+<span style="width: 92px; flex: none; color: #3D3D39">{{d.n}}</span>
+<div style="flex: 1; height: 8px; background: #F0F0EB; border-radius: 999px; overflow: hidden">
+<div style="height: 8px; width: {{d.w}}; background: {{d.c}}; border-radius: 999px"></div>
+</div>
+<span style="width: 52px; text-align: right; font-family: 'IBM Plex Mono', monospace; color: #5F5F5A">{{d.label}}</span>
+</div>
+</sc-for>
+</section>
+</aside>
+
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"expColor":{"editor":"color","default":"#D9AE3C","options":["#D9AE3C","#E8C25A","#C99A2E"]},"$preview":{"width":1440,"height":1000}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { done: { t1: true, t4: true }, showBonus: false, bonusDone: {} };
+  }
+  renderVals() {
+    const D = {
+      sante: { n: "Santé", c: "#2F8F62" },
+      famille: { n: "Famille", c: "#D2691E" },
+      carriere: { n: "Carrière", c: "#2F6FDB" },
+      patrimoine: { n: "Patrimoine", c: "#A47A12" },
+      securite: { n: "Sécurité", c: "#6B5BC4" },
+      maison: { n: "Maison", c: "#8A6448" },
+      inbox: { n: "Inbox", c: "#7A7A75" }
+    };
+    const fmt = (m) => m < 60 ? m + " min" : (m % 60 ? Math.floor(m / 60) + " h " + (m % 60) : (m / 60) + " h");
+    const base = [
+      { id: "t1", title: "Déposer le colis au relais", d: "inbox", project: "Inbox", why: "Deadline jeudi", dur: 30, exp: false },
+      { id: "t2", title: "Sortie vélo en famille", d: "famille", project: "Sorties & activités famille", why: "Expériences : 0 sur les 4 dernières semaines", dur: 120, exp: true },
+      { id: "t3", title: "Comparer les 3 devis photovoltaïques", d: "maison", project: "Panneaux photovoltaïques", why: "Projet du mois, 2 h de retard", dur: 60, exp: false },
+      { id: "t4", title: "Séance d'essai au club d'escalade", d: "sante", project: "Trouver un second sport", why: "Priorité n°1, projet du mois", dur: 60, exp: false },
+      { id: "t5", title: "Rédiger la fiche du POC RAG", d: "carriere", project: "Repositionnement IA", why: "Suite logique de la tâche faite lundi dernier", dur: 60, exp: false },
+      { id: "t6", title: "Isoler les objets connectés sur un VLAN", d: "securite", project: "Firewall maison", why: "Prérequis débloqué", dur: 30, exp: false }
+    ];
+    const bonus = [
+      { id: "b1", title: "Lire la doc du serveur MCP", d: "carriere", project: "Labo Tech", dur: 30, exp: false, why: "Bonus" },
+      { id: "b2", title: "Trier les idées du groupe Crypto", d: "patrimoine", project: "Idées", dur: 30, exp: false, why: "Bonus" },
+      { id: "b3", title: "Réparer le portillon du jardin", d: "maison", project: "Jardin", dur: 60, exp: false, why: "Bonus" }
+    ];
+    const row = (x, isBonus) => {
+      const d = D[x.d];
+      const done = isBonus ? true : !!this.state.done[x.id];
+      return {
+        id: x.id, title: x.title, project: x.project, why: x.why, exp: x.exp, isBonus: isBonus,
+        dn: d.n, color: d.c, durLabel: fmt(x.dur), dur: x.dur, done: done,
+        checkBg: done ? d.c : "#FFFFFF", mark: done ? "✓" : "", deco: done ? "line-through" : "none", opacity: done ? "0.5" : "1",
+        toggle: isBonus
+          ? () => this.setState((s) => ({ bonusDone: Object.assign({}, s.bonusDone, { [x.id]: false }) }))
+          : () => this.setState((s) => ({ done: Object.assign({}, s.done, { [x.id]: !s.done[x.id] }) }))
+      };
+    };
+    const all = base.map((x) => row(x, false)).concat(bonus.filter((b) => this.state.bonusDone[b.id]).map((b) => row(b, true)));
+    const tasks = all.filter((t) => !t.done).concat(all.filter((t) => t.done));
+    const bonusOpen = bonus.filter((b) => !this.state.bonusDone[b.id]).map((b) => ({
+      title: b.title, project: b.project, dn: D[b.d].n, color: D[b.d].c, durLabel: fmt(b.dur),
+      pick: () => this.setState((s) => ({ bonusDone: Object.assign({}, s.bonusDone, { [b.id]: true }) }))
+    }));
+    const planned = base.filter((x) => !x.exp).reduce((a, x) => a + x.dur, 0);
+    const doneMin = all.filter((t) => t.done && !t.exp).reduce((a, t) => a + t.dur, 0);
+    const expDone = all.filter((t) => t.done && t.exp).length;
+    const mixMin = {};
+    all.forEach((t) => { if (t.done) { mixMin[t.dn] = (mixMin[t.dn] || 0) + t.dur; } });
+    const order = ["Santé", "Famille", "Carrière", "Patrimoine", "Sécurité", "Maison", "Inbox"];
+    const colorOf = {}; Object.keys(D).forEach((k) => { colorOf[D[k].n] = D[k].c; });
+    const domainMix = order.map((n) => ({ n: n, c: colorOf[n], w: Math.round(((mixMin[n] || 0) / 360) * 100) + "%", label: mixMin[n] ? fmt(mixMin[n]) : "—" }));
+    const proj = [
+      { name: "Panneaux photovoltaïques", d: "maison", delta: -2 },
+      { name: "Repositionnement IA", d: "carriere", delta: 1 },
+      { name: "Trouver un second sport", d: "sante", delta: 0 }
+    ];
+    const projects = proj.map((p) => {
+      const a = Math.min(Math.abs(p.delta), 4) / 4 * 50;
+      return {
+        name: p.name, color: D[p.d].c,
+        segLeft: p.delta < 0 ? (50 - a) + "%" : "50%",
+        segW: a + "%",
+        segColor: p.delta < 0 ? "#E0A27A" : "#8FB3E8",
+        label: p.delta === 0 ? "à l'heure" : (p.delta > 0 ? "+" : "−") + Math.abs(p.delta) + " h",
+        labelColor: p.delta < 0 ? "#9A4A17" : (p.delta > 0 ? "#2456A8" : "#5F5F5A")
+      };
+    });
+    return {
+      tasks: tasks, remaining: all.filter((t) => !t.done).length,
+      bonusOpen: bonusOpen, bonusCount: bonusOpen.length, showBonus: this.state.showBonus,
+      bonusExpanded: this.state.showBonus ? "true" : "false",
+      chevronRot: this.state.showBonus ? "90deg" : "0deg",
+      toggleBonus: () => this.setState((s) => ({ showBonus: !s.showBonus })),
+      plannedLabel: fmt(planned), doneLabel: fmt(doneMin) || "0 min",
+      doneBarW: Math.min(100, Math.round((doneMin / 360) * 100)) + "%",
+      expLabel: String(expDone), projects: projects, domainMix: domainMix, expColor: this.props.expColor ?? "#D9AE3C"
+    };
+  }
+}
+</script>
+</body>
+</html>

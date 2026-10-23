@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>Planifier la semaine</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F6F6F3}
+a{color:inherit;text-decoration:none}a:hover{color:inherit;text-decoration:underline;text-underline-offset:3px}
+</style>
+</helmet>
+<div style="font-family: 'IBM Plex Sans', system-ui, sans-serif; color: #1A1A1A; background: #F6F6F3; min-height: 100vh; box-sizing: border-box; padding: 32px 24px">
+<div style="max-width: 1360px; margin: 0 auto; display: flex; flex-direction: column; gap: 24px">
+
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<div style="font-size: 13px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #5F5F5A">Planification · semaine 45 · 2 – 8 nov</div>
+<h1 style="margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.01em">Planifier la semaine</h1>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button disabled="" aria-disabled="true" title="Disponible en v2" style="min-height: 44px; padding: 0 16px; border-radius: 8px; border: 1px dashed #C9C9C3; background: #EFEFEA; font-family: inherit; font-size: 14px; color: #6B6B66; cursor: not-allowed; display: flex; align-items: center; gap: 8px">
+<svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16"><path d="M8 1.5l1.6 4.2 4.4.3-3.4 2.8 1.1 4.3L8 10.7l-3.7 2.4 1.1-4.3L2 6l4.4-.3z" fill="none" stroke="#6B6B66" stroke-width="1.3" stroke-linejoin="round"></path></svg>
+Proposer avec l'IA · v2
+</button>
+<button style="min-height: 44px; padding: 0 18px; border-radius: 8px; border: 0; background: #1A1A1A; font-family: inherit; font-size: 14px; font-weight: 600; color: #FFFFFF; cursor: pointer">Valider la semaine</button>
+</div>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-start">
+
+<div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; gap: 24px">
+<sc-for list="{{groups}}" as="g" hint-placeholder-count="3">
+<section style="display: flex; flex-direction: column; gap: 12px; background: #EFEFEA; border-radius: 18px; padding: 18px 18px 20px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 0 2px 4px">
+<h2 style="margin: 0; font-size: 21px; font-weight: 700; letter-spacing: -0.01em">{{g.name}}</h2>
+<span style="font-size: 12px; font-weight: 600; color: #3D3D39; background: #FFFFFF; border-radius: 999px; padding: 2px 9px">{{g.count}}</span>
+<span style="font-size: 13px; color: #5F5F5A">{{g.hint}}</span>
+</div>
+<sc-for list="{{g.projects}}" as="p" hint-placeholder-count="2">
+<div style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; overflow: hidden">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid #EFEFEA">
+<span style="width: 10px; height: 10px; border-radius: 999px; background: {{p.color}}; flex: none"></span>
+<a href="#" style="font-size: 16px; font-weight: 600">{{p.name}}</a>
+<span style="font-size: 13px; color: #6B6B66">{{p.domain}}</span>
+<sc-if value="{{p.hasObjective}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 13px; color: #6B6B66">· Objectif : <a href="#" style="color: #3D3D39">{{p.objective}}</a></span>
+</sc-if>
+</div>
+<sc-for list="{{p.tasks}}" as="t" hint-placeholder-count="3">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid #F3F3EF; background: {{t.rowBg}}; opacity: {{t.opacity}}">
+<div style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; gap: 2px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px">
+<a href="#" style="font-size: 15px; font-weight: 500">{{t.title}}</a>
+<sc-if value="{{t.exp}}" hint-placeholder-val="{{ false }}">
+<span style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #3B2C05; background: linear-gradient(135deg, #FDF3CF 0%, {{expColor}} 50%, #F6E2A0 100%); border: 1px solid #B8892A; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7); border-radius: 999px; padding: 1px 8px">Expérience</span>
+</sc-if>
+</div>
+<span style="font-size: 12px; color: #6B6B66">{{t.note}}</span>
+</div>
+<span style="flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 13px; background: #F0F0EB; border-radius: 999px; padding: 4px 10px">{{t.durLabel}}</span>
+<button onClick="{{t.addWeek}}" disabled="{{t.locked}}" style="flex: none; min-height: 36px; min-width: 104px; padding: 0 12px; border-radius: 8px; border: 1px solid {{t.weekBorder}}; background: {{t.weekBg}}; color: {{t.weekColor}}; font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer">{{t.weekLabel}}</button>
+<button onClick="{{t.addBonus}}" disabled="{{t.locked}}" style="flex: none; min-height: 36px; padding: 0 12px; border-radius: 8px; border: 1px solid {{t.bonusBorder}}; background: {{t.bonusBg}}; color: {{t.bonusColor}}; font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer">{{t.bonusLabel}}</button>
+</div>
+</sc-for>
+<sc-if value="{{p.hasMore}}" hint-placeholder-val="{{ false }}">
+<sc-if value="{{p.open}}" hint-placeholder-val="{{ false }}">
+<div style="background: #FAFAF8">
+<sc-for list="{{p.hiddenTasks}}" as="h" hint-placeholder-count="2">
+<div style="display: flex; align-items: center; gap: 12px; padding: 8px 18px; border-bottom: 1px solid #F3F3EF; color: #6B6B66">
+<a href="#" style="flex: 1; min-width: 0; font-size: 14px">{{h.title}}</a>
+<span style="flex: none; font-family: 'IBM Plex Mono', monospace; font-size: 12px">{{h.durLabel}}</span>
+</div>
+</sc-for>
+</div>
+</sc-if>
+<button onClick="{{p.toggleMore}}" aria-expanded="{{p.openAttr}}" style="display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; padding: 0 18px; border: 0; background: #FFFFFF; font-family: inherit; font-size: 13px; color: #6B6B66; text-align: left; cursor: pointer">
+<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14" style="transform: rotate({{p.chevron}})"><path d="M5 3l4 4-4 4" fill="none" stroke="#6B6B66" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+{{p.moreLabel}}
+</button>
+</sc-if>
+</div>
+</sc-for>
+</section>
+</sc-for>
+</div>
+
+<aside style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Budget</h2>
+<span style="font-size: 12px; color: #6B6B66">hors expériences</span>
+</div>
+<div style="font-family: 'IBM Plex Mono', monospace; font-size: 28px">{{plannedLabel}} <span style="font-size: 16px; color: #6B6B66">/ 6 h</span></div>
+<div style="height: 10px; background: #EDEDE8; border-radius: 999px; overflow: hidden">
+<div style="height: 10px; width: {{budgetW}}; background: {{budgetColor}}; border-radius: 999px"></div>
+</div>
+<div style="font-size: 13px; color: {{restColor}}; font-weight: 500">{{restLabel}}</div>
+<div style="font-size: 13px; color: #5F5F5A">{{countLabel}}</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Alertes</h2>
+<sc-for list="{{alerts}}" as="a" hint-placeholder-count="3">
+<div style="display: flex; gap: 10px; align-items: flex-start; font-size: 14px">
+<span style="width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; background: {{a.color}}; flex: none"></span>
+<span style="color: #2A2A27">{{a.text}}</span>
+</div>
+</sc-for>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #E6E6E1; border-radius: 14px; padding: 18px 20px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 18px; font-weight: 600">Répartition prévue</h2>
+<sc-for list="{{mix}}" as="d" hint-placeholder-count="6">
+<div style="display: flex; align-items: center; gap: 10px; font-size: 13px">
+<span style="width: 92px; flex: none; color: #3D3D39">{{d.n}}</span>
+<div style="flex: 1; height: 8px; background: #F0F0EB; border-radius: 999px; overflow: hidden">
+<div style="height: 8px; width: {{d.w}}; background: {{d.c}}; border-radius: 999px"></div>
+</div>
+<span style="width: 56px; text-align: right; font-family: 'IBM Plex Mono', monospace; color: #5F5F5A">{{d.label}}</span>
+</div>
+</sc-for>
+<div style="font-size: 12px; color: #6B6B66">Par ordre de priorité · expériences incluses</div>
+</section>
+</aside>
+
+</div>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"expColor":{"editor":"color","default":"#D9AE3C","options":["#D9AE3C","#E8C25A","#C99A2E"]},"$preview":{"width":1440,"height":1240}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { sel: { i1: "week", c1: "week" }, open: {} };
+  }
+  renderVals() {
+    const D = {
+      sante: { n: "Santé", c: "#2F8F62" },
+      famille: { n: "Famille", c: "#D2691E" },
+      carriere: { n: "Carrière", c: "#2F6FDB" },
+      patrimoine: { n: "Patrimoine", c: "#A47A12" },
+      securite: { n: "Sécurité", c: "#6B5BC4" },
+      maison: { n: "Maison", c: "#8A6448" },
+      inbox: { n: "Inbox", c: "#7A7A75" }
+    };
+    const fmt = (m) => m < 60 ? m + " min" : (m % 60 ? Math.floor(m / 60) + " h " + (m % 60) : (m / 60) + " h");
+    const sel = this.state.sel;
+    const toggle = (id, mode) => () => this.setState((s) => ({ sel: Object.assign({}, s.sel, { [id]: s.sel[id] === mode ? undefined : mode }) }));
+    const groupsData = [
+      { name: "Inbox", hint: "", projects: [
+        { name: "Inbox", d: "inbox", objective: "", tasks: [
+          { id: "i1", title: "Renouveler l'assurance auto", dur: 30, free: true, note: "Deadline jeudi 5 nov" },
+          { id: "i2", title: "Appeler le notaire", dur: 30, free: true, note: "Reportée 3 fois" }
+        ] }
+      ] },
+      { name: "Projets du mois", hint: "", projects: [
+        { name: "Panneaux photovoltaïques", d: "maison", show: 2, objective: "Réduire la facture d'énergie", tasks: [
+          { id: "p1", title: "Choisir l'installateur", dur: 60, note: "2 h de retard sur le mois" },
+          { id: "p2", title: "Signer le devis", dur: 30, note: "" },
+          { id: "p3", title: "Déposer la déclaration préalable en mairie", dur: 60, note: "" }
+        ] },
+        { name: "Repositionnement IA", d: "carriere", show: 2, objective: "2 POC IA publiés d'ici fin décembre", tasks: [
+          { id: "c1", title: "Rédiger la fiche du POC RAG", dur: 60, note: "Suite logique de la semaine passée" },
+          { id: "c2", title: "Coder l'ingestion des documents", dur: 120, note: "" },
+          { id: "c3", title: "Écrire le README du POC", dur: 30, note: "" },
+          { id: "c4", title: "Préparer une démo de 5 minutes", dur: 60, note: "" },
+          { id: "c5", title: "Publier un post sur le POC", dur: 60, note: "" }
+        ] },
+        { name: "Trouver un second sport", d: "sante", show: 1, objective: "Pratiquer 2 sports en régulier", tasks: [
+          { id: "s1", title: "Séance d'essai n°2 à l'escalade", dur: 60, note: "Santé = priorité n°1" },
+          { id: "s2", title: "S'inscrire au club", dur: 30, note: "" }
+        ] }
+      ] },
+      { name: "À considérer aussi", hint: "suggérés par le moteur, hors projets du mois", projects: [
+        { name: "Sorties & activités famille", d: "famille", objective: "", tasks: [
+          { id: "f1", title: "Pique-nique et balade en forêt", dur: 120, exp: true, free: true, note: "Expériences : 0 / 2 sur 4 semaines" }
+        ] },
+        { name: "Firewall maison", d: "securite", show: 1, objective: "", tasks: [
+          { id: "x1", title: "Isoler les objets connectés sur un VLAN", dur: 30, note: "Prérequis débloqué" },
+          { id: "x2", title: "Activer les alertes de détection d'intrusion", dur: 60, note: "" }
+        ] }
+      ] }
+    ];
+    let weekMin = 0, expCount = 0, weekCount = 0, bonusCount = 0;
+    const mixMin = {};
+    const groups = groupsData.map((g) => ({
+      name: g.name, hint: g.hint, count: g.name === "Inbox" ? g.projects[0].tasks.length + " tâches" : g.projects.length + " projets",
+      projects: g.projects.map((p) => {
+        const d = D[p.d];
+        let prevOk = true;
+        const tasks = p.tasks.map((t) => {
+          const locked = !t.free && !prevOk;
+          const mode = locked ? undefined : sel[t.id];
+          if (!t.free) { prevOk = !!mode; }
+          if (mode === "week") {
+            weekCount += 1;
+            mixMin[d.n] = (mixMin[d.n] || 0) + t.dur;
+            if (t.exp) { expCount += 1; } else { weekMin += t.dur; }
+          }
+          if (mode === "bonus") { bonusCount += 1; }
+          const week = mode === "week", bonus = mode === "bonus";
+          return {
+            title: t.title, exp: !!t.exp, durLabel: fmt(t.dur), locked: locked, sel: !!mode,
+            note: locked ? "Après la tâche précédente" : t.note,
+            opacity: locked ? "0.45" : "1",
+            rowBg: week ? "#F4F8F5" : (bonus ? "#F7F7F4" : "#FFFFFF"),
+            weekLabel: week ? "✓ Semaine" : "+ Semaine",
+            weekBg: week ? "#1A1A1A" : "#FFFFFF", weekColor: week ? "#FFFFFF" : "#1A1A1A", weekBorder: week ? "#1A1A1A" : "#D6D6D0",
+            bonusLabel: bonus ? "✓ Bonus" : "Bonus",
+            bonusBg: bonus ? "#EFEFEA" : "#FFFFFF", bonusColor: "#3D3D39", bonusBorder: bonus ? "#9A9A94" : "#E0E0DA",
+            addWeek: toggle(t.id, "week"), addBonus: toggle(t.id, "bonus")
+          };
+        });
+        let vis = Math.min(p.show || tasks.length, tasks.length);
+        while (vis < tasks.length && tasks.slice(0, vis).every((r) => r.sel)) { vis += 1; }
+        const hidden = tasks.length - vis;
+        const isOpen = !!this.state.open[p.name];
+        const nb = hidden + (hidden > 1 ? " autres tâches" : " autre tâche");
+        return { name: p.name, domain: d.n, color: d.c, objective: p.objective, hasObjective: !!p.objective, tasks: tasks.slice(0, vis), hasMore: hidden > 0,
+          open: isOpen, openAttr: isOpen ? "true" : "false", chevron: isOpen ? "90deg" : "0deg",
+          moreLabel: isOpen ? "Masquer les " + nb : "+ " + nb + " dans le projet",
+          hiddenTasks: p.tasks.slice(vis).map((t) => ({ title: t.title, durLabel: fmt(t.dur) })),
+          toggleMore: () => this.setState((s) => ({ open: Object.assign({}, s.open, { [p.name]: !s.open[p.name] }) })) };
+      })
+    }));
+    const over = weekMin - 360;
+    const alerts = [];
+    if (over > 0) { alerts.push({ color: "#E08A2E", text: "Dépassement de " + fmt(over) + " au-delà de 6 h. Tu peux valider quand même." }); }
+    if (!mixMin["Santé"]) { alerts.push({ color: "#E08A2E", text: "Santé, ta priorité n°1 : rien de prévu cette semaine." }); }
+    if (!mixMin["Famille"]) { alerts.push({ color: "#E08A2E", text: "Famille : rien de prévu cette semaine." }); }
+    if (expCount === 0) { alerts.push({ color: "#E08A2E", text: "Aucune expérience prévue (0 / 2 sur 4 semaines)." }); }
+    if (alerts.length === 0) { alerts.push({ color: "#3E9B6E", text: "Rien à signaler : semaine équilibrée." }); }
+    const order = ["Santé", "Famille", "Carrière", "Patrimoine", "Sécurité", "Maison", "Inbox"];
+    const colorOf = {}; Object.keys(D).forEach((k) => { colorOf[D[k].n] = D[k].c; });
+    const mix = order.map((n) => ({ n: n, c: colorOf[n], w: Math.min(100, Math.round(((mixMin[n] || 0) / 240) * 100)) + "%", label: mixMin[n] ? fmt(mixMin[n]) : "—" }));
+    return {
+      groups: groups, alerts: alerts, mix: mix, expColor: this.props.expColor ?? "#D9AE3C",
+      plannedLabel: weekMin ? fmt(weekMin) : "0 h",
+      budgetW: Math.min(100, Math.round((weekMin / 360) * 100)) + "%",
+      budgetColor: over > 0 ? "#E08A2E" : "#1A1A1A",
+      restLabel: over > 0 ? "+" + fmt(over) + " au-delà du budget" : "Reste " + fmt(360 - weekMin),
+      restColor: over > 0 ? "#9A4A17" : "#2F7A55",
+      countLabel: weekCount + " tâche(s) · " + expCount + " expérience(s) · " + bonusCount + " bonus"
+    };
+  }
+}
+</script>
+</body>
+</html>
