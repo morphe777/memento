@@ -61,64 +61,12 @@ function WeekDesktop({ ex }: { ex: Execution }) {
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false); // V-13: always folded by default, state not remembered
   const [replanOpen, setReplanOpen] = useState(false);
-  const over = ex.budget.overMin > 0;
   const mixRows = useDomainRows(ex.domainMix);
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Breadcrumb items={[{ label: 'Ma semaine' }]} />
-        <PageHeader
-          eyebrow={eyebrow(ex)}
-          title="Ma semaine"
-          actions={
-            <>
-              <Kpi
-                label="Budget"
-                foot={
-                  <div className="text-[12px]" style={{ color: over ? 'var(--late-text)' : 'var(--ok)' }}>
-                    {over
-                      ? `+${fmtMin(ex.budget.overMin)} au-delà · hors expériences`
-                      : 'Dans le budget · hors expériences'}
-                  </div>
-                }
-              >
-                {fmtMin(ex.budget.plannedMin)}{' '}
-                <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>
-                  / {fmtMin(ex.budget.budgetMin)}
-                </span>
-              </Kpi>
-              <Kpi
-                label="Fait"
-                minWidth={170}
-                foot={
-                  <div className="track" style={{ height: 6, background: 'var(--track)' }}>
-                    <div
-                      style={{
-                        height: 6,
-                        width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
-                        background: 'var(--text)',
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
-                }
-              >
-                {fmtMin(ex.doneMin)}
-              </Kpi>
-              <Kpi
-                label="Expériences"
-                foot={
-                  <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                    {ex.experiences.windowWeeks} dernières semaines
-                  </div>
-                }
-              >
-                {ex.experiences.done}{' '}
-                <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {ex.experiences.target}</span>
-              </Kpi>
-            </>
-          }
-        />
+        <PageHeader eyebrow={eyebrow(ex)} title="Ma semaine" />
       </div>
 
       <div className="flex flex-wrap gap-6 items-start">
@@ -206,6 +154,38 @@ function WeekDesktop({ ex }: { ex: Execution }) {
         </section>
 
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
+          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <Kpi
+              label="Fait"
+              minWidth={0}
+              foot={
+                <div className="track" style={{ height: 6, background: 'var(--track)' }}>
+                  <div
+                    style={{
+                      height: 6,
+                      width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
+                      background: 'var(--text)',
+                      borderRadius: 999,
+                    }}
+                  />
+                </div>
+              }
+            >
+              {fmtMin(ex.doneMin)}
+            </Kpi>
+            <Kpi
+              label="Expériences"
+              minWidth={0}
+              foot={
+                <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                  {ex.experiences.windowWeeks} dernières semaines
+                </div>
+              }
+            >
+              {ex.experiences.done}{' '}
+              <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {ex.experiences.target}</span>
+            </Kpi>
+          </div>
           <section className="card flex flex-col gap-4" style={{ padding: '18px 20px' }}>
             <div className="flex justify-between items-baseline">
               <h2 className="h2">Projets du mois</h2>
@@ -379,10 +359,9 @@ function WeekPhone({ ex }: { ex: Execution }) {
       </div>
       <div
         className="grid gap-2"
-        style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', padding: '0 8px' }}
+        style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', padding: '0 8px' }}
       >
         {[
-          ['Budget', `${compact(ex.budget.plannedMin)} / ${compact(ex.budget.budgetMin)}`],
           ['Fait', compact(ex.doneMin)],
           ['Expé.', `${ex.experiences.done} / ${ex.experiences.target}`],
         ].map(([l, v]) => (

@@ -522,61 +522,73 @@ function DomainsConfig() {
     reorder.mutate(next);
   };
   return (
-    <Section
-      title="Domaines de vie"
-      aside="glisser pour changer l'ordre de priorité"
-      info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
-    >
-      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-        Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
-        rang (1 pour le n°1, puis −1/8 par rang).
-      </p>
-      <div className="card overflow-hidden">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={order} strategy={verticalListSortingStrategy}>
-            {order.map((id, i) => {
-              const d = byId.get(id);
-              if (!d) return null;
-              return (
-                <SortableDomain key={id} d={d}>
-                  <span className="mono text-[12px]" style={{ width: 24, color: 'var(--text-faint)' }}>
-                    #{i + 1}
-                  </span>
-                  <DomainEditor d={d} onSave={(body) => update.mutate({ id, body })} />
-                </SortableDomain>
-              );
-            })}
-          </SortableContext>
-        </DndContext>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn" onClick={proposeWeights}>
-          Appliquer les poids proposés selon l'ordre
-        </button>
-      </div>
-      <form
-        className="flex flex-wrap gap-2 pt-2"
-        style={{ borderTop: '1px solid var(--border)' }}
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim())
-            create.mutate(
-              { name: name.trim(), colorLight: '#7A7A75', colorDark: '#9A9A94' },
-              { onSuccess: () => setName('') },
-            );
-        }}
+    <>
+      <Section
+        title="Domaines de vie"
+        aside="glisser pour changer l'ordre de priorité"
+        info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
       >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nouveau domaine (décision réfléchie : liste fermée)"
-          style={{ flex: '1 1 260px' }}
-        />
-        <button type="submit" className="btn" disabled={!name.trim()}>
-          Ajouter
-        </button>
-      </form>
-    </Section>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
+          rang (1 pour le n°1, puis −1/8 par rang).
+        </p>
+        <div className="card overflow-hidden">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={order} strategy={verticalListSortingStrategy}>
+              {order.map((id, i) => {
+                const d = byId.get(id);
+                if (!d) return null;
+                return (
+                  <SortableDomain key={id} d={d}>
+                    <span className="mono text-[12px]" style={{ width: 24, color: 'var(--text-faint)' }}>
+                      #{i + 1}
+                    </span>
+                    <DomainEditor d={d} onSave={(body) => update.mutate({ id, body })} />
+                  </SortableDomain>
+                );
+              })}
+            </SortableContext>
+          </DndContext>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" className="btn" onClick={proposeWeights}>
+            Recalculer les poids depuis l'ordre
+          </button>
+          <InfoTip>
+            Remplace tous les poids par la proposition linéaire : le domaine n°1 reçoit 1, puis chaque rang
+            perd 1/8 (n°2 = 0,875 … n°8 = 0,125). Pratique après avoir réordonné les domaines. Tu peux ensuite
+            ajuster chaque poids à la main.
+          </InfoTip>
+        </div>
+      </Section>
+      <Section
+        title="Nouveau domaine"
+        info="La liste des domaines est volontairement courte et stable : ajoute un domaine seulement après réflexion. Il arrive en dernier ; glisse-le ensuite à son rang."
+      >
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim())
+              create.mutate(
+                { name: name.trim(), colorLight: '#7A7A75', colorDark: '#9A9A94' },
+                { onSuccess: () => setName('') },
+              );
+          }}
+        >
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nom du domaine"
+            aria-label="Nom du nouveau domaine"
+            style={{ flex: '1 1 260px' }}
+          />
+          <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
+            Ajouter
+          </button>
+        </form>
+      </Section>
+    </>
   );
 }
 
@@ -657,79 +669,87 @@ function GroupsConfig() {
   });
   const remove = useAction((id: string) => del(`/groups/${id}`), { toast: 'Groupe supprimé.' });
   return (
-    <Section
-      title="Groupes"
-      aside="rangement libre · un groupe = un domaine"
-      info="Les groupes rangent les projets. Chaque groupe appartient à un domaine, et un projet tire ses domaines de ses groupes. Un groupe qui contient encore des projets ne peut pas être supprimé."
-    >
-      <div className="card overflow-hidden">
-        {(groups.data ?? []).map((g) => (
-          <div
-            key={g.id}
-            className="flex flex-wrap items-center gap-3"
-            style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
-          >
-            <span className="dot" style={{ background: dl.color(g.domainId) }} />
-            <input
-              defaultValue={g.name}
-              aria-label="Nom du groupe"
-              onBlur={(e) =>
-                e.target.value !== g.name && update.mutate({ id: g.id, body: { name: e.target.value } })
-              }
-              style={{ flex: '1 1 180px' }}
-            />
-            <select
-              value={g.domainId}
-              onChange={(e) => update.mutate({ id: g.id, body: { domainId: e.target.value } })}
-              aria-label="Domaine"
-            >
-              {dl.domains.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            <span className="text-[12px]" style={{ color: 'var(--text-faint)', width: 90 }}>
-              {g.projectCount} projet(s)
-            </span>
-            <button
-              type="button"
-              className="btn btn-sm btn-ghost"
-              disabled={g.projectCount > 0}
-              title={g.projectCount ? 'Contient des projets' : 'Supprimer'}
-              onClick={() => remove.mutate(g.id)}
-            >
-              Supprimer
-            </button>
-          </div>
-        ))}
-      </div>
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim() && domainId) create.mutate(undefined);
-        }}
+    <>
+      <Section
+        title="Groupes"
+        aside="rangement libre · un groupe = un domaine"
+        info="Les groupes rangent les projets. Chaque groupe appartient à un domaine, et un projet tire ses domaines de ses groupes. Un groupe qui contient encore des projets ne peut pas être supprimé."
       >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nouveau groupe"
-          style={{ flex: '1 1 200px' }}
-        />
-        <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
-          <option value="">Domaine…</option>
-          {dl.domains.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
+        <div className="card overflow-hidden">
+          {(groups.data ?? []).map((g) => (
+            <div
+              key={g.id}
+              className="flex flex-wrap items-center gap-3"
+              style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
+            >
+              <span className="dot" style={{ background: dl.color(g.domainId) }} />
+              <input
+                defaultValue={g.name}
+                aria-label="Nom du groupe"
+                onBlur={(e) =>
+                  e.target.value !== g.name && update.mutate({ id: g.id, body: { name: e.target.value } })
+                }
+                style={{ flex: '1 1 180px' }}
+              />
+              <select
+                value={g.domainId}
+                onChange={(e) => update.mutate({ id: g.id, body: { domainId: e.target.value } })}
+                aria-label="Domaine"
+              >
+                {dl.domains.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <span className="text-[12px]" style={{ color: 'var(--text-faint)', width: 90 }}>
+                {g.projectCount} projet(s)
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                disabled={g.projectCount > 0}
+                title={g.projectCount ? 'Contient des projets' : 'Supprimer'}
+                onClick={() => remove.mutate(g.id)}
+              >
+                Supprimer
+              </button>
+            </div>
           ))}
-        </select>
-        <button type="submit" className="btn" disabled={!name.trim() || !domainId}>
-          Créer
-        </button>
-      </form>
-    </Section>
+        </div>
+      </Section>
+      <Section
+        title="Nouveau groupe"
+        info="Choisis le domaine auquel le groupe appartient : ses projets en héritent."
+      >
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (name.trim() && domainId) create.mutate(undefined);
+          }}
+        >
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nom du groupe"
+            aria-label="Nom du nouveau groupe"
+            style={{ flex: '1 1 200px' }}
+          />
+          <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
+            <option value="">Domaine…</option>
+            {dl.domains.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className="btn btn-primary" disabled={!name.trim() || !domainId}>
+            Créer
+          </button>
+        </form>
+      </Section>
+    </>
   );
 }
 

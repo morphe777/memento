@@ -153,7 +153,7 @@ export function TaskBoard({
   };
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))' }}>
+      <div className="grid-2x2">
         {COLUMNS.map((c) => (
           <BoardColumn
             key={c.bucket}
@@ -195,7 +195,9 @@ function BoardColumn({
         >
           {tasks.length}
         </span>
-        <InfoTip align={column.bucket === 'done' ? 'right' : 'left'}>{column.info}</InfoTip>
+        <InfoTip align={column.bucket === 'done' || column.bucket === 'todo' ? 'right' : 'left'}>
+          {column.info}
+        </InfoTip>
         {minutes > 0 && (
           <span className="mono text-[12px] ml-auto" style={{ color: 'var(--text-faint)' }}>
             {Math.round((minutes / 60) * 10) / 10} h
