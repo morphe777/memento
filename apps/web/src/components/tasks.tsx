@@ -210,20 +210,37 @@ export function QuickAdd({
   projectId,
   placeholder,
   defaultDuration = 30,
+  withSchedule = false,
 }: {
   projectId: string | null;
   placeholder: string;
   defaultDuration?: 30 | 60 | 120 | null;
+  /** Inbox: deadline and recurrence can be set right away (RB-11). */
+  withSchedule?: boolean;
 }) {
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState<string>(defaultDuration ? String(defaultDuration) : '');
+  const [dueDate, setDueDate] = useState('');
+  const [rule, setRule] = useState('');
   const add = useAction(
-    (t: string) => post('/tasks', { title: t, projectId, durationMin: duration ? Number(duration) : null }),
-    { onSuccess: () => setTitle('') },
+    (t: string) =>
+      post('/tasks', {
+        title: t,
+        projectId,
+        durationMin: duration ? Number(duration) : null,
+        ...(withSchedule ? { dueDate: dueDate || null, recurrenceRule: rule || null } : {}),
+      }),
+    {
+      onSuccess: () => {
+        setTitle('');
+        setDueDate('');
+        setRule('');
+      },
+    },
   );
   return (
     <form
-      className="flex gap-2 items-center"
+      className="flex flex-wrap gap-2 items-center"
       onSubmit={(e) => {
         e.preventDefault();
         if (title.trim()) add.mutate(title.trim());
@@ -240,13 +257,37 @@ export function QuickAdd({
         value={duration}
         onChange={(e) => setDuration(e.target.value)}
         aria-label="Durée"
-        style={{ width: 96 }}
+        style={{ width: 112 }}
       >
         <option value="">Durée ?</option>
         <option value="30">30 min</option>
         <option value="60">1 h</option>
         <option value="120">2 h</option>
       </select>
+      {withSchedule && (
+        <>
+          <input
+            type="date"
+            value={dueDate}
+            onChange={(e) => setDueDate(e.target.value)}
+            aria-label="Deadline"
+            title="Deadline (facultative)"
+            style={{ width: 160 }}
+          />
+          <select
+            value={rule}
+            onChange={(e) => setRule(e.target.value)}
+            aria-label="Récurrence"
+            style={{ width: 210 }}
+          >
+            {RECURRENCES.map((r) => (
+              <option key={r.value} value={r.value}>
+                {r.value ? r.label : 'Pas de récurrence'}
+              </option>
+            ))}
+          </select>
+        </>
+      )}
       <button type="submit" className="btn" disabled={!title.trim() || add.isPending}>
         Ajouter
       </button>
