@@ -39,7 +39,9 @@ class ApiFailure extends Error {
   }
 }
 
-const ok = (data: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] });
+const ok = (data: unknown) => ({
+  content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }],
+});
 const fail = (e: unknown) => ({
   isError: true,
   content: [
@@ -61,7 +63,13 @@ const qs = (o: Record<string, unknown>) => {
 };
 
 export function buildServer(call: Call) {
-  const server = new McpServer({ name: 'memento', version: '0.1.0' });
+  const server = new McpServer(
+    { name: 'memento', version: '0.9.0' },
+    {
+      instructions:
+        "Mémento : objectifs, projets et tâches de Mehdi. Avant d'agir, lis le guide (outil get_guide) puis la vue d'ensemble (get_context). Toutes les règles sont appliquées par l'API ; un refus renvoie un code et un message en français à transmettre tel quel.",
+    },
+  );
   type Args<T extends z.ZodRawShape> = z.infer<z.ZodObject<T>>;
   const tool = <T extends z.ZodRawShape>(
     name: string,
@@ -200,6 +208,24 @@ export function buildServer(call: Call) {
     'Promeut une idée en projet « prêt » (backlog). Jamais bloquant : les manques RB-02 sont renvoyés dans gaps.',
     { id: S.uuid },
     (a) => call('POST', `/projects/${a.id}/promote`),
+  );
+  tool(
+    'get_guide',
+    'Guide d’utilisation de Mémento pour une IA (Markdown) : modèle, cycle de vie, planification, recettes, codes d’erreur. À lire en premier.',
+    {},
+    async () => ((await call('GET', '/guide')) as { markdown: string }).markdown,
+  );
+  tool(
+    'get_experiences',
+    'Expériences (objectif de vivre plus d’expériences) : cible sur la fenêtre glissante, souvenirs (faites), prévues, réserve.',
+    {},
+    () => call('GET', '/experiences'),
+  );
+  tool(
+    'add_experience_idea',
+    'Ajoute une idée d’expérience à la réserve (tâche Inbox marquée Expérience, sans date).',
+    S.experienceIdea.shape,
+    (a) => call('POST', '/experiences', a),
   );
   tool(
     'set_objective_quarter',

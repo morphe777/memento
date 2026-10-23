@@ -111,6 +111,13 @@ const taskFields = {
   recurrenceRule: z.string().max(500).nullable().optional(),
   domainId: uuid.nullable().optional(),
 };
+/** D-54: an experience idea for the reserve (an Inbox task flagged as experience). */
+export const experienceIdea = z.object({
+  title,
+  description: text.optional(),
+  durationMin: taskFields.durationMin,
+  domainId: taskFields.domainId,
+});
 export const taskCreate = z.object({
   ...taskFields,
   projectId: uuid.nullable().optional(),
@@ -163,6 +170,7 @@ export const changesQuery = z.object({
 });
 export const markReviewedBody = z.object({ ids: z.array(uuid).optional(), all: z.boolean().optional() });
 
+export type ExperienceIdea = z.infer<typeof experienceIdea>;
 export type DomainCreate = z.infer<typeof domainCreate>;
 export type DomainPatch = z.infer<typeof domainPatch>;
 export type GroupCreate = z.infer<typeof groupCreate>;
