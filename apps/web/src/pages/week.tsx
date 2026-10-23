@@ -361,7 +361,7 @@ function ReplanPanel({
 }
 
 /** iPhone tiles are narrow: "5h30" instead of "5 h 30" (display only). */
-const compact = (m: number) => fmtMin(m).replace(' h ', 'h');
+const compact = (m: number) => fmtMin(m).replace(/ h ?/, 'h');
 
 function WeekPhone({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
@@ -390,7 +390,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
             <span className="label-caps" style={{ fontSize: 11, letterSpacing: '0.04em' }}>
               {l}
             </span>
-            <span className="mono" style={{ fontSize: 16 }}>
+            <span className="mono whitespace-nowrap" style={{ fontSize: 16 }}>
               {v}
             </span>
           </div>

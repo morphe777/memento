@@ -7,13 +7,13 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { StrictMode, useEffect } from 'react';
+import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { AppShell } from './components/shell.tsx';
 import { Loading } from './components/ui.tsx';
 import { ApiError } from './lib/api.ts';
-import { useMe, useSettings } from './lib/hooks.ts';
+import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
 import { DomainPage, DomainsPage, ObjectivePage, ObjectivesPage } from './pages/objectives.tsx';
 import { PlanPage } from './pages/plan.tsx';
@@ -33,11 +33,6 @@ window.addEventListener('memento:unauthenticated', () => queryClient.setQueryDat
 
 function Root() {
   const me = useMe();
-  const settings = useSettings();
-  useEffect(() => {
-    const c = settings.data?.['experience.badge_color'];
-    if (c) document.documentElement.style.setProperty('--experience', c);
-  }, [settings.data]);
   if (me.isLoading) return <Loading />;
   if (!me.data) return <LoginPage />;
   return (
