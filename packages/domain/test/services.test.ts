@@ -25,6 +25,7 @@ import {
   getPlanningPage,
   getProject,
   getProjectReadiness,
+  getQuarterPlanningPage,
   getSettings,
   listBoardTasks,
   listChanges,
@@ -42,6 +43,7 @@ import {
   rollMonth,
   search,
   seed,
+  setObjectiveQuarter,
   setProjectGroups,
   setProjectMonth,
   setTaskInCurrentWeek,
@@ -612,6 +614,29 @@ describe('D-43 Planifier le mois', () => {
     expect(after.chosen.map((c) => [c.title, c.remainingMin])).toEqual([['Combles', 120]]);
     expect(after.budget.neededMin).toBe(150);
     expect(getMonthPlanningPage(ctx, '2026-10').chosen.map((c) => c.id)).toEqual([pv.id]);
+  });
+});
+
+describe('D-48 Planifier le trimestre', () => {
+  it('quarter objectives with remaining work, pull-in of other objectives, alerts', () => {
+    const ctx = makeCtx(); // 23 Oct 2026, Q4
+    const meta = createMetaObjective(ctx, { title: 'Autonomie' });
+    const q4 = createObjective(ctx, { title: 'Facture', deadline: '2026-12-20', metaObjectiveId: meta.id });
+    activeProject(ctx, 'PV', 'Travaux', 3, { objectiveId: q4.id });
+    const q1 = createObjective(ctx, { title: 'Batterie', deadline: '2027-02-15' });
+    createProject(ctx, {
+      title: 'Choisir',
+      groupIds: [lookups(ctx).group('Travaux').id],
+      objectiveId: q1.id,
+    });
+    let page = getQuarterPlanningPage(ctx, '2026-Q4');
+    expect(page.chosen.map((o) => [o.title, o.remainingMin])).toEqual([['Facture', 180]]);
+    expect(page.candidates.map((o) => o.title)).toEqual(['Batterie']);
+    expect(page.metas).toEqual([expect.objectContaining({ title: 'Autonomie', objectives: 1 })]);
+    expect(setObjectiveQuarter(ctx, q1.id, '2026-Q4').deadline).toBe('2026-12-31');
+    page = getQuarterPlanningPage(ctx, '2026-Q4');
+    expect(page.chosen.find((o) => o.title === 'Batterie')!.unknownSize).toBe(1);
+    expect(page.alerts.map((a) => a.code)).toContain('UNKNOWN_SIZE');
   });
 });
 

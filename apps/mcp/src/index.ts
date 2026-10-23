@@ -202,6 +202,12 @@ export function buildServer(call: Call) {
     (a) => call('POST', `/projects/${a.id}/promote`),
   );
   tool(
+    'set_objective_quarter',
+    'Place un objectif dans un trimestre (AAAA-Qn) : planification du trimestre. Sa deadline est ramenée dans le trimestre si besoin.',
+    { id: S.uuid, quarter: S.quarterKey },
+    (a) => call('POST', `/objectives/${a.id}/quarter`, { quarter: a.quarter }),
+  );
+  tool(
     'set_project_month',
     'Choisit un projet prêt comme projet du mois (month = AAAA-MM ; mois courant = actif) ou le retire (month = null). Exige RB-02 complet.',
     { id: S.uuid, month: S.monthKey.nullable() },

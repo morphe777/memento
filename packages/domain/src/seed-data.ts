@@ -5,17 +5,66 @@ export interface SeedDomain {
   name: string;
   colorLight: string;
   colorDark: string;
+  /** Proposal (decision D-49): what belongs to the domain, so that the AI files projects correctly. */
+  description: string;
 }
 
 export const SEED_DOMAINS: SeedDomain[] = [
-  { name: 'Santé', colorLight: '#2F8F62', colorDark: '#4FBF8A' },
-  { name: 'Famille', colorLight: '#D2691E', colorDark: '#F0954B' },
-  { name: 'Carrière', colorLight: '#2F6FDB', colorDark: '#6A9BF2' },
-  { name: 'Patrimoine', colorLight: '#A47A12', colorDark: '#D4A93A' },
-  { name: 'Sécurité', colorLight: '#6B5BC4', colorDark: '#9A8CF0' },
-  { name: 'Maison', colorLight: '#8A6448', colorDark: '#B88E6E' },
-  { name: 'Amis & Social', colorLight: '#B8487A', colorDark: '#E07AA6' },
-  { name: 'Loisirs & Découverte', colorLight: '#1F8A9C', colorDark: '#4CC0D3' },
+  {
+    name: 'Santé',
+    colorLight: '#2F8F62',
+    colorDark: '#4FBF8A',
+    description:
+      'Corps et esprit : sport, sommeil, alimentation, suivi médical, bien-être mental. Tout ce qui me garde en forme sur la durée. Pas ici : le matériel de sport (Maison) ni les sorties sportives entre amis (Amis & Social).',
+  },
+  {
+    name: 'Famille',
+    colorLight: '#D2691E',
+    colorDark: '#F0954B',
+    description:
+      'Le temps et les projets avec ma famille proche : sorties, vacances, moments partagés, éducation, entraide. Pas ici : les travaux de la maison (Maison) ni les papiers administratifs (Patrimoine ou Inbox).',
+  },
+  {
+    name: 'Carrière',
+    colorLight: '#2F6FDB',
+    colorDark: '#6A9BF2',
+    description:
+      'Mon activité professionnelle : missions, clients, montée en compétences, veille et projets techniques qui me font progresser dans mon métier (IA, labo). Pas ici : la veille par simple curiosité (Loisirs & Découverte).',
+  },
+  {
+    name: 'Patrimoine',
+    colorLight: '#A47A12',
+    colorDark: '#D4A93A',
+    description:
+      'Argent et biens : épargne, placements, immobilier, business, fiscalité, budget. Ce qui construit ou protège mon patrimoine. Pas ici : les travaux concrets dans la maison (Maison).',
+  },
+  {
+    name: 'Sécurité',
+    colorLight: '#6B5BC4',
+    colorDark: '#9A8CF0',
+    description:
+      'Se protéger et tenir en cas de coup dur : résilience (énergie, eau, réserves, coupures), sécurité numérique (sauvegardes, mots de passe, réseau), assurances.',
+  },
+  {
+    name: 'Maison',
+    colorLight: '#8A6448',
+    colorDark: '#B88E6E',
+    description:
+      'Le lieu de vie : travaux, rénovation, jardin, équipement, entretien. Ce qui rend la maison plus agréable ou plus efficace.',
+  },
+  {
+    name: 'Amis & Social',
+    colorLight: '#B8487A',
+    colorDark: '#E07AA6',
+    description: 'Les relations hors famille : amis, réseau, sorties, événements, entretenir les liens.',
+  },
+  {
+    name: 'Loisirs & Découverte',
+    colorLight: '#1F8A9C',
+    colorDark: '#4CC0D3',
+    description:
+      'Plaisir et curiosité : jeux, musique, lectures, voyages de découverte, apprendre pour le plaisir. Les expériences nouvelles y trouvent souvent leur place.',
+  },
 ];
 
 /** Pseudo-domain used for Inbox tasks without a domain (display only). */

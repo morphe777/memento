@@ -161,6 +161,38 @@ describe('API — export (D-45)', () => {
     });
     expect(denied.statusCode).toBe(403);
   });
+
+  it('D-50: re-importing an export restores the data, refuses foreign files, keeps the login', async () => {
+    const s = await setup();
+    const h = { cookie: s.cookie };
+    const groups = (await s.app.inject({ url: '/api/v1/groups', headers: h })).json();
+    await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: h,
+      payload: { title: 'Gardé', groupIds: [groups[0].id] },
+    });
+    const dump = (await s.app.inject({ url: '/api/v1/export', headers: h })).json();
+    await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: h,
+      payload: { title: 'Perdu', groupIds: [groups[0].id] },
+    });
+    const bad = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/import',
+      headers: h,
+      payload: { foo: 1 },
+    });
+    expect(bad.json().code).toBe('INVALID_EXPORT');
+    const ok = await s.app.inject({ method: 'POST', url: '/api/v1/import', headers: h, payload: dump });
+    expect(ok.statusCode).toBe(200);
+    const titles = (await s.app.inject({ url: '/api/v1/projects', headers: h }))
+      .json()
+      .map((p: { title: string }) => p.title);
+    expect(titles).toEqual(['Gardé']);
+  });
 });
 
 describe('API — tokens (AI / robots)', () => {

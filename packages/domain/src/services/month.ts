@@ -18,16 +18,9 @@ import { serializeProjects } from './projects.ts';
 
 const { project, objective, task, weekPlan, domain } = schema;
 
-export function getMonthPlanningPage(ctx: Ctx, month: string) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
-    throw new DomainError('INVALID_MONTH', `Mois invalide : ${month}`);
+/** Capacity of a period: each ISO week's budget (adjusted plan or default), prorated by its days in the period. */
+export function capacityBetween(ctx: Ctx, first: string, last: string) {
   const s = getSettings(ctx);
-  const today = parisDate(ctxNow(ctx));
-  const current = monthOf(today);
-  const first = monthStart(month);
-  const last = monthEnd(month);
-
-  // Capacity: each ISO week's budget (adjusted plan or default), prorated by its days inside the month.
   const weeks: {
     isoWeek: string;
     days: number;
@@ -47,25 +40,37 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
     w.reason = plan?.budgetReason ?? null;
     w.shareMin = Math.round((w.budgetMin * w.days) / 7);
   }
-  const capacityMin = weeks.reduce((a, w) => a + w.shareMin, 0);
+  return { weeks, capacityMin: weeks.reduce((a, w) => a + w.shareMin, 0) };
+}
 
-  // Already done this month (current month only): work tasks, experiences excluded (RB-09).
-  const spentMin =
-    month === current
-      ? ctx.db
-          .select({ m: task.durationMin, exp: task.isExperience })
-          .from(task)
-          .where(
-            and(
-              eq(task.status, 'done'),
-              gte(task.doneAt, `${first}T00:00:00`),
-              lt(task.doneAt, `${addDays(last, 1)}T00:00:00`),
-            ),
-          )
-          .all()
-          .filter((t) => !t.exp)
-          .reduce((a, t) => a + (t.m ?? 0), 0)
-      : 0;
+/** Work minutes done in [first, last] (experiences excluded, RB-09). */
+export function workDoneBetween(ctx: Ctx, first: string, last: string) {
+  return ctx.db
+    .select({ m: task.durationMin, exp: task.isExperience })
+    .from(task)
+    .where(
+      and(
+        eq(task.status, 'done'),
+        gte(task.doneAt, `${first}T00:00:00`),
+        lt(task.doneAt, `${addDays(last, 1)}T00:00:00`),
+      ),
+    )
+    .all()
+    .filter((t) => !t.exp)
+    .reduce((a, t) => a + (t.m ?? 0), 0);
+}
+
+export function getMonthPlanningPage(ctx: Ctx, month: string) {
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
+    throw new DomainError('INVALID_MONTH', `Mois invalide : ${month}`);
+  const s = getSettings(ctx);
+  const today = parisDate(ctxNow(ctx));
+  const current = monthOf(today);
+  const first = monthStart(month);
+  const last = monthEnd(month);
+
+  const { weeks, capacityMin } = capacityBetween(ctx, first, last);
+  const spentMin = month === current ? workDoneBetween(ctx, first, last) : 0;
   // Reserve for Inbox tasks due this month (they must be done whatever the projects).
   const inboxDue = ctx.db
     .select()
@@ -131,9 +136,18 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
     deadline: o.deadline,
     progressPct: o.progressPct,
     monthProjects: chosen.filter((p) => p.objectiveId === o.id).length,
+    covered: chosen.some((p) => p.objectiveId === o.id),
     readyProjects: candidates.filter((p) => p.objectiveId === o.id).length,
   }));
   const alerts: { level: 'warn' | 'ok'; code: string; text: string }[] = [];
+  // D-47: too many month projects at once dilutes the effort.
+  const open = chosen.filter((p) => p.status !== 'done').length;
+  if (open > s['month.max_projects'])
+    alerts.push({
+      level: 'warn',
+      code: 'TOO_MANY_PROJECTS',
+      text: `${open} projets en même temps (limite ${s['month.max_projects']}) : risque de dispersion.`,
+    });
   if (neededMin > availableMin)
     alerts.push({
       level: 'warn',
@@ -144,7 +158,14 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
     alerts.push({
       level: 'warn',
       code: 'OBJECTIVE_EMPTY',
-      text: `« ${o.title} » : aucun projet ce mois-ci.`,
+      text: `Objectif « ${o.title} » : aucun projet ce mois-ci, il n'avancera pas.`,
+    });
+  const offObjective = chosen.filter((p) => p.status !== 'done' && !p.inQuarterObjective).length;
+  if (offObjective && quarterObjectives.length)
+    alerts.push({
+      level: 'warn',
+      code: 'OFF_OBJECTIVE',
+      text: `${offObjective} projet${offObjective > 1 ? 's' : ''} du mois hors objectifs du trimestre.`,
     });
   const carried = candidates.filter((p) => p.carriedOver).length;
   if (carried)

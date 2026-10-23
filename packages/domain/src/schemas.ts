@@ -10,7 +10,12 @@ export const uuid = z.string().uuid();
 export const idParam = z.object({ id: uuid });
 export const isoWeekParam = z.object({ isoWeek: z.string().regex(/^\d{4}-W\d{2}$/) });
 
-export const domainCreate = z.object({ name: title, colorLight: color, colorDark: color });
+export const domainCreate = z.object({
+  name: title,
+  colorLight: color,
+  colorDark: color,
+  description: z.string().max(4000).optional(),
+});
 export const domainPatch = z
   .object({
     name: title,
@@ -18,6 +23,7 @@ export const domainPatch = z
     colorDark: color,
     weight: z.number().min(0).max(1),
     archived: z.boolean(),
+    description: z.string().max(4000),
   })
   .partial();
 export const reorderBody = z.object({ ids: z.array(uuid).min(1) });
@@ -64,6 +70,8 @@ const projectFields = {
   startDate: date.nullable().optional(),
   dueDate: date.nullable().optional(),
 };
+export const quarterKey = z.string().regex(/^\d{4}-Q[1-4]$/);
+export const objectiveQuarterBody = z.object({ quarter: quarterKey });
 export const monthKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 /** D-42: choose (month) or drop (null) a project for a month: Planifier › Mois. */
 export const projectMonthBody = z.object({ month: monthKey.nullable() });

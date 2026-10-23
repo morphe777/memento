@@ -1,7 +1,7 @@
 // Mémento REST API (dossier de dev §8). The only entry point to business logic (F-26): routes are thin
 // adapters around @memento/domain services.
 import { existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
@@ -26,6 +26,8 @@ export interface AppOptions {
   webDist?: string;
   logger?: boolean;
   now?: () => Date;
+  /** Where the SQLite backup is written before an import (D-50); no backup when absent (tests). */
+  backupDir?: string;
 }
 
 declare module 'fastify' {
@@ -218,6 +220,26 @@ export async function buildApp(opts: AppOptions) {
         async (req) => D.patchSettings(ctx(req), req.body),
       );
       r.get('/tokens', { schema: tag('Accès'), preHandler: userOnly }, async () => A.listTokens(db));
+      // D-50: restore an export (replaces all business data). A SQLite backup is taken first.
+      r.post(
+        '/import',
+        {
+          schema: { ...tag('Réglages'), body: z.record(z.string(), z.unknown()) },
+          preHandler: userOnly,
+          bodyLimit: 100 * 1024 * 1024,
+        },
+        async (req) => {
+          let backup: string | null = null;
+          if (opts.backupDir) {
+            backup = join(
+              opts.backupDir,
+              `backup-avant-import-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
+            );
+            await sqlite.backup(backup);
+          }
+          return { ...D.importData(ctx(req), req.body), backup: backup ? basename(backup) : null };
+        },
+      );
       // D-45: full JSON export (backup), interface only, without any secret.
       r.get('/export', { schema: tag('Réglages'), preHandler: userOnly }, async (req, reply) => {
         const data = D.exportData(ctx(req));
@@ -516,6 +538,16 @@ export async function buildApp(opts: AppOptions) {
         '/month-plans/:month',
         { schema: { ...tag('Planification'), params: z.object({ month: D.monthKey }) } },
         async (req) => D.getMonthPlanningPage(ctx(req), req.params.month),
+      );
+      r.get(
+        '/quarter-plans/:quarter',
+        { schema: { ...tag('Planification'), params: z.object({ quarter: D.quarterKey }) } },
+        async (req) => D.getQuarterPlanningPage(ctx(req), req.params.quarter),
+      );
+      r.post(
+        '/objectives/:id/quarter',
+        { schema: { ...tag('Objectifs'), params: D.idParam, body: D.objectiveQuarterBody } },
+        async (req) => D.setObjectiveQuarter(ctx(req), req.params.id, req.body.quarter),
       );
       r.get(
         '/weeks/:isoWeek/execution',
