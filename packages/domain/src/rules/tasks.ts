@@ -28,3 +28,16 @@ export function budgetStatus(
 ): { overMin: number; remainingMin: number } {
   return { overMin: Math.max(0, plannedMin - budgetMin), remainingMin: Math.max(0, budgetMin - plannedMin) };
 }
+
+export type TaskBucket = 'todo' | 'waiting' | 'week' | 'done';
+
+/**
+ * Task board columns (Q-11 adapted to tasks, decision D-33): derived from existing state only, no extra status.
+ * Done → « Fait » ; in the current week plan → « Cette semaine » ; locked by RB-06 → « En attente » ; else « À faire ».
+ */
+export function taskBucket(t: { status: string; inPlan: boolean; locked: boolean }): TaskBucket {
+  if (t.status === 'done') return 'done';
+  if (t.inPlan) return 'week';
+  if (t.locked) return 'waiting';
+  return 'todo';
+}

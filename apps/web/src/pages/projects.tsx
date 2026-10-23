@@ -27,6 +27,7 @@ import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe } from '../lib/hooks.ts';
 import type { Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
+import { TaskBoard, TaskTable, type TaskView, useBoardTasks } from './tasks.tsx';
 
 type View = 'tree' | 'list' | 'kanban';
 
@@ -446,8 +447,9 @@ export function NewProjectPanel({
   );
 }
 
-export function ProjectPage({ id, tache }: { id: string; tache?: string }) {
+export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vue?: TaskView }) {
   const navigate = useNavigate();
+  const board = useBoardTasks(id, !!vue);
   const q = useQuery({ queryKey: ['project', id], queryFn: () => get<ProjectDetail>(`/projects/${id}`) });
   const tasks = useQuery({ queryKey: ['tasks', id], queryFn: () => get<Task[]>(`/tasks?projectId=${id}`) });
   const dl = useDomainLookup();
@@ -457,6 +459,8 @@ export function ProjectPage({ id, tache }: { id: string; tache?: string }) {
   const p = q.data;
   const color = dl.color(p.domainIds[0]);
   const mainGroup = p.groups.find((g) => g.domainId === p.primaryDomainId) ?? p.groups[0];
+  const openTask = (tid: string) =>
+    navigate({ to: '/projets/$id', params: { id }, search: { tache: tid, vue } });
   return (
     <div
       className="flex flex-col gap-6"
@@ -495,20 +499,53 @@ export function ProjectPage({ id, tache }: { id: string; tache?: string }) {
             className="flex justify-between items-baseline gap-3 flex-wrap"
             style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
           >
-            <h2 className="h2">Tâches · dans l'ordre d'exécution</h2>
-            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+            <h2 className="h2">{vue ? 'Tâches' : "Tâches · dans l'ordre d'exécution"}</h2>
+            <Tabs
+              value={vue ?? 'list'}
+              onChange={(v) =>
+                navigate({
+                  to: '/projets/$id',
+                  params: { id },
+                  search: { vue: v === 'list' ? undefined : v },
+                })
+              }
+              options={[
+                { value: 'list', label: 'Liste' },
+                { value: 'table', label: 'Tableau' },
+                { value: 'kanban', label: 'Kanban' },
+              ]}
+            />
+          </div>
+          {!vue && (
+            <div
+              className="text-[13px]"
+              style={{
+                color: 'var(--text-faint)',
+                padding: '8px 20px',
+                borderBottom: '1px solid var(--divider)',
+              }}
+            >
               {p.sequenceMode === 'sequential'
                 ? 'Séquentiel : glisser pour réordonner'
                 : 'Parallèle : toutes disponibles'}
-            </span>
-          </div>
-          {tasks.data && (
+            </div>
+          )}
+          {!vue && tasks.data && (
             <TaskList
               tasks={tasks.data}
               projectId={p.id}
               color={() => color}
               onOpen={(tid) => navigate({ to: '/projets/$id', params: { id }, search: { tache: tid } })}
             />
+          )}
+          {vue && board.data && (
+            <div style={{ padding: vue === 'kanban' ? 12 : 0 }}>
+              {vue === 'kanban' ? (
+                <TaskBoard tasks={board.data} onOpen={openTask} />
+              ) : (
+                <TaskTable tasks={board.data} onOpen={openTask} />
+              )}
+            </div>
           )}
           <div style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
             <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
@@ -526,7 +563,7 @@ export function ProjectPage({ id, tache }: { id: string; tache?: string }) {
       </div>
       <TaskDrawer
         taskId={tache ?? null}
-        onClose={() => navigate({ to: '/projets/$id', params: { id }, search: {} })}
+        onClose={() => navigate({ to: '/projets/$id', params: { id }, search: { vue } })}
       />
     </div>
   );
@@ -638,7 +675,7 @@ function ProjectFields({ p }: { p: ProjectDetail }) {
           placeholder="ex. Contrat d'installation signé"
         />
       </Field>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
         <Field label="Début">
           <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
         </Field>
@@ -656,7 +693,10 @@ function ProjectFields({ p }: { p: ProjectDetail }) {
           ))}
         </select>
       </Field>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div
+        className="grid gap-3 items-end"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}
+      >
         <Field label="Enchaînement">
           <select
             value={f.sequenceMode}
@@ -666,7 +706,7 @@ function ProjectFields({ p }: { p: ProjectDetail }) {
             <option value="parallel">Parallèle</option>
           </select>
         </Field>
-        <label className="flex items-center gap-2 text-[13px] pt-6">
+        <label className="flex items-center gap-2 text-[13px]" style={{ minHeight: 40 }}>
           <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} /> Libre
           dans le chemin
         </label>

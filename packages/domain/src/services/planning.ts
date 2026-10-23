@@ -67,6 +67,7 @@ const planItems = (ctx: Ctx, planId: string) =>
     .where(eq(weekPlanItem.weekPlanId, planId))
     .orderBy(asc(weekPlanItem.position))
     .all();
+export const planItemsOf = planItems;
 
 /** Minutes done per domain (domains served, DM-84) and experiences done, in [from, to). */
 function doneStats(ctx: Ctx, from: string, to: string) {

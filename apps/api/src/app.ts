@@ -170,6 +170,46 @@ export async function buildApp(opts: AppOptions) {
         };
       });
 
+      r.patch(
+        '/auth/account',
+        {
+          schema: { ...tag('Auth'), body: z.object({ login: z.string().min(1).max(100) }) },
+          preHandler: userOnly,
+        },
+        async (req) => {
+          const c = ctx(req);
+          return D.tx(c, () => {
+            const before = req.principal!.login;
+            const res = A.renameUser(db, req.principal!.userId!, req.body.login);
+            D.audit(c, 'app_user', req.principal!.userId!, 'update', { login: before }, res);
+            return res;
+          });
+        },
+      );
+      r.post(
+        '/auth/password',
+        {
+          schema: {
+            ...tag('Auth'),
+            body: z.object({ current: z.string().min(1).max(500), next: z.string().min(1).max(500) }),
+          },
+          preHandler: userOnly,
+          config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+        },
+        async (req) => {
+          const c = ctx(req);
+          await A.changeOwnPassword(
+            db,
+            req.principal!.userId!,
+            req.cookies[A.SESSION_COOKIE]!,
+            req.body.current,
+            req.body.next,
+          );
+          D.audit(c, 'app_user', req.principal!.userId!, 'update', null, { password: 'changed' });
+          return { ok: true };
+        },
+      );
+
       // ---------- Settings & tokens (interface only, not for AI: dossier §9) ----------
       r.get('/settings', { schema: tag('Réglages') }, async (req) => D.getSettings(ctx(req)));
       r.patch(
@@ -352,6 +392,14 @@ export async function buildApp(opts: AppOptions) {
       // ---------- Tasks & Inbox ----------
       r.get('/tasks', { schema: { ...tag('Tâches'), querystring: D.taskListQuery } }, async (req) =>
         D.listTasks(ctx(req), req.query),
+      );
+      r.get('/tasks/board', { schema: { ...tag('Tâches'), querystring: D.boardQuery } }, async (req) =>
+        D.listBoardTasks(ctx(req), req.query),
+      );
+      r.put(
+        '/tasks/:id/current-week',
+        { schema: { ...tag('Tâches'), params: D.idParam, body: D.weekToggleBody } },
+        async (req) => D.setTaskInCurrentWeek(ctx(req), req.params.id, req.body.inWeek),
       );
       r.get('/tasks/:id', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) => {
         const c = ctx(req);

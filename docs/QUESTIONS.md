@@ -16,7 +16,7 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 7. **Moteur** (D-16, D-17, D-18) : les « pourquoi » et le nombre de tâches visibles par projet sonnent-ils juste ? Les 3 Bonus pré-placés te conviennent-ils, ou préfères-tu ne rien pré-cocher ?
 8. **Indicateur global R-01** (D-24) : les seuils vert / orange / rouge te parlent-ils ?
 9. **Garde-fous Santé / Famille** (D-15, Q-28) : reconnus par le nom du domaine. Seuils après usage ?
-10. **Kanban** (D-19, Q-11) : colonnes par statut de projet, ou buckets globaux « Cette semaine / En cours / En attente / Fait » ?
+10. **Kanban des tâches** (D-33) : faut-il une colonne « En cours » (limite de 3) ? Elle demande un statut de tâche en plus. Garde-t-on aussi le Kanban des projets ?
 11. **Domaine principal par défaut** (D-32) : « le plus prioritaire » met PV en Sécurité plutôt qu'en Maison. On garde cette règle ?
 
 ## Décisions déjà listées dans le dossier de dev §14, toujours ouvertes
