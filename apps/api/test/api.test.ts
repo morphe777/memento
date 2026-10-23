@@ -143,6 +143,26 @@ describe('API — own account (Configuration › Compte)', () => {
   });
 });
 
+describe('API — export (D-45)', () => {
+  it('exports all data as a JSON attachment, without secrets, for the web user only', async () => {
+    const s = await setup();
+    const res = await s.app.inject({ url: '/api/v1/export', headers: { cookie: s.cookie } });
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/attachment; filename="memento-export-/);
+    const body = res.json();
+    expect(body.tables.domain).toHaveLength(8);
+    const text = res.body;
+    expect(text).not.toMatch(/argon2|passwordHash|tokenHash/);
+    expect(body.tables.session).toBeUndefined();
+    const t = createToken(s.db, 'bot', 'read');
+    const denied = await s.app.inject({
+      url: '/api/v1/export',
+      headers: { authorization: `Bearer ${t.token}` },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+});
+
 describe('API — tokens (AI / robots)', () => {
   it('bearer token acts as ai:<name>; read-only tokens cannot write; revoked tokens are refused', async () => {
     const s = await setup();
@@ -200,13 +220,23 @@ describe('API L1 — business errors', () => {
         payload: { title: 'Clim', groupIds: [groups[0].id] },
       })
     ).json();
-    const res = await s.app.inject({
+    const promoted = await s.app.inject({
       method: 'POST',
       url: `/api/v1/projects/${idea.id}/promote`,
       headers: { cookie: s.cookie },
     });
+    expect(promoted.json()).toMatchObject({
+      status: 'ready',
+      gaps: ['SUCCESS_CRITERION_MISSING', 'TASK_MISSING'],
+    });
+    const res = await s.app.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${idea.id}/month`,
+      headers: { cookie: s.cookie },
+      payload: { month: new Date().toISOString().slice(0, 7) },
+    });
     expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('PROMOTION_INCOMPLETE');
+    expect(res.json().code).toBe('MONTH_PROJECT_INCOMPLETE');
     expect(res.json().details.map((d: { code: string }) => d.code)).toContain('TASK_MISSING');
   });
 

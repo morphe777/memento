@@ -52,7 +52,7 @@ export const objectiveCreate = z.object({
 });
 export const objectivePatch = objectiveCreate.partial();
 
-export const projectStatus = z.enum(['idea', 'active', 'paused', 'done', 'abandoned']);
+export const projectStatus = z.enum(['idea', 'ready', 'active', 'paused', 'done', 'abandoned']);
 const projectFields = {
   title,
   description: text.optional(),
@@ -63,12 +63,10 @@ const projectFields = {
   successCriterion: z.string().max(500).optional(),
   startDate: date.nullable().optional(),
   dueDate: date.nullable().optional(),
-  monthFlag: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/)
-    .nullable()
-    .optional(),
 };
+export const monthKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
+/** D-42: choose (month) or drop (null) a project for a month: Planifier › Mois. */
+export const projectMonthBody = z.object({ month: monthKey.nullable() });
 /** RB-01 + decision D-04: an idea needs a title and at least one group. */
 export const projectCreate = z.object({
   ...projectFields,

@@ -105,8 +105,14 @@ describe('MCP L6', () => {
       await rpc('tools/call', { name: 'create_idea', arguments: { title: 'Clim', groupIds: [groups[0].id] } })
     ).body;
     const id = JSON.parse(idea.result.content[0].text).id;
-    const res = (await rpc('tools/call', { name: 'promote_idea', arguments: { id } })).body;
+    await rpc('tools/call', { name: 'promote_idea', arguments: { id } });
+    const res = (
+      await rpc('tools/call', {
+        name: 'set_project_month',
+        arguments: { id, month: new Date().toISOString().slice(0, 7) },
+      })
+    ).body;
     expect(res.result.isError).toBe(true);
-    expect(JSON.parse(res.result.content[0].text).code).toBe('PROMOTION_INCOMPLETE');
+    expect(JSON.parse(res.result.content[0].text).code).toBe('MONTH_PROJECT_INCOMPLETE');
   });
 });

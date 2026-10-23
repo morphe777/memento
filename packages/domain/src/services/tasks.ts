@@ -7,8 +7,8 @@ import { assertNoCycle } from '../rules/graph.ts';
 import { checkRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
-import { withTemplate } from '../settings.ts';
-import { currentWeek, parisDate } from '../time.ts';
+import { getSettings, withTemplate } from '../settings.ts';
+import { addDays, currentWeek, parisDate } from '../time.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 
 const { task, taskDependency, project, weekPlan, weekPlanItem, domain } = schema;
@@ -283,4 +283,26 @@ export function removeTaskDependency(ctx: Ctx, id: string, dependsOnId: string) 
     audit(ctx, 'task', id, 'dependency_remove', { dependsOnTaskId: dependsOnId }, null);
     return getTask(ctx, id);
   });
+}
+
+/**
+ * Inbox page (D-44): open tasks; recurring tasks whose deadline is more than N days away (« Plus tard »,
+ * N = inbox.recurring_horizon_days); tasks done this month only.
+ */
+export function listInbox(ctx: Ctx) {
+  const today = parisDate(ctxNow(ctx));
+  const horizon = addDays(today, getSettings(ctx)['inbox.recurring_horizon_days']);
+  const all = listTasks(ctx, { projectId: 'inbox', status: 'todo,done' });
+  const later = (t: (typeof all)[number]) => !!t.recurrenceRule && !!t.dueDate && t.dueDate > horizon;
+  const month = today.slice(0, 7);
+  return {
+    horizonDays: getSettings(ctx)['inbox.recurring_horizon_days'],
+    open: all.filter((t) => t.status === 'todo' && !later(t)),
+    later: all
+      .filter((t) => t.status === 'todo' && later(t))
+      .sort((a, b) => (a.dueDate ?? '').localeCompare(b.dueDate ?? '')),
+    doneThisMonth: all.filter(
+      (t) => t.status === 'done' && !!t.doneAt && parisDate(new Date(t.doneAt)).slice(0, 7) === month,
+    ),
+  };
 }

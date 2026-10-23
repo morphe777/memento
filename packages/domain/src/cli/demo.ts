@@ -5,7 +5,7 @@ import { openDb, runMigrations, schema } from '@memento/db';
 import type { Ctx } from '../context.ts';
 import { seed } from '../seed.ts';
 import { closeWeek, proposeWeek, setWeekItems, validateWeek } from '../services/planning.ts';
-import { completeProject, createProject, promoteProject, updateProject } from '../services/projects.ts';
+import { completeProject, createProject, promoteProject, setProjectMonth } from '../services/projects.ts';
 import { createMetaObjective, createObjective, listDomains, listGroups } from '../services/referential.ts';
 import { generateReport } from '../services/reports.ts';
 import { completeTask, createTask } from '../services/tasks.ts';
@@ -99,7 +99,7 @@ function project(
     createTask(ctx, { projectId: p.id, title: t, durationMin: d, isExperience: o?.exp, isFree: o?.free }),
   );
   promoteProject(ctx, p.id);
-  if (opts.month) updateProject(ctx, p.id, { monthFlag: month });
+  if (opts.month) setProjectMonth(ctx, p.id, month);
   return { p, ts };
 }
 

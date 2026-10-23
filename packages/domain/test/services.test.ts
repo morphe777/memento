@@ -19,6 +19,7 @@ import {
   deleteTask,
   generateReport,
   getExecution,
+  getMonthPlanningPage,
   getObjective,
   getObjectivesMap,
   getPlanningPage,
@@ -28,6 +29,7 @@ import {
   listBoardTasks,
   listChanges,
   listDomains,
+  listInbox,
   listProjectDependencies,
   listTasks,
   markReviewed,
@@ -37,9 +39,11 @@ import {
   proposeWeek,
   reorderTasks,
   replanProject,
+  rollMonth,
   search,
   seed,
   setProjectGroups,
+  setProjectMonth,
   setTaskInCurrentWeek,
   setWeekItems,
   tx,
@@ -48,6 +52,7 @@ import {
   updateTask,
   validateWeek,
 } from '../src/index.ts';
+import { monthOf, parisDate } from '../src/time.ts';
 import { lookups, makeCtx } from './helpers.ts';
 
 const errCode = (fn: () => unknown) => {
@@ -80,6 +85,7 @@ function activeProject(
     createTask(ctx, { projectId: p.id, title: `${title} ${i + 1}`, durationMin: 60 }),
   );
   promoteProject(ctx, p.id);
+  setProjectMonth(ctx, p.id, monthOf(parisDate(ctx.now!()))); // D-42: actif = projet du mois
   return { project: getProject(ctx, p.id), tasks };
 }
 
@@ -138,28 +144,45 @@ describe('L1 référentiel', () => {
     expect(idea.domainIds).toHaveLength(1);
   });
 
-  it('RB-02: promoting an idea without tasks returns 422 with the gaps', () => {
+  it('D-42: promoting an incomplete idea gives a « prêt » project flagged with its RB-02 gaps', () => {
     const ctx = makeCtx();
     const { group } = lookups(ctx);
     const idea = createProject(ctx, { title: 'Clim', groupIds: [group('Travaux').id] });
+    const ready = promoteProject(ctx, idea.id);
+    expect(ready.status).toBe('ready');
+    expect(ready.gaps).toEqual(['SUCCESS_CRITERION_MISSING', 'TASK_MISSING']);
     try {
-      promoteProject(ctx, idea.id);
+      setProjectMonth(ctx, idea.id, '2026-10');
       throw new Error('should fail');
     } catch (e) {
       const err = e as DomainError;
-      expect(err.code).toBe('PROMOTION_INCOMPLETE');
+      expect(err.code).toBe('MONTH_PROJECT_INCOMPLETE');
       expect((err.details as { code: string }[]).map((d) => d.code)).toEqual([
         'SUCCESS_CRITERION_MISSING',
         'TASK_MISSING',
-        'DATES_MISSING',
       ]);
     }
   });
 
-  it('D-13: an active project cannot be stretched beyond 31 days', () => {
-    const ctx = makeCtx();
+  it('D-42: month projects are « actif »; later months stay « prêt » until the month roll', () => {
+    const ctx = makeCtx(); // October 2026
     const { project } = activeProject(ctx, 'PV', 'Travaux');
-    expect(errCode(() => updateProject(ctx, project.id, { dueDate: '2026-12-31' }))).toBe('PROJECT_TOO_LONG');
+    expect(project.status).toBe('active');
+    expect(project.monthFlag).toBe('2026-10');
+    expect(updateProject(ctx, project.id, { dueDate: '2027-03-31' }).status).toBe('active'); // no 31-day cap
+    const { project: next } = activeProject(ctx, 'Combles', 'Travaux');
+    expect(setProjectMonth(ctx, next.id, '2026-11')).toMatchObject({ status: 'ready', monthFlag: '2026-11' });
+    expect(errCode(() => setProjectMonth(ctx, next.id, '2026-09'))).toBe('MONTH_IN_PAST');
+    ctx.setNow('2026-11-01T08:00:00.000Z');
+    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 1, activated: 1 });
+    expect(getProject(ctx, project.id)).toMatchObject({
+      status: 'ready',
+      monthFlag: null,
+      previousMonthFlag: '2026-10',
+    });
+    expect(getProject(ctx, next.id).status).toBe('active');
+    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 0, activated: 0 });
+    expect(setProjectMonth(ctx, next.id, null).status).toBe('ready');
   });
 
   it('RB-03: tasks longer than 2 h are refused', () => {
@@ -229,17 +252,18 @@ describe('L1 référentiel', () => {
     expect(errCode(() => addProjectDependency(ctx, p1.id, p2.id))).toBe('DEPENDENCY_CYCLE');
   });
 
-  it('RB-08: month flag needs tasks all with duration', () => {
+  it('RB-08 (now RB-02 at activation): a month project needs tasks, all with duration', () => {
     const ctx = makeCtx();
     const { group } = lookups(ctx);
-    const idea = createProject(ctx, { title: 'Jardin', groupIds: [group('Jardin').id] });
-    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe(
-      'MONTH_FLAG_REQUIRES_TASKS',
-    );
+    const idea = createProject(ctx, {
+      title: 'Jardin',
+      groupIds: [group('Jardin').id],
+      successCriterion: 'Haie taillée',
+    });
+    promoteProject(ctx, idea.id);
+    expect(errCode(() => setProjectMonth(ctx, idea.id, '2026-10'))).toBe('MONTH_PROJECT_INCOMPLETE');
     createTask(ctx, { projectId: idea.id, title: 'Tailler', durationMin: null });
-    expect(errCode(() => updateProject(ctx, idea.id, { monthFlag: '2026-10' }))).toBe(
-      'MONTH_FLAG_REQUIRES_TASKS',
-    );
+    expect(errCode(() => setProjectMonth(ctx, idea.id, '2026-10'))).toBe('MONTH_PROJECT_INCOMPLETE');
   });
 
   it('RB-11: completing a recurring Inbox task creates the next occurrence', () => {
@@ -291,7 +315,7 @@ describe('L3 planification', () => {
   function world() {
     const ctx = makeCtx('2026-10-30T08:00:00.000Z'); // Friday of W44, planning W45
     const { project: pv } = activeProject(ctx, 'Panneaux', 'Travaux', 3);
-    updateProject(ctx, pv.id, { monthFlag: '2026-11' });
+    setProjectMonth(ctx, pv.id, '2026-11');
     const { project: ia } = activeProject(ctx, 'POC RAG', 'IA', 3);
     activeProject(ctx, 'Firewall', 'Sécu digitale', 2);
     const inbox = createTask(ctx, {
@@ -366,13 +390,7 @@ describe('L3 planification', () => {
       getProjectReadiness(ctx, id)
         .filter((r) => !r.ok)
         .map((r) => r.code);
-    expect(missing(idea.id)).toEqual([
-      'SUCCESS_CRITERION_MISSING',
-      'TASK_MISSING',
-      'TASK_DURATION_MISSING',
-      'DATES_MISSING',
-      'PROJECT_TOO_LONG',
-    ]);
+    expect(missing(idea.id)).toEqual(['SUCCESS_CRITERION_MISSING', 'TASK_MISSING', 'TASK_DURATION_MISSING']);
     const { project } = activeProject(ctx, 'Prêt', 'Travaux', 1);
     expect(missing(project.id)).toEqual([]);
   });
@@ -471,7 +489,7 @@ describe('L4 exécution', () => {
     });
     for (let i = 0; i < 4; i++) createTask(ctx, { projectId: p.id, title: `t${i}`, durationMin: 120 });
     promoteProject(ctx, p.id);
-    updateProject(ctx, p.id, { monthFlag: '2026-11' });
+    setProjectMonth(ctx, p.id, '2026-11');
     const delta = () => getExecution(ctx, '2026-W46').monthProjects[0].deltaMin;
     expect(delta()).toBeLessThan(0);
     replanProject(ctx, p.id);
@@ -549,6 +567,51 @@ describe('modèles de description et suppression (D-35)', () => {
     expect(getProject(ctx, other.id).objectiveId).toBeNull();
     const deleted = listChanges(ctx, { actor: 'me' }).filter((c) => c.action === 'delete');
     expect(deleted.map((c) => c.title).sort()).toEqual(['Autonomie', 'Panneaux', 'Panneaux 3', 'Énergie']);
+  });
+});
+
+describe('D-44 Inbox', () => {
+  it('moves far recurring tasks to « Plus tard » and keeps only this month’s done tasks', () => {
+    const ctx = makeCtx(); // 23 Oct 2026, horizon 14 days → 6 Nov
+    createTask(ctx, {
+      title: 'Impôts',
+      durationMin: 60,
+      dueDate: '2027-05-20',
+      recurrenceRule: 'FREQ=YEARLY',
+    });
+    createTask(ctx, { title: 'Box', durationMin: 30, dueDate: '2026-11-01', recurrenceRule: 'FREQ=MONTHLY' });
+    createTask(ctx, { title: 'Courrier', durationMin: 30, dueDate: '2027-01-10' });
+    const old = createTask(ctx, { title: 'Ancien', durationMin: 30 });
+    ctx.setNow('2026-09-20T08:00:00.000Z');
+    completeTask(ctx, old.id);
+    ctx.setNow('2026-10-23T08:00:00.000Z');
+    const inbox = listInbox(ctx);
+    expect(inbox.open.map((t) => t.title)).toEqual(['Box', 'Courrier']);
+    expect(inbox.later.map((t) => t.title)).toEqual(['Impôts']);
+    expect(inbox.doneThisMonth).toEqual([]);
+  });
+});
+
+describe('D-43 Planifier le mois', () => {
+  it('capacity from weekly budgets, chosen projects, backlog candidates, quarter objectives', () => {
+    const ctx = makeCtx(); // Friday 23 Oct 2026
+    const o = createObjective(ctx, { title: 'Énergie', deadline: '2026-12-20' });
+    const { project: pv } = activeProject(ctx, 'PV', 'Travaux', 3, { objectiveId: o.id }); // 3 h, month of Oct
+    const { project: backlog } = activeProject(ctx, 'Combles', 'Travaux', 2);
+    setProjectMonth(ctx, backlog.id, null);
+    createTask(ctx, { title: 'Assurance', durationMin: 30, dueDate: '2026-11-10' });
+    const page = getMonthPlanningPage(ctx, '2026-11');
+    // November 2026: W44 (1 day), W45–W48 (7 days each), W49 (1 day, Monday 30) → 30 days × 6 h / 7.
+    expect(page.budget.capacityMin).toBe(Math.round(360 / 7) * 2 + 360 * 4);
+    expect(page.chosen).toEqual([]);
+    expect(page.candidates.map((c) => c.title)).toEqual(['Combles']);
+    expect(page.budget.inboxReserveMin).toBe(30);
+    expect(page.alerts.map((a) => a.code)).toContain('OBJECTIVE_EMPTY');
+    setProjectMonth(ctx, backlog.id, '2026-11');
+    const after = getMonthPlanningPage(ctx, '2026-11');
+    expect(after.chosen.map((c) => [c.title, c.remainingMin])).toEqual([['Combles', 120]]);
+    expect(after.budget.neededMin).toBe(150);
+    expect(getMonthPlanningPage(ctx, '2026-10').chosen.map((c) => c.id)).toEqual([pv.id]);
   });
 });
 

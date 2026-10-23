@@ -15,6 +15,7 @@ import {
   TZ,
 } from '../time.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
+import { rollMonth } from './projects.ts';
 import { generateReport } from './reports.ts';
 
 function parisClock(at: Date) {
@@ -65,6 +66,16 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
   const { date, time } = parisClock(ctxNow(ctx));
   const week = isoWeekOf(date);
   const out: Record<string, string> = {};
+  const reportTime = s['schedule.reports'].time;
+  const month = monthOf(date);
+  // Month first: on a Monday the 1st, the week proposal must see the new month projects.
+  if (date > `${month}-01` || time >= reportTime) {
+    // WF-02, then D-42 month roll (after the report, which freezes last month's projects as they were).
+    out.month = once(ctx, 'month', month, () => {
+      generateReport(ctx, 'month', shiftMonth(month, -1));
+      rollMonth(ctx, month);
+    });
+  }
   const plan = s['schedule.week_plan'];
   // Weekly: from the configured day/time until the end of the ISO week (catch-up).
   if (isoDay(date) > plan.day || (isoDay(date) === plan.day && time >= plan.time)) {
@@ -77,11 +88,6 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
         // already validated by hand: nothing to propose
       }
     });
-  }
-  const reportTime = s['schedule.reports'].time;
-  const month = monthOf(date);
-  if (date > `${month}-01` || time >= reportTime) {
-    out.month = once(ctx, 'month', month, () => generateReport(ctx, 'month', shiftMonth(month, -1))); // WF-02
   }
   const quarter = quarterOf(date);
   if (date > quarterStart(quarter) || time >= reportTime) {

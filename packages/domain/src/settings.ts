@@ -32,6 +32,8 @@ export const settingsSchema = z.object({
   'templates.task': z.string().max(4000),
   theme: z.enum(['auto', 'light', 'dark']),
   'ui.breadcrumb': z.boolean(),
+  'ui.show_recalculate': z.boolean(),
+  'inbox.recurring_horizon_days': z.number().int().min(0).max(365),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -60,6 +62,8 @@ export const DEFAULT_SETTINGS: Settings = {
   'templates.task': '## Quoi faire, concrètement\n\n## Où / avec quoi (lien)\n',
   theme: 'auto', // NF-06
   'ui.breadcrumb': false, // user request 23/10/2026: off by default, links are everywhere
+  'ui.show_recalculate': false, // « Recalculer » hidden until the AI proposal replaces it (23/10/2026)
+  'inbox.recurring_horizon_days': 14, // D-44: recurring tasks due later than this go to « Plus tard »
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

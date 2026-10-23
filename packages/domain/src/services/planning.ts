@@ -113,7 +113,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     .all();
   const allProjects = ctx.db.select().from(project).all();
   const blocked = blockedProjectIds(allProjects, ctx.db.select().from(projectDependency).all());
-  const active = allProjects.filter((p) => p.status === 'active');
+  const active = allProjects.filter((p) => p.status === 'active' || p.status === 'ready'); // D-42
   const serialized = serializeProjects(ctx, active);
   const objectives = ctx.db.select().from(objective).all();
   const projects: EngineProject[] = serialized.map((p) => {
@@ -383,8 +383,8 @@ export function setWeekItems(ctx: Ctx, isoWeek: string, items: { taskId: string;
       if (t.status !== 'todo') throw new DomainError('TASK_NOT_TODO', `« ${t.title} » n'est plus à faire.`);
       if (!t.projectId) continue;
       const p = ctx.db.select().from(project).where(eq(project.id, t.projectId)).get()!;
-      if (p.status !== 'active')
-        throw new DomainError('PROJECT_NOT_ACTIVE', `« ${p.title} » n'est pas un projet actif.`);
+      if (p.status !== 'active' && p.status !== 'ready')
+        throw new DomainError('PROJECT_NOT_ACTIVE', `« ${p.title} » n'est ni prêt ni projet du mois.`);
       const siblings = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all();
       if (!availableTaskIds(siblings, p.sequenceMode, chosen, deps).has(t.id)) {
         throw new DomainError('TASK_LOCKED', `« ${t.title} » attend la tâche précédente.`);

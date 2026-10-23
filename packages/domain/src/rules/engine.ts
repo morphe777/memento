@@ -158,7 +158,8 @@ function prepare(input: EngineInput): Prepared {
   };
 }
 
-const eligibleProject = (p: EngineProject) => p.status === 'active' && !p.blocked;
+// D-42: month projects (actif) and the backlog (prêt) can feed the week; ideas and paused projects cannot.
+const eligibleProject = (p: EngineProject) => (p.status === 'active' || p.status === 'ready') && !p.blocked;
 
 function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   const { input } = P;
