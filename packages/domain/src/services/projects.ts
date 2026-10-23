@@ -14,6 +14,7 @@ import {
   resolveProjectDomains,
 } from '../rules/projects.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
+import { withTemplate } from '../settings.ts';
 import { parisDate } from '../time.ts';
 import { refreshObjectiveProgress } from './referential.ts';
 
@@ -217,6 +218,7 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
         id,
         createdBy: ctx.actor,
         ...fields,
+        description: withTemplate(ctx, 'project', fields.description),
         status: 'idea', // RB-01: an idea only needs a title (and a group, D-04)
         primaryDomainId,
         positionInObjective: nextPositionInObjective(ctx, fields.objectiveId),

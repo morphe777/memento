@@ -7,6 +7,7 @@ import { assertNoCycle } from '../rules/graph.ts';
 import { checkRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
+import { withTemplate } from '../settings.ts';
 import { currentWeek, parisDate } from '../time.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 
@@ -26,7 +27,7 @@ function nextPosition(ctx: Ctx, projectId: string | null) {
   );
 }
 
-function touchProject(ctx: Ctx, projectId: string | null) {
+export function touchProject(ctx: Ctx, projectId: string | null) {
   if (projectId)
     ctx.db
       .update(project)
@@ -122,6 +123,7 @@ export function createTask(ctx: Ctx, input: TaskCreate) {
         id,
         createdBy: ctx.actor,
         ...fields,
+        description: withTemplate(ctx, 'task', fields.description),
         projectId,
         domainId: projectId ? null : (input.domainId ?? null),
         position: position ?? nextPosition(ctx, projectId),
