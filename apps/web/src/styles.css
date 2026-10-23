@@ -1,0 +1,294 @@
+@import "tailwindcss";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans/700.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+
+/* Design tokens — dossier de dev §11. Light = validated mockups (NF-07); dark = proposal to validate on screen. */
+:root {
+  --bg: #f6f6f3;
+  --surface: #ffffff;
+  --surface-2: #fafaf8; /* bonus drawer, hidden tasks */
+  --bin: #efefea;
+  --border: #e6e6e1;
+  --divider: #f0f0eb;
+  --divider-2: #efefea;
+  --track: #f0f0eb; /* bars background */
+  --chip: #f0f0eb;
+  --btn-border: #d6d6d0;
+  --text: #1a1a1a;
+  --text-2: #3d3d39;
+  --text-muted: #5f5f5a;
+  --text-faint: #6b6b66;
+  --text-ghost: #8a8a84;
+  --late-bar: #e0a27a;
+  --late-text: #9a4a17;
+  --ahead-bar: #8fb3e8;
+  --ahead-text: #2456a8;
+  --warn: #e08a2e;
+  --ok: #2f7a55;
+  --status-green: #3e9b6e;
+  --status-orange: #e9a23b;
+  --status-red: #c8463b;
+  --experience: #d9ae3c;
+  --experience-text: #3b2c05;
+  --row-week: #f4f8f5;
+  --row-bonus: #f7f7f4;
+  --inverse-bg: #1a1a1a;
+  --inverse-text: #ffffff;
+  --focus: #2f6fdb;
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #121211;
+  --surface: #1c1c1a;
+  --surface-2: #191917;
+  --bin: #171715;
+  --border: #2e2e2b;
+  --divider: #262624;
+  --divider-2: #2a2a27;
+  --track: #2a2a27;
+  --chip: #2a2a27;
+  --btn-border: #3a3a36;
+  --text: #f2f2ee;
+  --text-2: #d6d6d0;
+  --text-muted: #b5b5ae;
+  --text-faint: #a5a59e;
+  --text-ghost: #8f8f88;
+  --late-bar: #b9784f;
+  --late-text: #f0b08a;
+  --ahead-bar: #5d86c4;
+  --ahead-text: #a9c6f2;
+  --warn: #f0a04b;
+  --ok: #5cc08d;
+  --status-green: #5cc08d;
+  --status-orange: #f0a04b;
+  --status-red: #e8776d;
+  --row-week: #1f2a23;
+  --row-bonus: #222220;
+  --inverse-bg: #f2f2ee;
+  --inverse-text: #121211;
+  --focus: #6a9bf2;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-bin: var(--bin);
+  --color-line: var(--border);
+  --color-divider: var(--divider);
+  --color-track: var(--track);
+  --color-chip: var(--chip);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+  --color-ghost: var(--text-ghost);
+  --color-warn: var(--warn);
+  --color-ok: var(--ok);
+  --color-late: var(--late-text);
+  --color-ahead: var(--ahead-text);
+}
+
+html,
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* G-12: everything is a link, nothing shouts: inherited colour, underline on hover only. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+button {
+  font-family: inherit;
+  color: inherit;
+}
+button:disabled {
+  cursor: not-allowed;
+}
+input,
+select,
+textarea {
+  font-family: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--btn-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 15px;
+  min-height: 40px;
+  box-sizing: border-box;
+}
+textarea {
+  min-height: 90px;
+  resize: vertical;
+}
+input[type="checkbox"] {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--text);
+}
+
+.mono {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+}
+.eyebrow {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.label-caps {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+}
+.h1 {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.h2-bin {
+  margin: 0;
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+.bin {
+  background: var(--bin);
+  border-radius: 18px;
+  padding: 18px 18px 20px;
+}
+.chip-duration {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-weight: 500;
+  font-size: 13px;
+  background: var(--chip);
+  border-radius: 999px;
+  padding: 4px 10px;
+  white-space: nowrap;
+}
+.badge-experience {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--experience-text);
+  background: linear-gradient(135deg, #fdf3cf 0%, var(--experience) 50%, #f6e2a0 100%);
+  border: 1px solid #b8892a;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.badge-bonus {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  background: var(--bin);
+  border-radius: 999px;
+  padding: 2px 8px;
+}
+.btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  border: 1px solid var(--btn-border);
+  background: var(--surface);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--text-ghost);
+}
+.btn-primary {
+  border: 0;
+  background: var(--inverse-bg);
+  color: var(--inverse-text);
+  font-weight: 600;
+}
+.btn-sm {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn-disabled-v2 {
+  border: 1px dashed #c9c9c3;
+  background: var(--bin);
+  color: var(--text-faint);
+}
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: none;
+}
+.track {
+  background: var(--track);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+@media (pointer: coarse) {
+  .btn,
+  .btn-sm {
+    min-height: 44px;
+  }
+}
