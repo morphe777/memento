@@ -4,7 +4,7 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 
 ## À trancher avant la mise en service (L7)
 
-1. **Déploiement Docker et base** : D-01 remplace PostgreSQL par SQLite. On garde SQLite en production (sauvegarde = copie du fichier vers un stockage externe) ou on repasse sur la VM PostgreSQL 17 existante ?
+1. ~~Déploiement Docker~~ : fait (D-56), SQLite conservé. Reste : sauvegarde régulière de `/srv/memento` vers un stockage externe.
 2. **Nom d'hôte interne** (ex. `memento.example.lan`) et accès iPhone via WireGuard : à confirmer pour la conf NGINX Proxy Manager. Passer alors `MEMENTO_COOKIE_SECURE=true`.
 3. **Exposition en dev** : l'API écoute sur `0.0.0.0:4500` (LAN `192.168.1.20`) pour que tu puisses tester. OK, ou on la restreint à `127.0.0.1` ?
 4. **Import de l'ancien outil** : script en L7 ou départ à zéro ?
