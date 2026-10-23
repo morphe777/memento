@@ -204,6 +204,7 @@ export function getPlanningPage(ctx: Ctx, isoWeek: string) {
     experienceTarget: input.experienceTarget,
     experienceWindowWeeks: input.experienceWindowWeeks,
     experiencesDone: input.experiencesDone,
+    items: items.map((i) => ({ taskId: i.taskId, kind: i.kind, source: i.source })),
     ...page,
   };
 }
@@ -345,6 +346,31 @@ export function setWeekItems(ctx: Ctx, isoWeek: string, items: { taskId: string;
   return tx(ctx, () => {
     const plan = getOrCreatePlan(ctx, isoWeek);
     const before = planItems(ctx, plan.id);
+    // Tasks already done stay in the plan even if the new selection omits them (history of the week).
+    const listed = new Set(items.map((i) => i.taskId));
+    const doneKept = before.filter((b) => !listed.has(b.taskId));
+    if (doneKept.length) {
+      const doneIds = new Set(
+        ctx.db
+          .select({ id: task.id })
+          .from(task)
+          .where(
+            and(
+              inArray(
+                task.id,
+                doneKept.map((b) => b.taskId),
+              ),
+              eq(task.status, 'done'),
+            ),
+          )
+          .all()
+          .map((r) => r.id),
+      );
+      items = [
+        ...items,
+        ...doneKept.filter((b) => doneIds.has(b.taskId)).map((b) => ({ taskId: b.taskId, kind: b.kind })),
+      ];
+    }
     const beforeIds = new Set(before.map((i) => i.taskId));
     const ids = [...new Set(items.map((i) => i.taskId))];
     const rows = ids.length ? ctx.db.select().from(task).where(inArray(task.id, ids)).all() : [];
@@ -380,7 +406,7 @@ export function setWeekItems(ctx: Ctx, isoWeek: string, items: { taskId: string;
           kind: it.kind,
           source: prev && prev.kind === it.kind ? prev.source : source,
           score: prev?.score ?? scored.get(it.taskId)?.score ?? null,
-          why: prev?.why ?? scored.get(it.taskId)?.why ?? null,
+          why: prev && prev.kind === it.kind ? prev.why : (scored.get(it.taskId)?.why ?? prev?.why ?? null),
           position: i + 1,
         })
         .onConflictDoNothing()

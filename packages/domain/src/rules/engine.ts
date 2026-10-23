@@ -225,9 +225,10 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
     if (val === 0) why = project ? 'Prochaine étape du projet' : 'À caser quand tu peux';
     else if (key === 'A') why = `Reportée ${t.postponeCount} fois`;
     else if (key === 'R') why = `Projet du mois, ${fmtMin(lateMin)} de retard`;
-    else if (key === 'U' && deadline) why = `Deadline ${frShort(deadline)}`;
+    else if (key === 'U' && deadline)
+      why = t.dueDate ? `Deadline ${frShort(deadline)}` : `Fin du projet le ${frShort(deadline)}`;
     else if (key === 'C') why = 'Suite logique : projet entamé';
-    else why = primary ? `${primary.name} = priorité n°${primary.priorityRank}` : 'Priorité';
+    else why = primary ? `${primary.name} = priorité n°${primary.priorityRank}` : 'À caser quand tu peux';
   }
   return { taskId: t.id, score, parts, mandatory, why };
 }
