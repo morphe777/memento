@@ -15,6 +15,7 @@ import { Loading } from './components/ui.tsx';
 import { ApiError } from './lib/api.ts';
 import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
+import { ExperiencesPage } from './pages/experiences.tsx';
 import {
   DomainPage,
   DomainsPage,
@@ -146,6 +147,14 @@ const domainRoute = createRoute({
   },
 });
 const ideasRoute = route('/idees', IdeasPage);
+const experiencesRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/experiences',
+  validateSearch: (s: Record<string, unknown>): { tache?: string } => ({ tache: str(s.tache) }),
+  component: function Experiences() {
+    return <ExperiencesPage tache={experiencesRoute.useSearch().tache} />;
+  },
+});
 const reportsRoute = route('/rapports', ReportsPage);
 const reportRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -181,6 +190,7 @@ const routeTree = rootRoute.addChildren([
   domainsRoute,
   domainRoute,
   ideasRoute,
+  experiencesRoute,
   reportsRoute,
   reportRoute,
   reviewRoute,
