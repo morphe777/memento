@@ -1,0 +1,140 @@
+// Shared Zod input schemas: single source of truth for API validation, OpenAPI, web forms and MCP tools.
+import { z } from 'zod';
+
+const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format AAAA-MM-JJ');
+const color = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+const title = z.string().trim().min(1, 'Titre obligatoire').max(200);
+const text = z.string().max(20_000);
+export const uuid = z.string().uuid();
+
+export const idParam = z.object({ id: uuid });
+export const isoWeekParam = z.object({ isoWeek: z.string().regex(/^\d{4}-W\d{2}$/) });
+
+export const domainCreate = z.object({ name: title, colorLight: color, colorDark: color });
+export const domainPatch = z
+  .object({ name: title, colorLight: color, colorDark: color, weight: z.number().min(0).max(1), archived: z.boolean() })
+  .partial();
+export const reorderBody = z.object({ ids: z.array(uuid).min(1) });
+
+export const groupCreate = z.object({ name: title, domainId: uuid });
+export const groupPatch = groupCreate.partial();
+
+export const metaObjectiveStatus = z.enum(['active', 'paused', 'achieved', 'abandoned']);
+export const metaObjectiveCreate = z.object({
+  title,
+  description: text.optional(),
+  horizonDate: date.nullable().optional(),
+  status: metaObjectiveStatus.optional(),
+});
+export const metaObjectivePatch = metaObjectiveCreate.partial();
+
+export const objectiveStatus = z.enum(['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned']);
+export const objectiveCreate = z.object({
+  title,
+  metaObjectiveId: uuid.nullable().optional(),
+  description: text.optional(),
+  smartIndicator: z.string().max(500).optional(),
+  smartTarget: z.string().max(200).optional(),
+  smartCurrent: z.string().max(200).optional(),
+  deadline: date,
+  quarter: z.string().regex(/^\d{4}-Q[1-4]$/).optional(),
+  criticality: z.number().int().min(1).max(3).optional(),
+  status: objectiveStatus.optional(),
+});
+export const objectivePatch = objectiveCreate.partial();
+
+export const projectStatus = z.enum(['idea', 'active', 'paused', 'done', 'abandoned']);
+const projectFields = {
+  title,
+  description: text.optional(),
+  objectiveId: uuid.nullable().optional(),
+  isFree: z.boolean().optional(),
+  sequenceMode: z.enum(['sequential', 'parallel']).optional(),
+  primaryDomainId: uuid.nullable().optional(),
+  successCriterion: z.string().max(500).optional(),
+  startDate: date.nullable().optional(),
+  dueDate: date.nullable().optional(),
+  monthFlag: z.string().regex(/^\d{4}-\d{2}$/).nullable().optional(),
+};
+/** RB-01 + decision D-04: an idea needs a title and at least one group. */
+export const projectCreate = z.object({ ...projectFields, groupIds: z.array(uuid).min(1, 'Au moins un groupe') });
+export const projectPatch = z.object({ ...projectFields, status: projectStatus }).partial();
+export const projectGroupsBody = z.object({ groupIds: z.array(uuid).min(1), primaryDomainId: uuid.nullable().optional() });
+export const projectCompleteBody = z.object({ success: z.boolean() });
+export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });
+export const projectReplanBody = z.object({ dueDate: date.optional() });
+export const projectListQuery = z.object({
+  status: z.string().optional(), // comma-separated
+  groupId: uuid.optional(),
+  domainId: uuid.optional(),
+  month: z.string().regex(/^\d{4}-\d{2}$/).optional(),
+  objectiveId: uuid.optional(),
+});
+
+export const duration = z.union([z.literal(30), z.literal(60), z.literal(120)]);
+const taskFields = {
+  title,
+  description: text.optional(),
+  durationMin: z.number().int().nullable().optional(), // RB-03 checked in domain for a readable message
+  isFree: z.boolean().optional(),
+  isExperience: z.boolean().optional(),
+  dueDate: date.nullable().optional(),
+  recurrenceRule: z.string().max(500).nullable().optional(),
+  domainId: uuid.nullable().optional(),
+};
+export const taskCreate = z.object({ ...taskFields, projectId: uuid.nullable().optional(), position: z.number().int().optional() });
+export const taskBatchCreate = z.object({ projectId: uuid.nullable().optional(), tasks: z.array(z.object(taskFields)).min(1).max(100) });
+export const taskPatch = z.object({ ...taskFields, status: z.enum(['todo', 'cancelled']) }).partial();
+export const taskMoveBody = z.object({ projectId: uuid.nullable(), position: z.number().int().optional() });
+export const taskReorderBody = z.object({ projectId: uuid.nullable(), ids: z.array(uuid).min(1) });
+export const taskListQuery = z.object({
+  projectId: z.string().optional(), // uuid or "inbox"
+  status: z.string().optional(),
+});
+export const dependencyBody = z.object({ dependsOnId: uuid });
+
+export const resourceCreate = z.object({
+  ownerType: z.enum(['objective', 'project', 'task', 'group']),
+  ownerId: uuid,
+  label: z.string().trim().min(1).max(200),
+  url: z.string().trim().min(1).max(2000),
+});
+
+export const weekItemsBody = z.object({
+  items: z.array(z.object({ taskId: uuid, kind: z.enum(['week', 'bonus']) })).max(200),
+});
+export const weekPatchBody = z.object({
+  budgetMin: z.number().int().min(0).max(10_080).nullable(),
+  budgetReason: z.string().max(200).nullable().optional(),
+});
+
+export const reportListQuery = z.object({
+  kind: z.enum(['week', 'month', 'quarter']).optional(),
+  from: z.string().optional(),
+  to: z.string().optional(),
+});
+export const reportGenerateBody = z.object({
+  kind: z.enum(['week', 'month', 'quarter']),
+  periodKey: z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/),
+});
+
+export const changesQuery = z.object({
+  since: z.string().optional(), // ISO timestamp, or "last-visit", "24h", "7d"
+  actor: z.enum(['all', 'me', 'ai']).optional(),
+  includeReviewed: z.coerce.boolean().optional(),
+});
+export const markReviewedBody = z.object({ ids: z.array(uuid).optional(), all: z.boolean().optional() });
+
+export type DomainCreate = z.infer<typeof domainCreate>;
+export type DomainPatch = z.infer<typeof domainPatch>;
+export type GroupCreate = z.infer<typeof groupCreate>;
+export type GroupPatch = z.infer<typeof groupPatch>;
+export type MetaObjectiveCreate = z.infer<typeof metaObjectiveCreate>;
+export type MetaObjectivePatch = z.infer<typeof metaObjectivePatch>;
+export type ObjectiveCreate = z.infer<typeof objectiveCreate>;
+export type ObjectivePatch = z.infer<typeof objectivePatch>;
+export type ProjectCreate = z.infer<typeof projectCreate>;
+export type ProjectPatch = z.infer<typeof projectPatch>;
+export type TaskCreate = z.infer<typeof taskCreate>;
+export type TaskPatch = z.infer<typeof taskPatch>;
+export type ResourceCreate = z.infer<typeof resourceCreate>;
