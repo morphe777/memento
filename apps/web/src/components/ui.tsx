@@ -481,6 +481,7 @@ export function ConfirmDialog({
   onConfirm,
   onClose,
   busy,
+  disabled,
 }: {
   open: boolean;
   title: string;
@@ -489,6 +490,7 @@ export function ConfirmDialog({
   onConfirm: () => void;
   onClose: () => void;
   busy?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Panel open={open} onClose={onClose} title={title} side={false} width={480}>
@@ -497,7 +499,12 @@ export function ConfirmDialog({
         <button type="button" className="btn" onClick={onClose}>
           Annuler
         </button>
-        <button type="button" className="btn btn-danger-solid" disabled={busy} onClick={onConfirm}>
+        <button
+          type="button"
+          className="btn btn-danger-solid"
+          disabled={busy || disabled}
+          onClick={onConfirm}
+        >
           {confirmLabel}
         </button>
       </div>

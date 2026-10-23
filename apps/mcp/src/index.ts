@@ -64,7 +64,7 @@ const qs = (o: Record<string, unknown>) => {
 
 export function buildServer(call: Call) {
   const server = new McpServer(
-    { name: 'memento', version: '0.9.0' },
+    { name: 'memento', version: '0.9.1' },
     {
       instructions:
         "Mémento : objectifs, projets et tâches de Mehdi. Avant d'agir, lis le guide (outil get_guide) puis la vue d'ensemble (get_context). Toutes les règles sont appliquées par l'API ; un refus renvoie un code et un message en français à transmettre tel quel.",

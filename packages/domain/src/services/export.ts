@@ -105,3 +105,34 @@ export function importData(ctx: Ctx, data: unknown) {
     return { ok: true as const, counts };
   });
 }
+
+// D-57: « Vider les données » — removes every meta-objective, objective, project and task (with their links),
+// keeping the configuration: domains, groups, settings, account, sessions, tokens and job runs. With
+// `history`, week plans, frozen reports and the journal go too (a clean start). Children first (foreign keys).
+const PURGE_TABLES = [
+  ['taskDependency', schema.taskDependency],
+  ['weekPlanItem', schema.weekPlanItem],
+  ['resourceLink', schema.resourceLink],
+  ['task', schema.task],
+  ['projectDependency', schema.projectDependency],
+  ['projectGroup', schema.projectGroup],
+  ['project', schema.project],
+  ['objective', schema.objective],
+  ['metaObjective', schema.metaObjective],
+] as const;
+const HISTORY_TABLES = [
+  ['weekPlan', schema.weekPlan],
+  ['report', schema.report],
+  ['auditLog', schema.auditLog],
+] as const;
+
+export function purgeData(ctx: Ctx, opts: { history: boolean }) {
+  return tx(ctx, () => {
+    const counts: Record<string, number> = {};
+    for (const [key, table] of [...PURGE_TABLES, ...(opts.history ? HISTORY_TABLES : [])])
+      counts[key] = ctx.db.delete(table).run().changes;
+    // Logged after the wipe, so the journal keeps a trace even when it was emptied.
+    audit(ctx, 'purge', 'purge', 'purge', null, { history: opts.history, counts });
+    return { ok: true as const, counts };
+  });
+}

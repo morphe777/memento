@@ -87,6 +87,8 @@ export const projectGroupsBody = z.object({
   primaryDomainId: uuid.nullable().optional(),
 });
 export const projectCompleteBody = z.object({ success: z.boolean() });
+/** D-57: the confirmation word guards against an accidental call. */
+export const purgeBody = z.object({ confirm: z.literal('SUPPRIMER'), history: z.boolean().default(false) });
 export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });
 export const projectReplanBody = z.object({ dueDate: date.optional() });
 export const projectListQuery = z.object({

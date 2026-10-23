@@ -24,7 +24,7 @@ Configuration › Accès › nom (`claude`, `n8n`…) + portée :
 
 Le secret `mem_…` n'est affiché **qu'une fois** (seule son empreinte est stockée). Un jeton par agent : chaque
 action est signée `ai:<nom>` dans le Journal. Révoquer coupe l'accès immédiatement. Aucun jeton ne peut toucher aux
-réglages, aux jetons, au compte ni à l'export / import.
+réglages, aux jetons, au compte, à l'export / import ni à « Vider les données ».
 
 ## 2. Brancher une IA par MCP (recommandé)
 

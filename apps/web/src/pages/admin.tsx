@@ -546,7 +546,9 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             <InfoTip>
               Télécharge toutes les données (domaines, objectifs, projets, tâches, plans, rapports, réglages,
               journal) dans un fichier JSON : une sauvegarde lisible par d'autres outils. Aucun secret n'y
-              figure (ni mot de passe, ni session, ni jeton).
+              figure (ni mot de passe, ni session, ni jeton). « Vider les données » efface les méta-objectifs,
+              objectifs, projets et tâches mais garde la configuration (domaines, groupes, réglages, compte,
+              jetons).
             </InfoTip>
           </span>
           <div className="flex flex-wrap gap-2">
@@ -554,6 +556,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               Exporter toutes les données (JSON)
             </a>
             <ImportButton />
+            <PurgeButton />
           </div>
         </div>
       )}
@@ -986,6 +989,71 @@ function AccessConfig() {
         </button>
       </form>
     </Section>
+  );
+}
+
+/** D-57: wipe meta-objectives, objectives, projects and tasks; the configuration stays. Typed confirmation. */
+function PurgeButton() {
+  const qc = useQueryClient();
+  const [open, setOpen] = useState(false);
+  const [word, setWord] = useState('');
+  const [history, setHistory] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const close = () => {
+    setOpen(false);
+    setWord('');
+    setHistory(false);
+  };
+  const run = async () => {
+    setBusy(true);
+    try {
+      const r = await post<{ counts: Record<string, number>; backup: string | null }>('/purge', {
+        confirm: word,
+        history,
+      });
+      toast(
+        `Données vidées : ${r.counts.project ?? 0} projets, ${r.counts.task ?? 0} tâches, ${r.counts.objective ?? 0} objectifs supprimés.${r.backup ? ` Sauvegarde : data/${r.backup}` : ''}`,
+      );
+      close();
+      await qc.invalidateQueries();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Suppression impossible', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button type="button" className="btn btn-danger" onClick={() => setOpen(true)}>
+        Vider les données…
+      </button>
+      <ConfirmDialog
+        open={open}
+        title="Vider les données ?"
+        confirmLabel="Tout supprimer"
+        busy={busy}
+        disabled={word !== 'SUPPRIMER'}
+        onClose={close}
+        onConfirm={run}
+      >
+        <p className="m-0">
+          Tous les <b>méta-objectifs, objectifs, projets et tâches</b> (Inbox et expériences comprises) seront
+          supprimés définitivement.
+        </p>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Restent : domaines et leurs descriptions, groupes, réglages, modèles, compte et jetons d'accès. Une
+          copie de la base est faite juste avant, dans le dossier data/.
+        </p>
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={history} onChange={(e) => setHistory(e.target.checked)} />
+          Effacer aussi l'historique : plans de semaine, rapports et journal
+        </label>
+        <label className="flex flex-col gap-1 text-[14px]">
+          Tape SUPPRIMER pour confirmer
+          <input value={word} onChange={(e) => setWord(e.target.value)} autoComplete="off" />
+        </label>
+      </ConfirmDialog>
+    </>
   );
 }
 

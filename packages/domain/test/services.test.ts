@@ -40,6 +40,7 @@ import {
   promoteProject,
   propose,
   proposeWeek,
+  purgeData,
   reorderTasks,
   replanProject,
   rollMonth,
@@ -726,5 +727,44 @@ describe('worker jobs (WF-01 to WF-03)', () => {
         .map((x) => `${x.kind}:${x.periodKey}`)
         .sort(),
     ).toEqual(['month:2026-10', 'quarter:2026-Q3', 'week:2026-W44']);
+  });
+});
+
+describe('D-57 vider les données', () => {
+  it('removes meta-objectives, objectives, projects and tasks, keeps the configuration', () => {
+    const ctx = makeCtx();
+    const { tasks } = activeProject(ctx, 'Panneaux', 'Travaux', 2);
+    setTaskInCurrentWeek(ctx, tasks[0].id, true);
+    const meta = createMetaObjective(ctx, { title: 'Autonomie' });
+    createObjective(ctx, { title: 'Énergie', deadline: '2026-12-20', metaObjectiveId: meta.id });
+    createTask(ctx, { title: 'Passeport' });
+    patchSettings(ctx, { 'month.max_projects': 5 });
+    generateReport(ctx, 'week', '2026-W42');
+    const r = purgeData(ctx, { history: false });
+    expect(r.counts).toMatchObject({ project: 1, task: 3, objective: 1, metaObjective: 1, weekPlanItem: 1 });
+    for (const t of [
+      schema.task,
+      schema.project,
+      schema.objective,
+      schema.metaObjective,
+      schema.weekPlanItem,
+    ])
+      expect(ctx.db.select().from(t).all()).toHaveLength(0);
+    expect(listDomains(ctx)).toHaveLength(8);
+    expect(lookups(ctx).group('Travaux')).toBeDefined();
+    expect(getSettings(ctx)['month.max_projects']).toBe(5);
+    expect(ctx.db.select().from(schema.report).all()).toHaveLength(1);
+    expect(listChanges(ctx, { actor: 'me' }).length).toBeGreaterThan(1);
+  });
+
+  it('with history, also empties week plans, reports and the journal (except the purge entry)', () => {
+    const ctx = makeCtx();
+    activeProject(ctx, 'Panneaux', 'Travaux', 1);
+    generateReport(ctx, 'week', '2026-W42');
+    purgeData(ctx, { history: true });
+    expect(ctx.db.select().from(schema.report).all()).toHaveLength(0);
+    expect(ctx.db.select().from(schema.weekPlan).all()).toHaveLength(0);
+    const log = ctx.db.select().from(schema.auditLog).all();
+    expect(log.map((l) => l.action)).toEqual(['purge']);
   });
 });

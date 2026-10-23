@@ -195,6 +195,39 @@ describe('API — export (D-45)', () => {
   });
 });
 
+describe('API — purge (D-57)', () => {
+  it('needs the confirmation word, is refused to tokens, and keeps domains and groups', async () => {
+    const s = await setup();
+    const h = { cookie: s.cookie };
+    const groups = (await s.app.inject({ url: '/api/v1/groups', headers: h })).json();
+    await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/projects',
+      headers: h,
+      payload: { title: 'Test', groupIds: [groups[0].id] },
+    });
+    const noWord = await s.app.inject({ method: 'POST', url: '/api/v1/purge', headers: h, payload: {} });
+    expect(noWord.statusCode).toBe(400);
+    const t = createToken(s.db, 'bot', 'read_write');
+    const denied = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/purge',
+      headers: { authorization: `Bearer ${t.token}` },
+      payload: { confirm: 'SUPPRIMER' },
+    });
+    expect(denied.statusCode).toBe(403);
+    const ok = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/purge',
+      headers: h,
+      payload: { confirm: 'SUPPRIMER' },
+    });
+    expect(ok.json().counts.project).toBe(1);
+    expect((await s.app.inject({ url: '/api/v1/projects', headers: h })).json()).toEqual([]);
+    expect((await s.app.inject({ url: '/api/v1/groups', headers: h })).json()).toHaveLength(groups.length);
+  });
+});
+
 describe('API — tokens (AI / robots)', () => {
   it('bearer token acts as ai:<name>; read-only tokens cannot write; revoked tokens are refused', async () => {
     const s = await setup();

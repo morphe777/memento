@@ -70,6 +70,8 @@ export const ENTITY_LABEL: Record<string, string> = {
   group: 'Groupe',
   domain: 'Domaine',
   resource: 'Ressource',
+  import: 'Données',
+  purge: 'Données',
 };
 export const ACTION_LABEL: Record<string, string> = {
   create: 'créé',
@@ -82,6 +84,8 @@ export const ACTION_LABEL: Record<string, string> = {
   cancel: 'annulé',
   archive: 'archivé',
   delete: 'supprimé',
+  import: 'importées',
+  purge: 'vidées',
   groups: 'groupes modifiés',
   domain_change: 'domaine changé',
   replan: 'replanifié',

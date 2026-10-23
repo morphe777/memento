@@ -127,7 +127,7 @@ export async function buildApp(opts: AppOptions) {
       const tag = (t: string) => ({ tags: [t] });
 
       // ---------- Health, auth ----------
-      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: '0.9.0' }));
+      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: '0.9.1' }));
       // Guide for AI clients (docs/api/guide-ia.md), also served by the MCP tool get_guide.
       r.get('/guide', { schema: tag('Système') }, async () => ({
         format: 'markdown',
@@ -246,6 +246,25 @@ export async function buildApp(opts: AppOptions) {
             await sqlite.backup(backup);
           }
           return { ...D.importData(ctx(req), req.body), backup: backup ? basename(backup) : null };
+        },
+      );
+      // D-57: wipe objectives, projects and tasks (configuration kept). A SQLite backup is taken first.
+      r.post(
+        '/purge',
+        { schema: { ...tag('Réglages'), body: D.purgeBody }, preHandler: userOnly },
+        async (req) => {
+          let backup: string | null = null;
+          if (opts.backupDir) {
+            backup = join(
+              opts.backupDir,
+              `backup-avant-purge-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
+            );
+            await sqlite.backup(backup);
+          }
+          return {
+            ...D.purgeData(ctx(req), { history: req.body.history }),
+            backup: backup ? basename(backup) : null,
+          };
         },
       );
       // D-45: full JSON export (backup), interface only, without any secret.
