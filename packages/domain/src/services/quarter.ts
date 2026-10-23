@@ -89,12 +89,6 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
       code: 'UNKNOWN_SIZE',
       text: `${unknown} projet${unknown > 1 ? 's' : ''} sans tâches chiffrées : la charge réelle sera plus élevée.`,
     });
-  for (const m of metaRows.filter((x) => x.objectives === 0))
-    alerts.push({
-      level: 'warn',
-      code: 'META_EMPTY',
-      text: `Méta-objectif « ${m.title} » : aucun objectif ce trimestre.`,
-    });
   const overdue = candidates.filter((o) => o.overdue).length;
   if (overdue)
     alerts.push({
