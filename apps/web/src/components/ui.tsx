@@ -617,29 +617,3 @@ export function DomainFilter({ value, onChange }: { value: string[]; onChange: (
     </div>
   );
 }
-
-/** « Proposer avec l'IA » (v2 placeholder, same on the week, month and quarter plans): the AI will propose the
- * plan through the MCP and explain its choices. Disabled until then. */
-export function AiProposeButton() {
-  return (
-    <button
-      type="button"
-      className="btn btn-disabled-v2"
-      disabled
-      aria-disabled="true"
-      title="Bientôt : une IA (via le MCP) proposera le plan en expliquant ses choix."
-      style={{ minHeight: 44, opacity: 1, padding: '0 18px' }}
-    >
-      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16">
-        <path
-          d="M8 1.5l1.6 4.2 4.4.3-3.4 2.8 1.1 4.3L8 10.7l-3.7 2.4 1.1-4.3L2 6l4.4-.3z"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.2"
-          strokeLinejoin="round"
-        />
-      </svg>
-      Proposer avec l'IA
-    </button>
-  );
-}

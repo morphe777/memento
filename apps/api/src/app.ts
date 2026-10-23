@@ -31,6 +31,8 @@ export interface AppOptions {
   now?: () => Date;
   /** Where the SQLite backup is written before an import (D-50); no backup when absent (tests). */
   backupDir?: string;
+  /** Replaces the configured AI provider (tests). */
+  llm?: D.Llm;
 }
 
 declare module 'fastify' {
@@ -53,7 +55,7 @@ export async function buildApp(opts: AppOptions) {
       info: {
         title: 'Mémento API',
         description: 'Objectifs, projets, charge mentale. Auth : cookie de session ou Bearer.',
-        version: '0.1.0',
+        version: D.APP_VERSION,
       },
       components: { securitySchemes: { bearer: { type: 'http', scheme: 'bearer' } } },
       security: [{ bearer: [] }],
@@ -127,7 +129,7 @@ export async function buildApp(opts: AppOptions) {
       const tag = (t: string) => ({ tags: [t] });
 
       // ---------- Health, auth ----------
-      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: '0.9.1' }));
+      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: D.APP_VERSION }));
       // Guide for AI clients (docs/api/guide-ia.md), also served by the MCP tool get_guide.
       r.get('/guide', { schema: tag('Système') }, async () => ({
         format: 'markdown',
@@ -246,6 +248,20 @@ export async function buildApp(opts: AppOptions) {
             await sqlite.backup(backup);
           }
           return { ...D.importData(ctx(req), req.body), backup: backup ? basename(backup) : null };
+        },
+      );
+      // D-58: « Proposer avec l'IA ». Interface only (it spends the user's AI credits); the proposal is
+      // returned, never applied: the user applies it through the usual planning endpoints.
+      r.get('/ai/status', { schema: tag('IA'), preHandler: userOnly }, async (req) =>
+        D.aiStatus(D.getSettings(ctx(req)), process.env),
+      );
+      r.post(
+        '/ai/propose',
+        { schema: { ...tag('IA'), body: D.aiProposeBody }, preHandler: userOnly },
+        async (req) => {
+          const c = ctx(req);
+          const llm = opts.llm ?? D.makeLlm(D.getSettings(c), process.env);
+          return D.proposeWithAi(c, req.body.scope, req.body.period, llm);
         },
       );
       // D-57: wipe objectives, projects and tasks (configuration kept). A SQLite backup is taken first.

@@ -1,6 +1,7 @@
 // Settings (dossier de dev §4 "Réglages") with defaults and validation (V-14).
 import { schema } from '@memento/db';
 import { z } from 'zod';
+import { DEFAULT_AI_PROMPTS } from './ai/prompts.ts';
 import { audit, type Ctx, tx } from './context.ts';
 import { DomainError } from './errors.ts';
 
@@ -37,6 +38,15 @@ export const settingsSchema = z.object({
   'ui.projects_default_view': z.enum(['tree', 'list', 'kanban']),
   'month.max_projects': z.number().int().min(1).max(20),
   'quarter.max_objectives': z.number().int().min(1).max(20),
+  // D-58: AI provider for « Proposer avec l'IA ». Keys stay in environment variables, never here.
+  'ai.provider': z.enum(['none', 'anthropic', 'openai', 'openrouter', 'google', 'ollama', 'custom']),
+  'ai.model': z.string().trim().max(200),
+  'ai.base_url': z.union([z.literal(''), z.url({ protocol: /^https?$/ })]),
+  'ai.instructions': z.string().max(4000),
+  'ai.prompt.system': z.string().trim().min(1).max(8000),
+  'ai.prompt.week': z.string().trim().min(1).max(8000),
+  'ai.prompt.month': z.string().trim().min(1).max(8000),
+  'ai.prompt.quarter': z.string().trim().min(1).max(8000),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -70,6 +80,14 @@ export const DEFAULT_SETTINGS: Settings = {
   'ui.projects_default_view': 'tree',
   'month.max_projects': 3, // D-47: alert above this many month projects at once
   'quarter.max_objectives': 3, // D-48: alert above this many objectives in a quarter
+  'ai.provider': 'none', // D-58: off until chosen in Configuration › IA
+  'ai.model': '', // empty: the provider's default (Anthropic) or required
+  'ai.base_url': '', // empty: the provider's usual URL
+  'ai.instructions': '',
+  'ai.prompt.system': DEFAULT_AI_PROMPTS.system, // editable without a new image (Configuration › IA)
+  'ai.prompt.week': DEFAULT_AI_PROMPTS.week,
+  'ai.prompt.month': DEFAULT_AI_PROMPTS.month,
+  'ai.prompt.quarter': DEFAULT_AI_PROMPTS.quarter,
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

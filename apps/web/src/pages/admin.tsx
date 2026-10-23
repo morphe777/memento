@@ -20,7 +20,7 @@ import {
 import { ApiError, del, get, patch, post } from '../lib/api.ts';
 import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
-import type { Change, Domain, Settings } from '../lib/types.ts';
+import type { AiStatus, Change, Domain, Settings } from '../lib/types.ts';
 
 // ---------- À revoir ----------
 
@@ -160,6 +160,7 @@ const CONFIG_TABS = [
   { value: 'alertes', label: 'Alertes' },
   { value: 'planning', label: 'Planning' },
   { value: 'templates', label: 'Templates' },
+  { value: 'ia', label: 'IA' },
   { value: 'acces', label: 'Accès' },
   { value: 'compte', label: 'Compte' },
 ] as const;
@@ -221,6 +222,10 @@ const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> 
     title: 'Planning automatique',
     info: 'Quand le worker prépare la semaine et génère les rapports, en heure de Paris.',
   },
+  ia: {
+    title: 'IA',
+    info: "Fournisseur appelé par « Proposer avec l'IA » (Planifier). La clé d'API n'est jamais saisie ici : elle se met dans une variable d'environnement du conteneur. Les prompts sont modifiables ; le format de réponse attendu est ajouté automatiquement.",
+  },
   templates: {
     title: 'Modèles de description',
     info: 'Texte de départ des descriptions, pour garder la même structure partout.',
@@ -271,6 +276,16 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
     ],
     planning: ['schedule.week_plan', 'schedule.reports'],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
+    ia: [
+      'ai.provider',
+      'ai.model',
+      'ai.base_url',
+      'ai.instructions',
+      'ai.prompt.system',
+      'ai.prompt.week',
+      'ai.prompt.month',
+      'ai.prompt.quarter',
+    ],
   };
   const submit = () => save.mutate(Object.fromEntries(keys[tab].map((k) => [k, s[k]])) as Partial<Settings>);
   const w = s['engine.weights'];
@@ -536,6 +551,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
           ))}
         </>
       )}
+      {tab === 'ia' && <AiConfig s={s} setS={setS} />}
       <button type="button" className="btn btn-primary self-start" onClick={submit} disabled={save.isPending}>
         Enregistrer
       </button>
@@ -989,6 +1005,116 @@ function AccessConfig() {
         </button>
       </form>
     </Section>
+  );
+}
+
+const AI_PROVIDER_OPTIONS: [Settings['ai.provider'], string][] = [
+  ['none', 'Aucun (bouton désactivé)'],
+  ['anthropic', 'Anthropic (Claude)'],
+  ['openai', 'OpenAI'],
+  ['openrouter', 'OpenRouter'],
+  ['google', 'Google (Gemini)'],
+  ['ollama', 'Ollama (local)'],
+  ['custom', 'Autre, compatible OpenAI'],
+];
+
+const AI_PROMPTS = [
+  [
+    'ai.prompt.system',
+    'Prompt système (commun)',
+    'Le rôle et les règles générales, envoyés à chaque proposition.',
+  ],
+  ['ai.prompt.week', 'Prompt Semaine', 'Comment choisir les tâches de la semaine.'],
+  ['ai.prompt.month', 'Prompt Mois', 'Comment choisir les projets du mois.'],
+  ['ai.prompt.quarter', 'Prompt Trimestre', 'Comment choisir les objectifs du trimestre.'],
+] as const;
+
+/** D-58: Configuration › IA. Provider and model here; the API key stays in an environment variable. */
+function AiConfig({ s, setS }: { s: Settings; setS: (s: Settings) => void }) {
+  const status = useQuery({ queryKey: ['ai-status'], queryFn: () => get<AiStatus>('/ai/status') });
+  const st = status.data;
+  const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS({ ...s, [k]: v });
+  return (
+    <>
+      <Field label="Fournisseur">
+        <select
+          value={s['ai.provider']}
+          onChange={(e) => set('ai.provider', e.target.value as Settings['ai.provider'])}
+        >
+          {AI_PROVIDER_OPTIONS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+      </Field>
+      {s['ai.provider'] !== 'none' && (
+        <>
+          <Field
+            label="Modèle"
+            info="Le nom exact du modèle chez le fournisseur (ex. pour OpenRouter : « fournisseur/modèle »). Vide pour Anthropic = claude-opus-5-5."
+          >
+            <input
+              value={s['ai.model']}
+              onChange={(e) => set('ai.model', e.target.value)}
+              placeholder={s['ai.provider'] === 'anthropic' ? 'claude-opus-5-5' : 'nom du modèle'}
+            />
+          </Field>
+          <Field
+            label="URL du serveur"
+            info="Vide = l'adresse habituelle du fournisseur. À renseigner pour Ollama en Docker (ex. http://192.168.1.10:11434/v1) ou un serveur compatible OpenAI."
+          >
+            <input
+              value={s['ai.base_url']}
+              onChange={(e) => set('ai.base_url', e.target.value.trim())}
+              placeholder="adresse par défaut"
+            />
+          </Field>
+        </>
+      )}
+      {st && (
+        <p
+          className="m-0 text-[14px]"
+          style={{ color: st.configured ? 'var(--ok, #2E7D4F)' : 'var(--warn, #B7791F)' }}
+        >
+          {st.configured ? `✓ Prêt : ${st.providerLabel}, modèle ${st.model}.` : `⚠ ${st.reason}`}
+          {st.keyEnv && (
+            <span style={{ color: 'var(--text-muted)' }}>
+              {' '}
+              Clé lue dans {st.keyEnv} : {st.keyPresent ? 'présente' : 'absente'}.
+            </span>
+          )}
+          <span style={{ color: 'var(--text-muted)' }}> (état des réglages enregistrés)</span>
+        </p>
+      )}
+      <Field
+        label="Tes consignes"
+        info="Ce que l'IA doit savoir de toi en plus des données : contraintes, préférences (ex. « le mercredi je suis avec les enfants »)."
+      >
+        <textarea
+          value={s['ai.instructions']}
+          onChange={(e) => set('ai.instructions', e.target.value)}
+          style={{ minHeight: 80 }}
+        />
+      </Field>
+      {AI_PROMPTS.map(([k, label, info]) => (
+        <Field key={k} label={label} info={info}>
+          <textarea value={s[k]} onChange={(e) => set(k, e.target.value)} style={{ minHeight: 160 }} />
+          {st &&
+            s[k] !== st.defaultPrompts[k.slice('ai.prompt.'.length) as keyof typeof st.defaultPrompts] && (
+              <button
+                type="button"
+                className="btn btn-sm self-start mt-1"
+                onClick={() =>
+                  set(k, st.defaultPrompts[k.slice('ai.prompt.'.length) as keyof typeof st.defaultPrompts])
+                }
+              >
+                Rétablir le texte d'origine
+              </button>
+            )}
+        </Field>
+      ))}
+    </>
   );
 }
 

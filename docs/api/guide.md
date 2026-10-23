@@ -72,3 +72,12 @@ Pour un écosystème (santé, sommeil, activité…), lis en lecture seule :
 - Les jetons et mots de passe ne sont stockés que sous forme d'empreinte. Un jeton perdu se révoque, il ne se
   retrouve pas.
 - Le MCP ne garde aucun secret : il relaie le jeton de l'agent appelant.
+
+## 7. « Proposer avec l'IA » (l'inverse du MCP)
+
+Avec le MCP, c'est l'IA qui vient vers Mémento. Le bouton « Proposer avec l'IA » de Planifier fait l'inverse :
+Mémento appelle le fournisseur choisi dans Configuration › IA, avec la clé lue dans une variable d'environnement du
+conteneur (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` ou `MEMENTO_AI_API_KEY`).
+La proposition s'affiche avec une raison par changement ; rien n'est appliqué sans ton clic. Les prompts se
+modifient dans la même page. Les données de la page de planification (titres, durées, budgets, contexte, rapports
+récents) partent chez ce fournisseur : choisis Ollama si rien ne doit sortir de chez toi.

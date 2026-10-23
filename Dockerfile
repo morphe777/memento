@@ -44,6 +44,7 @@ COPY --from=build --chown=node:node /app /app
 RUN mkdir -p /data && chown node:node /data
 
 ENV NODE_ENV=production \
+    MEMENTO_VERSION=${VERSION} \
     TZ=Europe/Paris \
     MEMENTO_DB_FILE=/data/memento.db \
     MEMENTO_HOST=0.0.0.0 \

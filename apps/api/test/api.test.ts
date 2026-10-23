@@ -228,6 +228,41 @@ describe('API — purge (D-57)', () => {
   });
 });
 
+describe('API — Proposer avec l’IA (D-58)', () => {
+  it('reports the status, refuses tokens and returns a proposal through the configured model', async () => {
+    const { db, sqlite } = openDb(':memory:');
+    runMigrations(db);
+    seed({ db, sqlite, actor: 'me' });
+    await setUserPassword(db, 'mehdi', PASSWORD);
+    const llm = async () => ({ text: '{"summary":"Rien à changer.","objectives":[]}', model: 'fake' });
+    const app = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent', llm });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'mehdi', password: PASSWORD },
+    });
+    const h = { cookie: `memento_session=${login.cookies.find((c) => c.name === 'memento_session')!.value}` };
+    const st = (await app.inject({ url: '/api/v1/ai/status', headers: h })).json();
+    expect(st.configured).toBe(false);
+    expect(st.defaultPrompts.week).toMatch(/semaine/);
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/propose',
+      headers: h,
+      payload: { scope: 'quarter', period: '2026-Q4' },
+    });
+    expect(r.json()).toMatchObject({ summary: 'Rien à changer.', model: 'fake', changes: [] });
+    const t = createToken(db, 'bot', 'read_write');
+    const denied = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/propose',
+      headers: { authorization: `Bearer ${t.token}` },
+      payload: { scope: 'quarter', period: '2026-Q4' },
+    });
+    expect(denied.statusCode).toBe(403);
+  });
+});
+
 describe('API — tokens (AI / robots)', () => {
   it('bearer token acts as ai:<name>; read-only tokens cannot write; revoked tokens are refused', async () => {
     const s = await setup();
