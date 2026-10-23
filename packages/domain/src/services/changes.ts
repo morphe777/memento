@@ -10,6 +10,14 @@ const TITLE_TABLES = {
   meta_objective: schema.metaObjective,
 } as const;
 
+/** Title of an entity that no longer exists (deleted) or has no title column: taken from the journal diff. */
+function diffLabel(diff: unknown): string {
+  if (!diff || typeof diff !== 'object') return '';
+  const d = diff as Record<string, unknown[] | undefined>;
+  const v = d.title ?? d.name;
+  return v ? String(v[1] ?? v[0] ?? '') : '';
+}
+
 export function resolveSince(ctx: Ctx, since: string | undefined, userId?: string): string | undefined {
   const now = ctxNow(ctx).getTime();
   if (!since || since === 'all') return undefined;
@@ -72,11 +80,7 @@ export function listChanges(
   );
   return rows.map((r) => ({
     ...r,
-    title:
-      titles.get(r.entityId) ??
-      (r.diff && typeof r.diff === 'object' && 'name' in r.diff
-        ? String((r.diff as Record<string, unknown[]>).name?.[1] ?? '')
-        : ''),
+    title: titles.get(r.entityId) ?? diffLabel(r.diff),
     projectId: r.entityType === 'task' ? (projectOfTask.get(r.entityId) ?? null) : null,
   }));
 }
