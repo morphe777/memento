@@ -3,6 +3,7 @@ import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
   GroupPicker,
@@ -13,9 +14,11 @@ import {
   useSortSensors,
 } from '../components/tasks.tsx';
 import {
+  ConfirmDialog,
   Empty,
   ErrorBox,
   Field,
+  InfoTip,
   Loading,
   PageHeader,
   Panel,
@@ -453,7 +456,10 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
   const q = useQuery({ queryKey: ['project', id], queryFn: () => get<ProjectDetail>(`/projects/${id}`) });
   const tasks = useQuery({ queryKey: ['tasks', id], queryFn: () => get<Task[]>(`/tasks?projectId=${id}`) });
   const dl = useDomainLookup();
-  const groups = useGroups();
+  const [editing, setEditing] = useState(false);
+  const saveDescription = useAction((description: string) => patch(`/projects/${id}`, { description }), {
+    toast: 'Description enregistrée.',
+  });
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
   const p = q.data;
@@ -463,7 +469,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
     navigate({ to: '/projets/$id', params: { id }, search: { tache: tid, vue } });
   return (
     <div
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-5"
       style={{ borderTop: `3px solid ${color}`, paddingTop: 12, marginTop: -12 }}
     >
       <div>
@@ -490,14 +496,27 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
             </span>
           }
           title={p.title}
-          actions={<ProjectActions p={p} />}
+          actions={
+            <>
+              <ProjectActions p={p} />
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                <PencilIcon /> Modifier
+              </button>
+            </>
+          }
         />
       </div>
+      <DescriptionBlock
+        text={p.description}
+        lines={6}
+        saving={saveDescription.isPending}
+        onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
+      />
       <div className="flex flex-wrap gap-6 items-start">
         <section className="card overflow-hidden min-w-0" style={{ flex: '999 1 560px' }}>
           <div
-            className="flex justify-between items-baseline gap-3 flex-wrap"
-            style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
+            className="flex justify-between items-center gap-3 flex-wrap"
+            style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider-2)' }}
           >
             <h2 className="h2">{vue ? 'Tâches' : "Tâches · dans l'ordre d'exécution"}</h2>
             <Tabs
@@ -531,12 +550,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
             </div>
           )}
           {!vue && tasks.data && (
-            <TaskList
-              tasks={tasks.data}
-              projectId={p.id}
-              color={() => color}
-              onOpen={(tid) => navigate({ to: '/projets/$id', params: { id }, search: { tache: tid } })}
-            />
+            <TaskList tasks={tasks.data} projectId={p.id} color={() => color} onOpen={openTask} />
           )}
           {vue && board.data && (
             <div style={{ padding: vue === 'kanban' ? 12 : 0 }}>
@@ -551,21 +565,129 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
             <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
           </div>
         </section>
-        <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
-          <ProjectFields key={p.updatedAt} p={p} />
-          <Section title="Groupes">
-            <ProjectGroups key={p.groupIds.join()} p={p} allGroups={groups.data ?? []} />
-          </Section>
+        <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 300px', maxWidth: 420 }}>
+          <ProjectInfo p={p} />
           <Section>
             <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
           </Section>
         </aside>
       </div>
+      <ProjectEditPanel
+        key={`${p.id}-${p.updatedAt}`}
+        p={p}
+        open={editing}
+        onClose={() => setEditing(false)}
+      />
       <TaskDrawer
         taskId={tache ?? null}
         onClose={() => navigate({ to: '/projets/$id', params: { id }, search: { vue } })}
       />
     </div>
+  );
+}
+
+/** Read-only facts of the project (edit through « Modifier »). */
+function ProjectInfo({ p }: { p: ProjectDetail }) {
+  const dl = useDomainLookup();
+  const me = useMe();
+  const today = me.data?.today;
+  const daysLeft =
+    p.dueDate && today ? Math.round((Date.parse(p.dueDate) - Date.parse(today)) / 86_400_000) : null;
+  const pct = p.taskStats.totalMin ? Math.round((p.taskStats.doneMin / p.taskStats.totalMin) * 100) : 0;
+  const row = (label: string, value: React.ReactNode) => (
+    <div
+      className="flex flex-col gap-0.5"
+      style={{ padding: '10px 0', borderBottom: '1px solid var(--divider)' }}
+    >
+      <span className="label-caps" style={{ fontSize: 11 }}>
+        {label}
+      </span>
+      <span className="text-[14px]" style={{ color: 'var(--text-2)' }}>
+        {value}
+      </span>
+    </div>
+  );
+  return (
+    <section className="card" style={{ padding: '6px 18px 8px' }}>
+      {row(
+        'Avancement',
+        <span className="flex flex-col gap-1.5">
+          <span>
+            <span className="mono text-[13px]">
+              {fmtMin(p.taskStats.doneMin)} / {fmtMin(p.taskStats.totalMin)}
+            </span>{' '}
+            · {p.taskStats.done} faite
+            {p.taskStats.done > 1 ? 's' : ''}, {p.taskStats.todo} à faire
+          </span>
+          <span className="track block" style={{ height: 6 }}>
+            <span
+              className="block h-full"
+              style={{ width: `${pct}%`, background: dl.color(p.domainIds[0]) }}
+            />
+          </span>
+        </span>,
+      )}
+      {row(
+        'Critère de succès',
+        p.successCriterion || <span style={{ color: 'var(--text-faint)' }}>À définir</span>,
+      )}
+      {row(
+        'Dates',
+        p.startDate || p.dueDate ? (
+          <span>
+            {p.startDate ? fmtDate(p.startDate) : '…'} → {p.dueDate ? fmtDate(p.dueDate) : '…'}
+            {daysLeft !== null && p.status === 'active' && (
+              <span style={{ color: daysLeft < 0 ? 'var(--late-text)' : 'var(--text-faint)' }}>
+                {' '}
+                · {daysLeft < 0 ? `${-daysLeft} j de retard` : `${daysLeft} j restants`}
+              </span>
+            )}
+            {p.replannedAt && (
+              <span className="block text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                Replanifié le {fmtDate(p.replannedAt)}
+              </span>
+            )}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--text-faint)' }}>Non planifié</span>
+        ),
+      )}
+      {row(
+        'Objectif',
+        p.objectiveId ? (
+          <Link to="/objectifs/$id" params={{ id: p.objectiveId }}>
+            {p.objectiveTitle}
+          </Link>
+        ) : (
+          <span style={{ color: 'var(--text-faint)' }}>Hors objectif</span>
+        ),
+      )}
+      {row(
+        'Groupes',
+        <span className="flex flex-wrap gap-1.5 pt-0.5">
+          {p.groups.map((g) => (
+            <Link
+              key={g.id}
+              to="/projets"
+              search={{ groupe: g.id }}
+              className="flex items-center gap-1.5 rounded-full text-[12px]"
+              style={{ border: '1px solid var(--border)', padding: '2px 9px' }}
+            >
+              <span className="dot" style={{ background: dl.color(g.domainId), width: 6, height: 6 }} />
+              {g.name}
+            </Link>
+          ))}
+        </span>,
+      )}
+      {row(
+        'Organisation',
+        <span>
+          {p.sequenceMode === 'sequential' ? 'Séquentiel' : 'Parallèle'}
+          {p.isFree ? ' · libre dans le chemin' : ''}
+          {p.monthFlag ? ` · projet du mois (${p.monthFlag})` : ''}
+        </span>,
+      )}
+    </section>
   );
 }
 
@@ -635,8 +757,12 @@ function ProjectActions({ p }: { p: ProjectDetail }) {
   );
 }
 
-function ProjectFields({ p }: { p: ProjectDetail }) {
+/** « Modifier le projet »: every editable field in one dialog (description is edited in place under the title). */
+function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolean; onClose: () => void }) {
+  const navigate = useNavigate();
   const me = useMe();
+  const dl = useDomainLookup();
+  const groups = useGroups();
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: () => get<Objective[]>('/objectives') });
   const [f, setF] = useState({
     title: p.title,
@@ -646,58 +772,86 @@ function ProjectFields({ p }: { p: ProjectDetail }) {
     objectiveId: p.objectiveId ?? '',
     sequenceMode: p.sequenceMode,
     isFree: p.isFree,
-    description: p.description,
+    monthFlag: !!p.monthFlag,
   });
+  const [groupIds, setGroupIds] = useState(p.groupIds);
+  const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
+  const [deleting, setDeleting] = useState(false);
+  const domains = [
+    ...new Set(
+      groupIds.map((g) => groups.data?.find((x) => x.id === g)?.domainId).filter((x): x is string => !!x),
+    ),
+  ];
+  const month = me.data?.today.slice(0, 7) ?? '';
   const save = useAction(
-    () =>
-      patch(`/projects/${p.id}`, {
-        ...f,
+    async () => {
+      const groupsChanged =
+        groupIds.join() !== p.groupIds.join() || (primary || null) !== (p.primaryDomainId ?? null);
+      if (groupsChanged)
+        await put(`/projects/${p.id}/groups`, {
+          groupIds,
+          primaryDomainId: domains.includes(primary) ? primary : null,
+        });
+      return patch(`/projects/${p.id}`, {
+        title: f.title,
+        successCriterion: f.successCriterion,
         startDate: f.startDate || null,
         dueDate: f.dueDate || null,
         objectiveId: f.objectiveId || null,
-      }),
-    { toast: 'Projet enregistré.' },
+        sequenceMode: f.sequenceMode,
+        isFree: f.isFree,
+        monthFlag: f.monthFlag ? (p.monthFlag ?? month) : null,
+      });
+    },
+    { onSuccess: onClose, toast: 'Projet enregistré.' },
   );
-  const month = me.data?.today.slice(0, 7) ?? '';
-  const toggleMonth = useAction((on: boolean) =>
-    patch(`/projects/${p.id}`, { monthFlag: on ? month : null }),
-  );
+  const remove = useAction(() => del(`/projects/${p.id}`), {
+    onSuccess: () => navigate({ to: '/projets' }),
+    toast: 'Projet supprimé.',
+  });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' };
   return (
-    <Section title="Fiche">
+    <Panel open={open} onClose={onClose} title="Modifier le projet" side={false} width={760}>
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
       </Field>
-      <Field label="Critère de succès (oui / non)">
+      <Field
+        label="Critère de succès (oui / non)"
+        info="Phrase vérifiable par oui ou non à la fin du projet. Obligatoire pour promouvoir une idée."
+      >
         <input
           value={f.successCriterion}
           onChange={(e) => set('successCriterion', e.target.value)}
           placeholder="ex. Contrat d'installation signé"
         />
       </Field>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+      <div className="grid gap-3" style={two}>
         <Field label="Début">
           <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
         </Field>
-        <Field label="Fin (≤ 1 mois)">
+        <Field
+          label="Fin"
+          info="Un projet actif dure 31 jours au plus : au-delà, découpe-le en plusieurs projets."
+        >
           <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
         </Field>
       </div>
-      <Field label="Objectif">
-        <select value={f.objectiveId} onChange={(e) => set('objectiveId', e.target.value)}>
-          <option value="">Hors objectif</option>
-          {(objectives.data ?? []).map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.title} ({o.quarter})
-            </option>
-          ))}
-        </select>
-      </Field>
-      <div
-        className="grid gap-3 items-end"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}
-      >
-        <Field label="Enchaînement">
+      <div className="grid gap-3" style={two}>
+        <Field label="Objectif">
+          <select value={f.objectiveId} onChange={(e) => set('objectiveId', e.target.value)}>
+            <option value="">Hors objectif</option>
+            {(objectives.data ?? []).map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.title} ({o.quarter})
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field
+          label="Enchaînement des tâches"
+          info="Séquentiel : une tâche attend la précédente. Parallèle : toutes les tâches sont disponibles."
+        >
           <select
             value={f.sequenceMode}
             onChange={(e) => set('sequenceMode', e.target.value as typeof f.sequenceMode)}
@@ -706,72 +860,30 @@ function ProjectFields({ p }: { p: ProjectDetail }) {
             <option value="parallel">Parallèle</option>
           </select>
         </Field>
-        <label className="flex items-center gap-2 text-[13px]" style={{ minHeight: 40 }}>
-          <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} /> Libre
-          dans le chemin
+      </div>
+      <div className="flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} />
+          Libre dans le chemin de l'objectif (n'attend pas les projets placés avant lui)
+        </label>
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={f.monthFlag} onChange={(e) => set('monthFlag', e.target.checked)} />
+          Projet du mois {p.monthFlag ? `(${p.monthFlag})` : month ? `(${month})` : ''}
         </label>
       </div>
-      <Field
-        label="Description"
-        hint="Résultat attendu en 1 phrase · Critère de succès · Contexte en 2 lignes · Ressources"
-      >
-        <textarea value={f.description} onChange={(e) => set('description', e.target.value)} />
-      </Field>
-      <button
-        type="button"
-        className="btn btn-primary self-start"
-        onClick={() => save.mutate(undefined)}
-        disabled={save.isPending}
-      >
-        Enregistrer
-      </button>
-      <label
-        className="flex items-center gap-2 text-[14px] pt-2"
-        style={{ borderTop: '1px solid var(--border)' }}
-      >
-        <input
-          type="checkbox"
-          checked={!!p.monthFlag}
-          onChange={(e) => toggleMonth.mutate(e.target.checked)}
-        />
-        Projet du mois {p.monthFlag ? `(${p.monthFlag})` : ''}
-      </label>
-      {p.replannedAt && (
-        <div className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-          Replanifié le {fmtDate(p.replannedAt)}
-        </div>
-      )}
-    </Section>
-  );
-}
-
-function ProjectGroups({
-  p,
-  allGroups,
-}: {
-  p: ProjectDetail;
-  allGroups: { id: string; domainId: string }[];
-}) {
-  const dl = useDomainLookup();
-  const [ids, setIds] = useState(p.groupIds);
-  const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
-  const domains = [
-    ...new Set(ids.map((g) => allGroups.find((x) => x.id === g)?.domainId).filter((x): x is string => !!x)),
-  ];
-  const save = useAction(
-    () =>
-      put(`/projects/${p.id}/groups`, {
-        groupIds: ids,
-        primaryDomainId: domains.includes(primary) ? primary : null,
-      }),
-    { toast: 'Groupes enregistrés.' },
-  );
-  return (
-    <>
-      <GroupPicker value={ids} onChange={setIds} />
+      <div className="field">
+        <span className="flex items-center gap-1.5">
+          Groupes
+          <InfoTip>Au moins un groupe. Les domaines du projet viennent de ses groupes.</InfoTip>
+        </span>
+        <GroupPicker value={groupIds} onChange={setGroupIds} />
+      </div>
       {domains.length > 1 && (
         <Field label="Domaine principal (couleur)">
-          <select value={primary} onChange={(e) => setPrimary(e.target.value)}>
+          <select
+            value={domains.includes(primary) ? primary : domains[0]}
+            onChange={(e) => setPrimary(e.target.value)}
+          >
             {domains.map((d) => (
               <option key={d} value={d}>
                 {dl.name(d)}
@@ -780,15 +892,46 @@ function ProjectGroups({
           </select>
         </Field>
       )}
-      <button
-        type="button"
-        className="btn self-start"
-        disabled={!ids.length}
-        onClick={() => save.mutate(undefined)}
+      <div
+        className="flex flex-wrap gap-2 items-center pt-3"
+        style={{ borderTop: '1px solid var(--border)' }}
       >
-        Enregistrer les groupes
-      </button>
-    </>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!f.title.trim() || !groupIds.length || save.isPending}
+          onClick={() => save.mutate(undefined)}
+        >
+          Enregistrer
+        </button>
+        <button type="button" className="btn" onClick={onClose}>
+          Annuler
+        </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-danger ml-auto"
+          style={{ borderColor: 'transparent' }}
+          onClick={() => setDeleting(true)}
+        >
+          Supprimer le projet
+        </button>
+      </div>
+      <ConfirmDialog
+        open={deleting}
+        title="Supprimer le projet ?"
+        busy={remove.isPending}
+        onClose={() => setDeleting(false)}
+        onConfirm={() => remove.mutate(undefined)}
+      >
+        <p className="m-0">
+          « {p.title} » et ses {p.taskStats.todo + p.taskStats.done} tâche(s) seront supprimés définitivement.
+          Les rapports déjà générés ne changent pas.
+        </p>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Pour garder une trace, préfère « Abandonner ».
+        </p>
+      </ConfirmDialog>
+    </Panel>
   );
 }
 

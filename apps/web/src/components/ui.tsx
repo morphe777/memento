@@ -417,6 +417,39 @@ export function InfoTip({ children, align = 'left' }: { children: ReactNode; ali
   );
 }
 
+/** Confirmation dialog for irreversible actions (deletion). */
+export function ConfirmDialog({
+  open,
+  title,
+  children,
+  confirmLabel = 'Supprimer',
+  onConfirm,
+  onClose,
+  busy,
+}: {
+  open: boolean;
+  title: string;
+  children: ReactNode;
+  confirmLabel?: string;
+  onConfirm: () => void;
+  onClose: () => void;
+  busy?: boolean;
+}) {
+  return (
+    <Panel open={open} onClose={onClose} title={title} side={false} width={480}>
+      <div className="text-[15px] flex flex-col gap-2">{children}</div>
+      <div className="flex gap-2 justify-end">
+        <button type="button" className="btn" onClick={onClose}>
+          Annuler
+        </button>
+        <button type="button" className="btn btn-danger-solid" disabled={busy} onClick={onConfirm}>
+          {confirmLabel}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
 export function Field({
   label,
   children,

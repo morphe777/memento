@@ -313,6 +313,137 @@ input[type="checkbox"] {
   font-weight: 500;
 }
 
+/* Rendered Markdown descriptions. */
+.md {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre,
+.md table {
+  margin: 0 0 10px;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  color: var(--text);
+  font-weight: 600;
+  line-height: 1.3;
+  margin: 16px 0 6px;
+}
+.md h1 {
+  font-size: 20px;
+}
+.md h2 {
+  font-size: 17px;
+}
+.md h3,
+.md h4 {
+  font-size: 15px;
+}
+.md ul,
+.md ol {
+  padding-left: 22px;
+}
+.md ul {
+  list-style: disc;
+}
+.md ol {
+  list-style: decimal;
+}
+.md li + li {
+  margin-top: 2px;
+}
+.md li:has(> input[type="checkbox"]) {
+  list-style: none;
+  margin-left: -20px;
+}
+.md li > input[type="checkbox"] {
+  width: 14px;
+  height: 14px;
+  margin: 0 6px 0 0;
+  vertical-align: -2px;
+}
+.md a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--text-ghost);
+}
+.md strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.md code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 13px;
+  background: var(--chip);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.md pre {
+  background: var(--chip);
+  border-radius: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+.md pre code {
+  background: none;
+  padding: 0;
+}
+.md blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 12px;
+  color: var(--text-muted);
+}
+.md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+  text-align: left;
+}
+.md hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 14px 0;
+}
+.btn-danger {
+  border-color: var(--status-red);
+  color: var(--status-red);
+}
+.btn-danger-solid {
+  border: 0;
+  background: var(--status-red);
+  color: #fff;
+  font-weight: 600;
+}
+/* Task kanban: 4 columns as 2 rows of 2 (one column on phones). */
+.grid-2x2 {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .grid-2x2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .icon-btn {
   display: inline-grid;
   place-items: center;
