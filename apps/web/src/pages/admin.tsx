@@ -1,0 +1,771 @@
+// À revoir (F-25), Configuration (V-14), Connexion.
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core';
+import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
+import { useSortSensors } from '../components/tasks.tsx';
+import { Empty, Field, Loading, PageHeader, Section, Tabs } from '../components/ui.tsx';
+import { ApiError, del, get, patch, post } from '../lib/api.ts';
+import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
+import { useAction, useDomainLookup, useGroups, useSettings } from '../lib/hooks.ts';
+import type { Change, Domain, Settings } from '../lib/types.ts';
+
+// ---------- À revoir ----------
+
+export function ReviewPage() {
+  const [since, setSince] = useState<'last-visit' | '24h' | '7d' | 'all'>('7d');
+  const [actor, setActor] = useState<'all' | 'me' | 'ai'>('ai');
+  const [selected, setSelected] = useState<string[]>([]);
+  const q = useQuery({
+    queryKey: ['changes', since, actor],
+    queryFn: () => get<Change[]>(`/changes?since=${since}&actor=${actor}`),
+  });
+  const mark = useAction((body: { ids?: string[]; all?: boolean }) => post('/changes/mark-reviewed', body), {
+    onSuccess: () => setSelected([]),
+    toast: 'Marqué comme revu.',
+  });
+  const link = (c: Change) => {
+    if (c.entityType === 'project')
+      return (
+        <Link to="/projets/$id" params={{ id: c.entityId }}>
+          {c.title || 'Projet'}
+        </Link>
+      );
+    if (c.entityType === 'objective')
+      return (
+        <Link to="/objectifs/$id" params={{ id: c.entityId }}>
+          {c.title || 'Objectif'}
+        </Link>
+      );
+    if (c.entityType === 'task')
+      return c.projectId ? (
+        <Link to="/projets/$id" params={{ id: c.projectId }} search={{ tache: c.entityId }}>
+          {c.title || 'Tâche'}
+        </Link>
+      ) : (
+        <Link to="/inbox" search={{ tache: c.entityId }}>
+          {c.title || 'Tâche'}
+        </Link>
+      );
+    return <span>{c.title || ENTITY_LABEL[c.entityType] || c.entityType}</span>;
+  };
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb items={[{ label: 'À revoir' }]} />
+        <PageHeader
+          eyebrow="Journal des créations et modifications · IA ou moi"
+          title="À revoir"
+          actions={
+            <>
+              <button
+                type="button"
+                className="btn"
+                disabled={!selected.length}
+                onClick={() => mark.mutate({ ids: selected })}
+              >
+                Marquer la sélection comme revue
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!q.data?.length}
+                onClick={() => mark.mutate({ ids: q.data!.map((c) => c.id) })}
+              >
+                Tout marquer comme revu
+              </button>
+            </>
+          }
+        />
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <Tabs
+          value={since}
+          onChange={setSince}
+          options={[
+            { value: 'last-visit', label: 'Depuis ma dernière visite' },
+            { value: '24h', label: '24 h' },
+            { value: '7d', label: '7 jours' },
+            { value: 'all', label: 'Tout' },
+          ]}
+        />
+        <Tabs
+          value={actor}
+          onChange={setActor}
+          options={[
+            { value: 'ai', label: 'IA' },
+            { value: 'me', label: 'Moi' },
+            { value: 'all', label: 'Tous' },
+          ]}
+        />
+      </div>
+      <section className="card overflow-hidden">
+        {q.isLoading && <Loading />}
+        {q.data?.length === 0 && <Empty>Rien à revoir.</Empty>}
+        {q.data?.map((c) => (
+          <div
+            key={c.id}
+            className="flex items-center gap-3"
+            style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)' }}
+          >
+            <input
+              type="checkbox"
+              aria-label="Sélectionner"
+              checked={selected.includes(c.id)}
+              onChange={(e) =>
+                setSelected((s) => (e.target.checked ? [...s, c.id] : s.filter((x) => x !== c.id)))
+              }
+            />
+            <div className="flex-1 min-w-0 flex flex-col">
+              <span className="text-[15px] font-medium truncate">{link(c)}</span>
+              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                {ENTITY_LABEL[c.entityType] ?? c.entityType} {ACTION_LABEL[c.action] ?? c.action} ·{' '}
+                {c.actor === 'me' ? 'moi' : c.actor} · {fmtDateTime(c.at)}
+              </span>
+            </div>
+            <button type="button" className="btn btn-sm" onClick={() => mark.mutate({ ids: [c.id] })}>
+              Revu
+            </button>
+          </div>
+        ))}
+      </section>
+    </div>
+  );
+}
+
+// ---------- Configuration ----------
+
+const CONFIG_TABS = [
+  { value: 'budget', label: 'Budget' },
+  { value: 'domaines', label: 'Domaines' },
+  { value: 'groupes', label: 'Groupes' },
+  { value: 'moteur', label: 'Moteur' },
+  { value: 'alertes', label: 'Alertes' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'templates', label: 'Templates' },
+  { value: 'acces', label: 'Accès' },
+] as const;
+type ConfigTab = (typeof CONFIG_TABS)[number]['value'];
+
+export function ConfigPage({ onglet }: { onglet: string }) {
+  const navigate = useNavigate();
+  const tab = (CONFIG_TABS.find((t) => t.value === onglet)?.value ?? 'budget') as ConfigTab;
+  const settings = useSettings();
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb
+          items={[
+            { label: 'Configuration', to: '/configuration/$onglet', params: { onglet: 'budget' } },
+            { label: CONFIG_TABS.find((t) => t.value === tab)!.label },
+          ]}
+        />
+        <PageHeader title="Configuration" />
+      </div>
+      <div className="overflow-x-auto">
+        <Tabs
+          value={tab}
+          onChange={(v) => navigate({ to: '/configuration/$onglet', params: { onglet: v } })}
+          options={[...CONFIG_TABS]}
+        />
+      </div>
+      {!settings.data ? (
+        <Loading />
+      ) : tab === 'domaines' ? (
+        <DomainsConfig />
+      ) : tab === 'groupes' ? (
+        <GroupsConfig />
+      ) : tab === 'acces' ? (
+        <AccessConfig />
+      ) : (
+        <SettingsForm key={tab} tab={tab} settings={settings.data} />
+      )}
+    </div>
+  );
+}
+
+function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings }) {
+  const [s, setS] = useState(settings);
+  const save = useAction((patchBody: Partial<Settings>) => patch('/settings', patchBody), {
+    toast: 'Réglages enregistrés.',
+  });
+  const num = (k: keyof Settings) => (
+    <input
+      type="number"
+      value={s[k] as number}
+      onChange={(e) => setS({ ...s, [k]: Number(e.target.value) })}
+    />
+  );
+  const keys: Record<string, (keyof Settings)[]> = {
+    budget: ['budget.weekly_min', 'theme'],
+    moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
+    alertes: [
+      'guards.window_weeks',
+      'experience.target',
+      'experience.window_weeks',
+      'experience.badge_color',
+      'report.rhythm_low_pct',
+      'report.rhythm_high_pct',
+      'ideas.purge_after_months',
+    ],
+    planning: ['schedule.week_plan', 'schedule.reports'],
+    templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
+  };
+  const submit = () => save.mutate(Object.fromEntries(keys[tab].map((k) => [k, s[k]])) as Partial<Settings>);
+  const w = s['engine.weights'];
+  return (
+    <Section>
+      {tab === 'budget' && (
+        <>
+          <Field
+            label="Budget hebdo par défaut (heures)"
+            hint="CH-11 · surcharge ponctuelle dans Planifier › Budget"
+          >
+            <input
+              type="number"
+              step={0.5}
+              value={s['budget.weekly_min'] / 60}
+              onChange={(e) => setS({ ...s, 'budget.weekly_min': Math.round(Number(e.target.value) * 60) })}
+            />
+          </Field>
+          <div className="field">
+            <span>Thème</span>
+            <div style={{ maxWidth: 280 }}>
+              <ThemeSwitch />
+            </div>
+          </div>
+        </>
+      )}
+      {tab === 'moteur' && (
+        <>
+          <div className="label-caps">Poids du score (V, U, R, C, A)</div>
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
+          >
+            {(
+              [
+                ['value', 'Valeur'],
+                ['urgency', 'Urgence'],
+                ['delay', 'Retard'],
+                ['continuity', 'Continuité'],
+                ['age', 'Âge (reports)'],
+              ] as const
+            ).map(([k, l]) => (
+              <Field key={k} label={l}>
+                <input
+                  type="number"
+                  step={0.1}
+                  min={0}
+                  value={w[k]}
+                  onChange={(e) => setS({ ...s, 'engine.weights': { ...w, [k]: Number(e.target.value) } })}
+                />
+              </Field>
+            ))}
+          </div>
+          <Field label="Taille de la liste Bonus">{num('engine.bonus_count')}</Field>
+          <Field label="Projets dans « À considérer aussi »">{num('engine.consider_also_count')}</Field>
+        </>
+      )}
+      {tab === 'alertes' && (
+        <>
+          <Field label="Garde-fous Santé / Famille : fenêtre (semaines)">{num('guards.window_weeks')}</Field>
+          <Field label="Expériences : cible">{num('experience.target')}</Field>
+          <Field label="Expériences : fenêtre (semaines)">{num('experience.window_weeks')}</Field>
+          <Field label="Couleur du badge Expérience">
+            <input
+              type="color"
+              value={s['experience.badge_color']}
+              onChange={(e) => setS({ ...s, 'experience.badge_color': e.target.value.toUpperCase() })}
+              style={{ width: 80, padding: 2 }}
+            />
+          </Field>
+          <Field label="Rythme : sous-productif sous (%)">{num('report.rhythm_low_pct')}</Field>
+          <Field label="Rythme : surproductif au-delà de (%)">{num('report.rhythm_high_pct')}</Field>
+          <Field label="Idées : proposer à la purge après (mois)">{num('ideas.purge_after_months')}</Field>
+        </>
+      )}
+      {tab === 'planning' && (
+        <>
+          <Field label="Plan de la semaine : jour (1 = lundi)" hint="Heure de Paris">
+            <input
+              type="number"
+              min={1}
+              max={7}
+              value={s['schedule.week_plan'].day}
+              onChange={(e) =>
+                setS({
+                  ...s,
+                  'schedule.week_plan': { ...s['schedule.week_plan'], day: Number(e.target.value) },
+                })
+              }
+            />
+          </Field>
+          <Field label="Plan de la semaine : heure">
+            <input
+              type="time"
+              value={s['schedule.week_plan'].time}
+              onChange={(e) =>
+                setS({ ...s, 'schedule.week_plan': { ...s['schedule.week_plan'], time: e.target.value } })
+              }
+            />
+          </Field>
+          <Field label="Rapports : heure (lundi, 1er du mois, 1er jour du trimestre)">
+            <input
+              type="time"
+              value={s['schedule.reports'].time}
+              onChange={(e) => setS({ ...s, 'schedule.reports': { time: e.target.value } })}
+            />
+          </Field>
+          <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+            Canal de notification : dans l'outil seulement (question ouverte Q-16).
+          </div>
+        </>
+      )}
+      {tab === 'templates' && (
+        <>
+          {(
+            [
+              ['templates.meta_objective', 'Méta-objectif'],
+              ['templates.objective', 'Objectif'],
+              ['templates.project', 'Projet'],
+              ['templates.task', 'Tâche'],
+            ] as const
+          ).map(([k, l]) => (
+            <Field key={k} label={l}>
+              <textarea
+                value={s[k]}
+                onChange={(e) => setS({ ...s, [k]: e.target.value })}
+                style={{ minHeight: 120 }}
+              />
+            </Field>
+          ))}
+        </>
+      )}
+      <button type="button" className="btn btn-primary self-start" onClick={submit} disabled={save.isPending}>
+        Enregistrer
+      </button>
+    </Section>
+  );
+}
+
+function SortableDomain({ d, children }: { d: Domain; children: React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: d.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex flex-wrap items-center gap-3"
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        padding: '10px 12px',
+        borderBottom: '1px solid var(--divider)',
+        background: 'var(--surface)',
+        position: 'relative',
+      }}
+    >
+      <button
+        type="button"
+        aria-label="Déplacer"
+        className="border-0 bg-transparent cursor-grab"
+        style={{ width: 24, minHeight: 32, color: 'var(--text-ghost)', touchAction: 'none' }}
+        {...attributes}
+        {...listeners}
+      >
+        ⋮⋮
+      </button>
+      {children}
+    </div>
+  );
+}
+
+/** Domains: order = priority (drag), weight, colours, archive. Weights proposed linearly from rank (D-07). */
+function DomainsConfig() {
+  const dl = useDomainLookup();
+  const sensors = useSortSensors();
+  const [order, setOrder] = useState<string[]>([]);
+  useEffect(() => setOrder(dl.domains.map((d) => d.id)), [dl.domains]);
+  const reorder = useAction((ids: string[]) => post('/domains/reorder', { ids }), {
+    toast: 'Ordre de priorité enregistré.',
+  });
+  const update = useAction(
+    ({ id, body }: { id: string; body: Partial<Domain> }) => patch(`/domains/${id}`, body),
+    { toast: 'Domaine enregistré.' },
+  );
+  const create = useAction(
+    (body: { name: string; colorLight: string; colorDark: string }) => post('/domains', body),
+    { toast: 'Domaine ajouté.' },
+  );
+  const [name, setName] = useState('');
+  const byId = new Map(dl.domains.map((d) => [d.id, d]));
+  const proposeWeights = () => {
+    order.forEach((id, i) => {
+      const weight = Math.round(((order.length - i) / order.length) * 1000) / 1000;
+      update.mutate({ id, body: { weight } });
+    });
+  };
+  const onDragEnd = (e: DragEndEvent) => {
+    if (!e.over || e.active.id === e.over.id) return;
+    const next = arrayMove(order, order.indexOf(String(e.active.id)), order.indexOf(String(e.over.id)));
+    setOrder(next);
+    reorder.mutate(next);
+  };
+  return (
+    <Section title="Domaines de vie" aside="glisser pour changer l'ordre de priorité">
+      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
+        rang (1 pour le n°1, puis −1/8 par rang).
+      </p>
+      <div className="card overflow-hidden">
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={order} strategy={verticalListSortingStrategy}>
+            {order.map((id, i) => {
+              const d = byId.get(id);
+              if (!d) return null;
+              return (
+                <SortableDomain key={id} d={d}>
+                  <span className="mono text-[12px]" style={{ width: 24, color: 'var(--text-faint)' }}>
+                    #{i + 1}
+                  </span>
+                  <DomainEditor d={d} onSave={(body) => update.mutate({ id, body })} />
+                </SortableDomain>
+              );
+            })}
+          </SortableContext>
+        </DndContext>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button type="button" className="btn" onClick={proposeWeights}>
+          Appliquer les poids proposés selon l'ordre
+        </button>
+      </div>
+      <form
+        className="flex flex-wrap gap-2 pt-2"
+        style={{ borderTop: '1px solid var(--border)' }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim())
+            create.mutate(
+              { name: name.trim(), colorLight: '#7A7A75', colorDark: '#9A9A94' },
+              { onSuccess: () => setName('') },
+            );
+        }}
+      >
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nouveau domaine (décision réfléchie : liste fermée)"
+          style={{ flex: '1 1 260px' }}
+        />
+        <button type="submit" className="btn" disabled={!name.trim()}>
+          Ajouter
+        </button>
+      </form>
+    </Section>
+  );
+}
+
+function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) => void }) {
+  const [f, setF] = useState({
+    name: d.name,
+    weight: d.weight,
+    colorLight: d.colorLight,
+    colorDark: d.colorDark,
+  });
+  useEffect(
+    () => setF({ name: d.name, weight: d.weight, colorLight: d.colorLight, colorDark: d.colorDark }),
+    [d],
+  );
+  return (
+    <>
+      <input
+        value={f.name}
+        onChange={(e) => setF({ ...f, name: e.target.value })}
+        aria-label="Nom"
+        style={{ flex: '1 1 160px', opacity: d.archived ? 0.5 : 1 }}
+      />
+      <label className="flex items-center gap-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        poids
+        <input
+          type="number"
+          step={0.05}
+          min={0}
+          max={1}
+          value={f.weight}
+          onChange={(e) => setF({ ...f, weight: Number(e.target.value) })}
+          style={{ width: 76 }}
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        clair
+        <input
+          type="color"
+          value={f.colorLight}
+          onChange={(e) => setF({ ...f, colorLight: e.target.value.toUpperCase() })}
+          style={{ width: 44, padding: 2 }}
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[12px]" style={{ color: 'var(--text-muted)' }}>
+        sombre
+        <input
+          type="color"
+          value={f.colorDark}
+          onChange={(e) => setF({ ...f, colorDark: e.target.value.toUpperCase() })}
+          style={{ width: 44, padding: 2 }}
+        />
+      </label>
+      <button type="button" className="btn btn-sm" onClick={() => onSave(f)}>
+        Enregistrer
+      </button>
+      <button
+        type="button"
+        className="btn btn-sm btn-ghost"
+        onClick={() => onSave({ archived: !d.archived })}
+      >
+        {d.archived ? 'Désarchiver' : 'Archiver'}
+      </button>
+    </>
+  );
+}
+
+function GroupsConfig() {
+  const groups = useGroups();
+  const dl = useDomainLookup();
+  const [name, setName] = useState('');
+  const [domainId, setDomainId] = useState('');
+  const create = useAction(() => post('/groups', { name, domainId }), {
+    onSuccess: () => setName(''),
+    toast: 'Groupe créé.',
+  });
+  const update = useAction(({ id, body }: { id: string; body: object }) => patch(`/groups/${id}`, body), {
+    toast: 'Groupe enregistré.',
+  });
+  const remove = useAction((id: string) => del(`/groups/${id}`), { toast: 'Groupe supprimé.' });
+  return (
+    <Section title="Groupes" aside="rangement libre · un groupe = un domaine">
+      <div className="card overflow-hidden">
+        {(groups.data ?? []).map((g) => (
+          <div
+            key={g.id}
+            className="flex flex-wrap items-center gap-3"
+            style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
+          >
+            <span className="dot" style={{ background: dl.color(g.domainId) }} />
+            <input
+              defaultValue={g.name}
+              aria-label="Nom du groupe"
+              onBlur={(e) =>
+                e.target.value !== g.name && update.mutate({ id: g.id, body: { name: e.target.value } })
+              }
+              style={{ flex: '1 1 180px' }}
+            />
+            <select
+              value={g.domainId}
+              onChange={(e) => update.mutate({ id: g.id, body: { domainId: e.target.value } })}
+              aria-label="Domaine"
+            >
+              {dl.domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-[12px]" style={{ color: 'var(--text-faint)', width: 90 }}>
+              {g.projectCount} projet(s)
+            </span>
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              disabled={g.projectCount > 0}
+              title={g.projectCount ? 'Contient des projets' : 'Supprimer'}
+              onClick={() => remove.mutate(g.id)}
+            >
+              Supprimer
+            </button>
+          </div>
+        ))}
+      </div>
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim() && domainId) create.mutate(undefined);
+        }}
+      >
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nouveau groupe"
+          style={{ flex: '1 1 200px' }}
+        />
+        <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
+          <option value="">Domaine…</option>
+          {dl.domains.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <button type="submit" className="btn" disabled={!name.trim() || !domainId}>
+          Créer
+        </button>
+      </form>
+    </Section>
+  );
+}
+
+interface TokenRow {
+  id: string;
+  name: string;
+  scopes: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+}
+
+function AccessConfig() {
+  const tokens = useQuery({ queryKey: ['tokens'], queryFn: () => get<TokenRow[]>('/tokens') });
+  const [name, setName] = useState('');
+  const [scopes, setScopes] = useState<'read' | 'read_write'>('read_write');
+  const [created, setCreated] = useState<string | null>(null);
+  const create = useAction(() => post<{ token: string }>('/tokens', { name, scopes }), {
+    onSuccess: (t) => {
+      setCreated(t.token);
+      setName('');
+    },
+  });
+  const revoke = useAction((id: string) => del(`/tokens/${id}`), { toast: 'Jeton révoqué.' });
+  return (
+    <Section title="Jetons API / MCP" aside="IA et robots · secret affiché une seule fois, stocké haché">
+      {created && (
+        <div className="card p-3 flex flex-col gap-2" style={{ background: 'var(--row-week)' }}>
+          <span className="text-[13px] font-semibold">
+            Copie ce jeton maintenant : il ne sera plus jamais affiché.
+          </span>
+          <code className="mono text-[13px] break-all select-all">{created}</code>
+          <button
+            type="button"
+            className="btn btn-sm self-start"
+            onClick={() => navigator.clipboard?.writeText(created)}
+          >
+            Copier
+          </button>
+        </div>
+      )}
+      <div className="card overflow-hidden">
+        {(tokens.data ?? []).map((t) => (
+          <div
+            key={t.id}
+            className="flex flex-wrap items-center gap-3"
+            style={{
+              padding: '10px 12px',
+              borderBottom: '1px solid var(--divider)',
+              opacity: t.revokedAt ? 0.5 : 1,
+            }}
+          >
+            <span className="mono text-[14px] flex-1">ai:{t.name}</span>
+            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+              {t.scopes === 'read' ? 'lecture' : 'lecture-écriture'} ·{' '}
+              {t.lastUsedAt ? `utilisé ${fmtDateTime(t.lastUsedAt)}` : 'jamais utilisé'}
+              {t.revokedAt ? ' · révoqué' : ''}
+            </span>
+            {!t.revokedAt && (
+              <button type="button" className="btn btn-sm" onClick={() => revoke.mutate(t.id)}>
+                Révoquer
+              </button>
+            )}
+          </div>
+        ))}
+        {tokens.data?.length === 0 && <Empty>Aucun jeton.</Empty>}
+      </div>
+      <form
+        className="flex flex-wrap gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (name.trim()) create.mutate(undefined);
+        }}
+      >
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Nom (ex. claude, yuki, n8n)"
+          style={{ flex: '1 1 200px' }}
+        />
+        <select
+          value={scopes}
+          onChange={(e) => setScopes(e.target.value as typeof scopes)}
+          aria-label="Portée"
+        >
+          <option value="read_write">Lecture-écriture</option>
+          <option value="read">Lecture seule</option>
+        </select>
+        <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
+          Créer un jeton
+        </button>
+      </form>
+    </Section>
+  );
+}
+
+// ---------- Login ----------
+
+export function LoginPage() {
+  const qc = useQueryClient();
+  const [login, setLogin] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="min-h-screen grid place-items-center px-4" style={{ background: 'var(--bg)' }}>
+      <form
+        className="card flex flex-col gap-4 w-full"
+        style={{ maxWidth: 380, padding: 28 }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError('');
+          try {
+            await post('/auth/login', { login, password });
+            await qc.invalidateQueries();
+          } catch (err) {
+            setError(err instanceof ApiError ? err.message : 'Connexion impossible');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="flex items-center gap-2.5">
+          <img src="/icon.svg" alt="" width={32} height={32} />
+          <h1 className="m-0 text-[24px] font-bold">Mémento</h1>
+        </div>
+        <Field label="Identifiant">
+          <input autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} autoFocus />
+        </Field>
+        <Field label="Mot de passe">
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {error && (
+          <div role="alert" className="text-[14px]" style={{ color: 'var(--late-text)' }}>
+            {error}
+          </div>
+        )}
+        <button
+          type="submit"
+          className="btn btn-primary"
+          disabled={busy || !login || !password}
+          style={{ minHeight: 44 }}
+        >
+          Se connecter
+        </button>
+      </form>
+    </div>
+  );
+}

@@ -1,0 +1,888 @@
+// Projets (V-04, V-05, V-10), Projet (V-03), Idées (DM-90). No mockup: built from the mockups' components.
+import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useState } from 'react';
+import { Breadcrumb } from '../components/shell.tsx';
+import {
+  GroupPicker,
+  QuickAdd,
+  Resources,
+  TaskDrawer,
+  TaskList,
+  useSortSensors,
+} from '../components/tasks.tsx';
+import {
+  Empty,
+  ErrorBox,
+  Field,
+  Loading,
+  PageHeader,
+  Panel,
+  Section,
+  StatusPill,
+  Tabs,
+} from '../components/ui.tsx';
+import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
+import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
+import { toast, useAction, useDomainLookup, useGroups, useMe } from '../lib/hooks.ts';
+import type { Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
+
+type View = 'tree' | 'list' | 'kanban';
+
+function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent?: string }) {
+  const dl = useDomainLookup();
+  return (
+    <Link
+      to="/projets/$id"
+      params={{ id: p.id }}
+      className="flex items-center gap-3 hover:no-underline"
+      style={{
+        padding: '10px 16px',
+        borderBottom: '1px solid var(--divider)',
+        opacity: muted ? 0.6 : 1,
+        borderLeft: accent ? `3px solid ${accent}` : undefined,
+      }}
+    >
+      <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
+      <span className="flex-1 min-w-0 text-[15px] font-medium truncate hover:underline">
+        {p.title}
+        {p.groupIds.length > 1 && (
+          <span
+            title="Projet dans plusieurs groupes"
+            className="ml-2 text-[12px]"
+            style={{ color: 'var(--text-ghost)' }}
+          >
+            ⧉
+          </span>
+        )}
+      </span>
+      {p.monthFlag && <StatusPill>Projet du mois</StatusPill>}
+      <StatusPill tone={p.status === 'active' ? 'ok' : 'neutral'}>{STATUS_LABEL[p.status]}</StatusPill>
+      <span
+        className="mono text-[12px] flex-none"
+        style={{ color: 'var(--text-faint)', width: 90, textAlign: 'right' }}
+      >
+        {fmtMin(p.taskStats.doneMin)} / {fmtMin(p.taskStats.totalMin)}
+      </span>
+    </Link>
+  );
+}
+
+export function ProjectsPage({ groupe, vue }: { groupe?: string; vue?: View }) {
+  const navigate = useNavigate();
+  const view: View = vue ?? 'tree';
+  const [status, setStatus] = useState('active,paused');
+  const [month, setMonth] = useState('');
+  const q = useQuery({
+    queryKey: ['projects', status, month],
+    queryFn: () =>
+      get<Project[]>(`/projects?status=${view === 'kanban' ? '' : status}${month ? `&month=${month}` : ''}`),
+  });
+  const all = useQuery({
+    queryKey: ['projects', 'kanban'],
+    queryFn: () => get<Project[]>('/projects'),
+    enabled: view === 'kanban',
+  });
+  const groups = useGroups();
+  const dl = useDomainLookup();
+  const [creating, setCreating] = useState(false);
+  const group = groups.data?.find((g) => g.id === groupe);
+  const list = (q.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe));
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb
+          items={
+            group
+              ? [
+                  { label: 'Projets', to: '/projets' },
+                  { label: dl.name(group.domainId) },
+                  { label: group.name },
+                ]
+              : [{ label: 'Projets' }]
+          }
+        />
+        <PageHeader
+          eyebrow={group ? `Groupe · ${dl.name(group.domainId)}` : 'Domaine › Groupe › Projet'}
+          title={group ? group.name : 'Projets'}
+          actions={
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              + Projet / idée
+            </button>
+          }
+        />
+      </div>
+      <div className="flex flex-wrap gap-3 items-center">
+        <Tabs
+          value={view}
+          onChange={(v) => navigate({ to: '/projets', search: { groupe, vue: v } })}
+          options={[
+            { value: 'tree', label: 'Arborescence' },
+            { value: 'list', label: 'Liste' },
+            { value: 'kanban', label: 'Kanban' },
+          ]}
+        />
+        {view !== 'kanban' && (
+          <>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Statut">
+              <option value="active,paused">Actifs et en pause</option>
+              <option value="active">Actifs</option>
+              <option value="idea">Idées</option>
+              <option value="done,abandoned">Terminés / abandonnés</option>
+              <option value="">Tous</option>
+            </select>
+            <input
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              aria-label="Projets du mois"
+              title="Projets du mois"
+            />
+          </>
+        )}
+      </div>
+      {q.isError && <ErrorBox error={q.error} />}
+      {view === 'tree' && <ProjectTree projects={list} />}
+      {view === 'list' && <ProjectTable projects={list} />}
+      {view === 'kanban' && (
+        <Kanban projects={(all.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe))} />
+      )}
+      <NewProjectPanel open={creating} onClose={() => setCreating(false)} defaultGroup={groupe} />
+    </div>
+  );
+}
+
+/** V-10: Domain › Group › Project, readable at a glance; a project in 2 groups appears in both. */
+function ProjectTree({ projects }: { projects: Project[] }) {
+  const dl = useDomainLookup();
+  const groups = useGroups();
+  return (
+    <div className="flex flex-col gap-5">
+      {dl.domains.map((d) => {
+        const gs = (groups.data ?? [])
+          .filter((g) => g.domainId === d.id)
+          .map((g) => ({ g, ps: projects.filter((p) => p.groupIds.includes(g.id)) }))
+          .filter((x) => x.ps.length);
+        if (!gs.length) return null;
+        return (
+          <section key={d.id} className="bin flex flex-col gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="dot" style={{ width: 10, height: 10, background: dl.colorOf(d) }} />
+              <Link to="/domaines/$id" params={{ id: d.id }} className="h2-bin">
+                {d.name}
+              </Link>
+            </div>
+            {gs.map(({ g, ps }) => (
+              <div key={g.id} className="card overflow-hidden">
+                <div
+                  className="flex items-center justify-between"
+                  style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider-2)' }}
+                >
+                  <Link to="/projets" search={{ groupe: g.id }} className="text-[15px] font-semibold">
+                    {g.name}
+                  </Link>
+                  <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                    {ps.length} projet{ps.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {ps.map((p) => (
+                  <ProjectLine key={p.id} p={p} />
+                ))}
+              </div>
+            ))}
+          </section>
+        );
+      })}
+      {projects.length === 0 && <Empty>Aucun projet avec ces filtres.</Empty>}
+    </div>
+  );
+}
+
+function ProjectTable({ projects }: { projects: Project[] }) {
+  const [sort, setSort] = useState<'title' | 'dueDate' | 'domain'>('title');
+  const dl = useDomainLookup();
+  const sorted = [...projects].sort((a, b) =>
+    sort === 'title'
+      ? a.title.localeCompare(b.title)
+      : sort === 'dueDate'
+        ? (a.dueDate ?? '9').localeCompare(b.dueDate ?? '9')
+        : (dl.get(a.domainIds[0])?.priorityRank ?? 9) - (dl.get(b.domainIds[0])?.priorityRank ?? 9),
+  );
+  const th = (k: typeof sort, label: string) => (
+    <th
+      className="text-left font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer"
+      style={{ color: 'var(--text-muted)' }}
+      onClick={() => setSort(k)}
+    >
+      {label} {sort === k ? '↓' : ''}
+    </th>
+  );
+  return (
+    <div className="card overflow-x-auto">
+      <table className="w-full border-collapse text-[14px]">
+        <thead>
+          <tr style={{ borderBottom: '1px solid var(--border)' }}>
+            {th('title', 'Projet')}
+            {th('domain', 'Domaine')}
+            <th className="text-left text-[12px] uppercase py-2 px-3" style={{ color: 'var(--text-muted)' }}>
+              Statut
+            </th>
+            {th('dueDate', 'Échéance')}
+            <th className="text-right text-[12px] uppercase py-2 px-3" style={{ color: 'var(--text-muted)' }}>
+              Fait / total
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {sorted.map((p) => (
+            <tr key={p.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+              <td className="py-2.5 px-3">
+                <Link to="/projets/$id" params={{ id: p.id }} className="font-medium">
+                  {p.title}
+                </Link>
+              </td>
+              <td className="py-2.5 px-3">
+                <span className="flex items-center gap-2">
+                  <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
+                  {dl.name(p.domainIds[0])}
+                </span>
+              </td>
+              <td className="py-2.5 px-3">{STATUS_LABEL[p.status]}</td>
+              <td className="py-2.5 px-3 mono text-[13px]">{p.dueDate ? fmtDate(p.dueDate) : '—'}</td>
+              <td className="py-2.5 px-3 mono text-[13px] text-right">
+                {fmtMin(p.taskStats.doneMin)} / {fmtMin(p.taskStats.totalMin)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {sorted.length === 0 && <Empty>Aucun projet.</Empty>}
+    </div>
+  );
+}
+
+const KANBAN = [
+  { status: 'idea', label: 'Idées' },
+  { status: 'active', label: 'Actifs' },
+  { status: 'paused', label: 'En pause' },
+  { status: 'done', label: 'Terminés' },
+] as const;
+
+/** Kanban by project status (decision D-19, pending Q-11). Moving a card calls the matching API action. */
+function Kanban({ projects }: { projects: Project[] }) {
+  const sensors = useSortSensors();
+  const [completing, setCompleting] = useState<Project | null>(null);
+  const move = useAction(async ({ p, to }: { p: Project; to: string }) => {
+    if (to === 'active' && (p.status === 'idea' || p.status === 'paused'))
+      return post(`/projects/${p.id}/promote`);
+    return patch(`/projects/${p.id}`, { status: to });
+  });
+  const onDragEnd = (e: DragEndEvent) => {
+    const p = projects.find((x) => x.id === e.active.id);
+    const to = e.over?.id as string | undefined;
+    if (!p || !to || to === p.status) return;
+    if (to === 'done') setCompleting(p);
+    else move.mutate({ p, to });
+  };
+  return (
+    <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        {KANBAN.map((c) => (
+          <KanbanColumn
+            key={c.status}
+            id={c.status}
+            label={c.label}
+            projects={projects.filter((p) => p.status === c.status)}
+          />
+        ))}
+      </div>
+      <CompletePanel project={completing} onClose={() => setCompleting(null)} />
+    </DndContext>
+  );
+}
+
+function KanbanColumn({ id, label, projects }: { id: string; label: string; projects: Project[] }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <section
+      ref={setNodeRef}
+      className="bin flex flex-col gap-2.5"
+      style={{ outline: isOver ? '2px dashed var(--text-ghost)' : undefined, minHeight: 160 }}
+    >
+      <div className="flex items-baseline gap-2.5">
+        <h2 className="h2">{label}</h2>
+        <span
+          className="text-[12px] font-semibold rounded-full"
+          style={{ background: 'var(--surface)', padding: '2px 9px' }}
+        >
+          {projects.length}
+        </span>
+      </div>
+      {projects.map((p) => (
+        <KanbanCard key={p.id} p={p} />
+      ))}
+    </section>
+  );
+}
+
+function KanbanCard({ p }: { p: Project }) {
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: p.id });
+  const dl = useDomainLookup();
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className="card flex flex-col gap-1 cursor-grab"
+      style={{
+        padding: '10px 12px',
+        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+        touchAction: 'none',
+        zIndex: transform ? 10 : undefined,
+        position: 'relative',
+      }}
+    >
+      <div className="flex items-center gap-2">
+        <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
+        <Link
+          to="/projets/$id"
+          params={{ id: p.id }}
+          className="text-[14px] font-medium"
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {p.title}
+        </Link>
+      </div>
+      <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        {p.taskStats.todo} à faire · {fmtMin(p.taskStats.totalMin - p.taskStats.doneMin)} restantes
+      </span>
+    </div>
+  );
+}
+
+function CompletePanel({ project, onClose }: { project: Project | null; onClose: () => void }) {
+  const complete = useAction((success: boolean) => post(`/projects/${project!.id}/complete`, { success }), {
+    onSuccess: onClose,
+    toast: 'Projet terminé.',
+  });
+  return (
+    <Panel open={!!project} onClose={onClose} title="Terminer le projet" side={false} width={460}>
+      <p className="m-0 text-[15px]">
+        Critère de succès atteint ?<br />
+        <span className="text-[14px]" style={{ color: 'var(--text-muted)' }}>
+          « {project?.successCriterion || 'non renseigné'} »
+        </span>
+      </p>
+      <div className="flex gap-2 justify-end">
+        <button type="button" className="btn" onClick={() => complete.mutate(false)}>
+          Non
+        </button>
+        <button type="button" className="btn btn-primary" onClick={() => complete.mutate(true)}>
+          Oui
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+export function NewProjectPanel({
+  open,
+  onClose,
+  defaultGroup,
+}: {
+  open: boolean;
+  onClose: () => void;
+  defaultGroup?: string;
+}) {
+  const navigate = useNavigate();
+  const [title, setTitle] = useState('');
+  const [groupIds, setGroupIds] = useState<string[]>(defaultGroup ? [defaultGroup] : []);
+  const create = useAction(() => post<Project>('/projects', { title, groupIds }), {
+    onSuccess: (p) => {
+      onClose();
+      setTitle('');
+      navigate({ to: '/projets/$id', params: { id: p.id } });
+    },
+  });
+  return (
+    <Panel open={open} onClose={onClose} title="Nouvelle idée / nouveau projet" side={false} width={640}>
+      <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+        Tout commence en idée : un titre et un groupe suffisent. Tu la promeus en projet quand elle est prête
+        (critère de succès, dates, tâches).
+      </p>
+      <Field label="Titre">
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="ex. Installer des panneaux photovoltaïques"
+        />
+      </Field>
+      <div className="field">
+        <span>Groupe(s) — les domaines s'en déduisent</span>
+        <GroupPicker value={groupIds} onChange={setGroupIds} />
+      </div>
+      <div className="flex justify-end">
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={!title.trim() || !groupIds.length || create.isPending}
+          onClick={() => create.mutate(undefined)}
+        >
+          Créer l'idée
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+export function ProjectPage({ id, tache }: { id: string; tache?: string }) {
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ['project', id], queryFn: () => get<ProjectDetail>(`/projects/${id}`) });
+  const tasks = useQuery({ queryKey: ['tasks', id], queryFn: () => get<Task[]>(`/tasks?projectId=${id}`) });
+  const dl = useDomainLookup();
+  const groups = useGroups();
+  if (q.isError) return <ErrorBox error={q.error} />;
+  if (!q.data) return <Loading />;
+  const p = q.data;
+  const color = dl.color(p.domainIds[0]);
+  const mainGroup = p.groups.find((g) => g.domainId === p.primaryDomainId) ?? p.groups[0];
+  return (
+    <div
+      className="flex flex-col gap-6"
+      style={{ borderTop: `3px solid ${color}`, paddingTop: 12, marginTop: -12 }}
+    >
+      <div>
+        <Breadcrumb
+          items={[
+            { label: 'Projets', to: '/projets' },
+            {
+              label: dl.name(p.primaryDomainId),
+              to: '/domaines/$id',
+              params: { id: p.primaryDomainId ?? '' },
+            },
+            ...(mainGroup
+              ? [{ label: mainGroup.name, to: '/projets', search: { groupe: mainGroup.id } }]
+              : []),
+            { label: p.title },
+          ]}
+        />
+        <PageHeader
+          eyebrow={
+            <span className="flex items-center gap-2">
+              <span className="dot" style={{ background: color }} />
+              {p.domainIds.map((d) => dl.name(d)).join(' · ')} · {STATUS_LABEL[p.status]}
+              {p.success !== null && p.status === 'done' && (p.success ? ' · réussi' : ' · échec')}
+            </span>
+          }
+          title={p.title}
+          actions={<ProjectActions p={p} />}
+        />
+      </div>
+      <div className="flex flex-wrap gap-6 items-start">
+        <section className="card overflow-hidden min-w-0" style={{ flex: '999 1 560px' }}>
+          <div
+            className="flex justify-between items-baseline gap-3 flex-wrap"
+            style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
+          >
+            <h2 className="h2">Tâches · dans l'ordre d'exécution</h2>
+            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+              {p.sequenceMode === 'sequential'
+                ? 'Séquentiel : glisser pour réordonner'
+                : 'Parallèle : toutes disponibles'}
+            </span>
+          </div>
+          {tasks.data && (
+            <TaskList
+              tasks={tasks.data}
+              projectId={p.id}
+              color={() => color}
+              onOpen={(tid) => navigate({ to: '/projets/$id', params: { id }, search: { tache: tid } })}
+            />
+          )}
+          <div style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
+            <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
+          </div>
+        </section>
+        <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
+          <ProjectFields key={p.updatedAt} p={p} />
+          <Section title="Groupes">
+            <ProjectGroups key={p.groupIds.join()} p={p} allGroups={groups.data ?? []} />
+          </Section>
+          <Section>
+            <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
+          </Section>
+        </aside>
+      </div>
+      <TaskDrawer
+        taskId={tache ?? null}
+        onClose={() => navigate({ to: '/projets/$id', params: { id }, search: {} })}
+      />
+    </div>
+  );
+}
+
+function ProjectActions({ p }: { p: ProjectDetail }) {
+  const [completing, setCompleting] = useState(false);
+  const [gaps, setGaps] = useState<{ code: string; label: string }[] | null>(null);
+  const promote = useAction(() => post(`/projects/${p.id}/promote`), {
+    toast: 'Idée promue en projet actif.',
+  });
+  const status = useAction((s: string) => patch(`/projects/${p.id}`, { status: s }));
+  const doPromote = () =>
+    promote.mutate(undefined, {
+      onError: (e) => {
+        if (e instanceof ApiError && Array.isArray(e.details)) setGaps(e.details as never);
+      },
+    });
+  return (
+    <>
+      {(p.status === 'idea' || p.status === 'paused') && (
+        <button type="button" className="btn btn-primary" onClick={doPromote}>
+          {p.status === 'idea' ? 'Promouvoir en projet' : 'Réactiver'}
+        </button>
+      )}
+      {p.status === 'active' && (
+        <>
+          <button type="button" className="btn" onClick={() => status.mutate('paused')}>
+            Mettre en pause
+          </button>
+          <button type="button" className="btn btn-primary" onClick={() => setCompleting(true)}>
+            Terminer
+          </button>
+        </>
+      )}
+      {p.status !== 'abandoned' && p.status !== 'done' && (
+        <button type="button" className="btn btn-ghost" onClick={() => status.mutate('abandoned')}>
+          Abandonner
+        </button>
+      )}
+      {p.status === 'abandoned' && (
+        <button type="button" className="btn" onClick={() => status.mutate('idea')}>
+          Remettre en idée
+        </button>
+      )}
+      {p.status === 'done' && (
+        <button type="button" className="btn" onClick={() => status.mutate('active')}>
+          Rouvrir
+        </button>
+      )}
+      <CompletePanel project={completing ? p : null} onClose={() => setCompleting(false)} />
+      <Panel
+        open={!!gaps}
+        onClose={() => setGaps(null)}
+        title="Pas encore prêt à devenir un projet"
+        side={false}
+        width={480}
+      >
+        <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+          Il manque :
+        </p>
+        <ul className="m-0 pl-5 flex flex-col gap-1 text-[15px]">
+          {gaps?.map((g) => (
+            <li key={g.code}>{g.label}</li>
+          ))}
+        </ul>
+      </Panel>
+    </>
+  );
+}
+
+function ProjectFields({ p }: { p: ProjectDetail }) {
+  const me = useMe();
+  const objectives = useQuery({ queryKey: ['objectives'], queryFn: () => get<Objective[]>('/objectives') });
+  const [f, setF] = useState({
+    title: p.title,
+    successCriterion: p.successCriterion,
+    startDate: p.startDate ?? '',
+    dueDate: p.dueDate ?? '',
+    objectiveId: p.objectiveId ?? '',
+    sequenceMode: p.sequenceMode,
+    isFree: p.isFree,
+    description: p.description,
+  });
+  const save = useAction(
+    () =>
+      patch(`/projects/${p.id}`, {
+        ...f,
+        startDate: f.startDate || null,
+        dueDate: f.dueDate || null,
+        objectiveId: f.objectiveId || null,
+      }),
+    { toast: 'Projet enregistré.' },
+  );
+  const month = me.data?.today.slice(0, 7) ?? '';
+  const toggleMonth = useAction((on: boolean) =>
+    patch(`/projects/${p.id}`, { monthFlag: on ? month : null }),
+  );
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  return (
+    <Section title="Fiche">
+      <Field label="Titre">
+        <input value={f.title} onChange={(e) => set('title', e.target.value)} />
+      </Field>
+      <Field label="Critère de succès (oui / non)">
+        <input
+          value={f.successCriterion}
+          onChange={(e) => set('successCriterion', e.target.value)}
+          placeholder="ex. Contrat d'installation signé"
+        />
+      </Field>
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <Field label="Début">
+          <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
+        </Field>
+        <Field label="Fin (≤ 1 mois)">
+          <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Objectif">
+        <select value={f.objectiveId} onChange={(e) => set('objectiveId', e.target.value)}>
+          <option value="">Hors objectif</option>
+          {(objectives.data ?? []).map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.title} ({o.quarter})
+            </option>
+          ))}
+        </select>
+      </Field>
+      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <Field label="Enchaînement">
+          <select
+            value={f.sequenceMode}
+            onChange={(e) => set('sequenceMode', e.target.value as typeof f.sequenceMode)}
+          >
+            <option value="sequential">Séquentiel</option>
+            <option value="parallel">Parallèle</option>
+          </select>
+        </Field>
+        <label className="flex items-center gap-2 text-[13px] pt-6">
+          <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} /> Libre
+          dans le chemin
+        </label>
+      </div>
+      <Field
+        label="Description"
+        hint="Résultat attendu en 1 phrase · Critère de succès · Contexte en 2 lignes · Ressources"
+      >
+        <textarea value={f.description} onChange={(e) => set('description', e.target.value)} />
+      </Field>
+      <button
+        type="button"
+        className="btn btn-primary self-start"
+        onClick={() => save.mutate(undefined)}
+        disabled={save.isPending}
+      >
+        Enregistrer
+      </button>
+      <label
+        className="flex items-center gap-2 text-[14px] pt-2"
+        style={{ borderTop: '1px solid var(--border)' }}
+      >
+        <input
+          type="checkbox"
+          checked={!!p.monthFlag}
+          onChange={(e) => toggleMonth.mutate(e.target.checked)}
+        />
+        Projet du mois {p.monthFlag ? `(${p.monthFlag})` : ''}
+      </label>
+      {p.replannedAt && (
+        <div className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+          Replanifié le {fmtDate(p.replannedAt)}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function ProjectGroups({
+  p,
+  allGroups,
+}: {
+  p: ProjectDetail;
+  allGroups: { id: string; domainId: string }[];
+}) {
+  const dl = useDomainLookup();
+  const [ids, setIds] = useState(p.groupIds);
+  const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
+  const domains = [
+    ...new Set(ids.map((g) => allGroups.find((x) => x.id === g)?.domainId).filter((x): x is string => !!x)),
+  ];
+  const save = useAction(
+    () =>
+      put(`/projects/${p.id}/groups`, {
+        groupIds: ids,
+        primaryDomainId: domains.includes(primary) ? primary : null,
+      }),
+    { toast: 'Groupes enregistrés.' },
+  );
+  return (
+    <>
+      <GroupPicker value={ids} onChange={setIds} />
+      {domains.length > 1 && (
+        <Field label="Domaine principal (couleur)">
+          <select value={primary} onChange={(e) => setPrimary(e.target.value)}>
+            {domains.map((d) => (
+              <option key={d} value={d}>
+                {dl.name(d)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      )}
+      <button
+        type="button"
+        className="btn self-start"
+        disabled={!ids.length}
+        onClick={() => save.mutate(undefined)}
+      >
+        Enregistrer les groupes
+      </button>
+    </>
+  );
+}
+
+export function IdeasPage() {
+  const [domainId, setDomainId] = useState('');
+  const [groupId, setGroupId] = useState('');
+  const [creating, setCreating] = useState(false);
+  const q = useQuery({
+    queryKey: ['ideas', domainId, groupId],
+    queryFn: () =>
+      get<Project[]>(
+        `/ideas?${domainId ? `domainId=${domainId}&` : ''}${groupId ? `groupId=${groupId}` : ''}`,
+      ),
+  });
+  const dl = useDomainLookup();
+  const groups = useGroups();
+  const navigate = useNavigate();
+  const promote = useAction((id: string) => post(`/projects/${id}/promote`), {
+    toast: 'Idée promue en projet actif.',
+  });
+  const drop = useAction((id: string) => patch(`/projects/${id}`, { status: 'abandoned' }), {
+    toast: 'Idée abandonnée.',
+  });
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb items={[{ label: 'Idées' }]} />
+        <PageHeader
+          eyebrow="Vider la tête · les plus anciennes en premier"
+          title="Idées"
+          actions={
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              + Idée
+            </button>
+          }
+        />
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
+          <option value="">Tous les domaines</option>
+          {dl.domains.map((d) => (
+            <option key={d.id} value={d.id}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+        <select value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Groupe">
+          <option value="">Tous les groupes</option>
+          {(groups.data ?? []).map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.name}
+            </option>
+          ))}
+        </select>
+      </div>
+      <section className="card overflow-hidden">
+        {q.data?.length === 0 && <Empty>Aucune idée.</Empty>}
+        {q.data?.map((p) => (
+          <div
+            key={p.id}
+            className="flex flex-wrap items-center gap-3"
+            style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider)' }}
+          >
+            <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
+            <div className="flex-1 min-w-0 flex flex-col">
+              <Link to="/projets/$id" params={{ id: p.id }} className="text-[15px] font-medium">
+                {p.title}
+              </Link>
+              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                {p.groups.map((g) => g.name).join(' · ')} · depuis le {fmtDate(p.createdAt.slice(0, 10))}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() =>
+                promote.mutate(p.id, {
+                  onError: (e) => {
+                    if (e instanceof ApiError && e.code === 'PROMOTION_INCOMPLETE')
+                      navigate({ to: '/projets/$id', params: { id: p.id } });
+                  },
+                })
+              }
+            >
+              Promouvoir
+            </button>
+            <button type="button" className="btn btn-sm btn-ghost" onClick={() => drop.mutate(p.id)}>
+              Abandonner
+            </button>
+          </div>
+        ))}
+      </section>
+      <NewProjectPanel open={creating} onClose={() => setCreating(false)} />
+    </div>
+  );
+}
+
+export function InboxPage({ tache }: { tache?: string }) {
+  const navigate = useNavigate();
+  const q = useQuery({ queryKey: ['tasks', 'inbox'], queryFn: () => get<Task[]>('/tasks?projectId=inbox') });
+  const [showDone, setShowDone] = useState(false);
+  const dl = useDomainLookup();
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb items={[{ label: 'Inbox' }]} />
+        <PageHeader
+          eyebrow="Tâches hors projet · deadlines · récurrences"
+          title="Inbox"
+          actions={
+            <label className="flex items-center gap-2 text-[14px]">
+              <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />{' '}
+              Afficher les faites
+            </label>
+          }
+        />
+      </div>
+      <section className="card overflow-hidden">
+        <div
+          style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--divider-2)',
+            background: 'var(--surface-2)',
+          }}
+        >
+          <QuickAdd projectId={null} placeholder="Capturer une tâche (Entrée)…" />
+        </div>
+        {q.isLoading && <Loading />}
+        {q.data && (
+          <TaskList
+            tasks={q.data}
+            projectId={null}
+            showDone={showDone}
+            color={(t) => dl.color(t.domainId)}
+            onOpen={(id) => navigate({ to: '/inbox', search: { tache: id } })}
+          />
+        )}
+      </section>
+      <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/inbox', search: {} })} />
+    </div>
+  );
+}
+
+export function useDeleteGroup() {
+  return useAction((id: string) => del(`/groups/${id}`), { toast: 'Groupe supprimé.' });
+}
+export { toast };
