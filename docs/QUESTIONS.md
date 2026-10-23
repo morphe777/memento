@@ -4,7 +4,7 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 
 ## À trancher avant la mise en service (L7)
 
-1. **Déploiement Docker et base** : D-01 remplace PostgreSQL par SQLite. On garde SQLite en production (sauvegarde = copie du fichier vers le NAS) ou on repasse sur la VM PostgreSQL 17 existante ?
+1. ~~Déploiement Docker~~ : fait (D-56), SQLite conservé. Reste : sauvegarde régulière de `/home/morphe/Dockers/Memento` vers le NAS.
 2. **Nom d'hôte interne** (ex. `memento.internal.lcl`) et accès iPhone via WireGuard : à confirmer pour la conf NGINX Proxy Manager. Passer alors `MEMENTO_COOKIE_SECURE=true`.
 3. **Exposition en dev** : l'API écoute sur `0.0.0.0:4500` (LAN `192.168.10.18`) pour que tu puisses tester. OK, ou on la restreint à `127.0.0.1` ?
 4. **Import Vikunja** : script en L7 ou départ à zéro ?

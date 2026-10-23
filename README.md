@@ -54,7 +54,46 @@ Un jeton en lecture seule ne peut faire que des GET. Aucun jeton ne peut gérer 
 pnpm check        # lint (Biome) + typage + tests (Vitest)
 ```
 
-## Sauvegarde (en attendant L7)
+## Déploiement Docker (production)
+
+Une image `morphe777/memento` (Docker Hub), trois conteneurs : `memento` (API + interface, port 4500),
+`memento-worker` (jobs planifiés) et `memento-mcp` (serveur MCP, port 4502). Données : bind
+`/home/morphe/Dockers/Memento` → `/data` (base `memento.db`).
+
+### 1. Construire et pousser l'image
+
+```bash
+./install/build-and-push.sh            # build + login + push (version lue dans package.json, + latest)
+./install/build-and-push.sh --no-push  # build local seulement
+```
+
+### 2. Préparer le dossier de données
+
+```bash
+mkdir -p /home/morphe/Dockers/Memento
+# Reprendre la base de dev : arrêter d'abord l'API, le worker et le MCP de dev, puis copier la base
+cp data/memento.db* /home/morphe/Dockers/Memento/
+```
+
+Sans base existante, le conteneur la crée au premier démarrage (migrations + 8 domaines). Créer alors le compte :
+
+```bash
+docker exec -it memento node_modules/.bin/tsx apps/api/src/cli/set-password.ts mehdi
+```
+
+### 3. Lancer la stack
+
+Portainer : nouvelle stack avec le contenu de `install/docker-compose.yml`. Ou en ligne de commande :
+
+```bash
+docker compose -f install/docker-compose.yml up -d
+```
+
+Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la même machine). Derrière NGINX Proxy
+Manager en HTTPS, passer `MEMENTO_COOKIE_SECURE: "true"`. Mise à jour : nouvelle image puis « Pull and redeploy »
+(les migrations s'appliquent au démarrage ; une copie de la base est conseillée avant).
+
+## Sauvegarde
 
 La base est un seul fichier SQLite (`data/memento.db`, mode WAL). Pour une sauvegarde à chaud cohérente :
 
