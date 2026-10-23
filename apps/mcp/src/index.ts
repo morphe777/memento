@@ -165,7 +165,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'create_project',
-    'Crée un projet complet (critère de succès, dates ≤ 31 j, groupes, tâches 30/60/120 min) puis le promeut. Renvoie les manques si la promotion échoue.',
+    'Crée un projet (critère de succès, groupes, tâches 30/60/120 min ; dates facultatives) puis le promeut en « prêt » (backlog). Les manques éventuels sont dans le champ gaps.',
     {
       ...S.projectCreate.shape,
       tasks: z
@@ -191,15 +191,21 @@ export function buildServer(call: Call) {
   );
   tool(
     'update_project',
-    'Modifie un projet ou une idée (dont statut, case projet du mois AAAA-MM).',
+    'Modifie un projet ou une idée (titre, critère, dates, objectif, statut : ready / paused / abandoned / idea). Pour le projet du mois, utiliser set_project_month.',
     { id: S.uuid, ...S.projectPatch.shape },
     ({ id, ...rest }) => call('PATCH', `/projects/${id}`, rest),
   );
   tool(
     'promote_idea',
-    'Promeut une idée en projet actif (RB-02) ; renvoie la liste des manques sinon.',
+    'Promeut une idée en projet « prêt » (backlog). Jamais bloquant : les manques RB-02 sont renvoyés dans gaps.',
     { id: S.uuid },
     (a) => call('POST', `/projects/${a.id}/promote`),
+  );
+  tool(
+    'set_project_month',
+    'Choisit un projet prêt comme projet du mois (month = AAAA-MM ; mois courant = actif) ou le retire (month = null). Exige RB-02 complet.',
+    { id: S.uuid, month: S.monthKey.nullable() },
+    (a) => call('POST', `/projects/${a.id}/month`, { month: a.month }),
   );
   tool(
     'complete_project',

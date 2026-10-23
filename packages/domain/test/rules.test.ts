@@ -8,7 +8,6 @@ import {
   blockedProjectIds,
   budgetMinutes,
   budgetStatus,
-  canFlagMonth,
   checkObjectiveDeadline,
   checkRecurrenceRule,
   checkTaskDuration,
@@ -102,11 +101,12 @@ describe('RB-02 promotion', () => {
   it('lists every gap (idea without task → TASK_MISSING)', () => {
     expect(
       promotionGaps({ ...ok, successCriterion: ' ', groupCount: 0, tasks: [], startDate: null }),
-    ).toEqual(['SUCCESS_CRITERION_MISSING', 'GROUP_MISSING', 'TASK_MISSING', 'DATES_MISSING']);
+    ).toEqual(['SUCCESS_CRITERION_MISSING', 'GROUP_MISSING', 'TASK_MISSING']);
   });
-  it('refuses projects longer than 31 days (DM-23)', () => {
-    expect(promotionGaps({ ...ok, dueDate: '2026-12-03' })).toEqual(['PROJECT_TOO_LONG']);
-    expect(promotionGaps({ ...ok, dueDate: '2026-12-02' })).toEqual([]);
+  it('D-42: dates are optional (the month is the time box), but never inverted', () => {
+    expect(promotionGaps({ ...ok, startDate: null, dueDate: null })).toEqual([]);
+    expect(promotionGaps({ ...ok, dueDate: '2027-03-01' })).toEqual([]);
+    expect(promotionGaps({ ...ok, dueDate: '2026-10-01' })).toEqual(['DATES_INVERTED']);
   });
   it('requires durations on all tasks', () => {
     expect(promotionGaps({ ...ok, tasks: [{ durationMin: null, status: 'todo' }] })).toEqual([
@@ -215,19 +215,6 @@ describe('RB-07 cycles', () => {
   });
 });
 
-describe('RB-08 month flag', () => {
-  it('needs tasks, all with duration', () => {
-    expect(canFlagMonth([])).toBe(false);
-    expect(canFlagMonth([{ durationMin: null, status: 'todo' }])).toBe(false);
-    expect(
-      canFlagMonth([
-        { durationMin: 30, status: 'todo' },
-        { durationMin: null, status: 'cancelled' },
-      ]),
-    ).toBe(true);
-  });
-});
-
 describe('RB-09 / RB-14 budget', () => {
   it('experiences are out of budget', () => {
     expect(
@@ -257,9 +244,12 @@ describe('RB-12 completion and DM-89 lifecycle', () => {
     expect(code(() => assertCompletion(undefined))).toBe('SUCCESS_ANSWER_REQUIRED');
     expect(code(() => assertCompletion(false))).toBeNull();
   });
-  it('idea → active only through promotion', () => {
-    expect(code(() => assertStatusTransition('idea', 'active'))).toBe('INVALID_STATUS_TRANSITION');
+  it('D-42: idea → ready only through promotion, → active only through the month plan', () => {
+    expect(code(() => assertStatusTransition('idea', 'ready'))).toBe('INVALID_STATUS_TRANSITION');
+    expect(code(() => assertStatusTransition('ready', 'active'))).toBe('INVALID_STATUS_TRANSITION');
     expect(code(() => assertStatusTransition('active', 'paused'))).toBeNull();
+    expect(code(() => assertStatusTransition('active', 'ready'))).toBeNull();
+    expect(code(() => assertStatusTransition('paused', 'ready'))).toBeNull();
   });
   it('objective progress = done projects ÷ path', () => {
     expect(objectiveProgressPct([{ status: 'done' }, { status: 'active' }, { status: 'idea' }])).toBe(50);

@@ -218,6 +218,15 @@ export async function buildApp(opts: AppOptions) {
         async (req) => D.patchSettings(ctx(req), req.body),
       );
       r.get('/tokens', { schema: tag('Accès'), preHandler: userOnly }, async () => A.listTokens(db));
+      // D-45: full JSON export (backup), interface only, without any secret.
+      r.get('/export', { schema: tag('Réglages'), preHandler: userOnly }, async (req, reply) => {
+        const data = D.exportData(ctx(req));
+        reply.header(
+          'content-disposition',
+          `attachment; filename="memento-export-${data.exportedAt.slice(0, 10)}.json"`,
+        );
+        return data;
+      });
       r.post(
         '/tokens',
         {
@@ -375,6 +384,11 @@ export async function buildApp(opts: AppOptions) {
         D.promoteProject(ctx(req), req.params.id),
       );
       r.post(
+        '/projects/:id/month',
+        { schema: { ...tag('Projets'), params: D.idParam, body: D.projectMonthBody } },
+        async (req) => D.setProjectMonth(ctx(req), req.params.id, req.body.month),
+      );
+      r.post(
         '/projects/:id/complete',
         { schema: { ...tag('Projets'), params: D.idParam, body: D.projectCompleteBody } },
         async (req) => D.completeProject(ctx(req), req.params.id, req.body.success),
@@ -404,6 +418,7 @@ export async function buildApp(opts: AppOptions) {
       r.get('/tasks', { schema: { ...tag('Tâches'), querystring: D.taskListQuery } }, async (req) =>
         D.listTasks(ctx(req), req.query),
       );
+      r.get('/inbox', { schema: tag('Tâches') }, async (req) => D.listInbox(ctx(req)));
       r.get('/tasks/board', { schema: { ...tag('Tâches'), querystring: D.boardQuery } }, async (req) =>
         D.listBoardTasks(ctx(req), req.query),
       );
@@ -496,6 +511,11 @@ export async function buildApp(opts: AppOptions) {
         '/week-plans/:isoWeek/validate',
         { schema: { ...tag('Planification'), params: D.isoWeekParam } },
         async (req) => D.validateWeek(ctx(req), req.params.isoWeek),
+      );
+      r.get(
+        '/month-plans/:month',
+        { schema: { ...tag('Planification'), params: z.object({ month: D.monthKey }) } },
+        async (req) => D.getMonthPlanningPage(ctx(req), req.params.month),
       );
       r.get(
         '/weeks/:isoWeek/execution',

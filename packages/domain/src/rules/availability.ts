@@ -58,7 +58,7 @@ export function blockedProjectIds(
     let open = true;
     for (const p of ordered) {
       if (!open && !p.isFree) blocked.add(p.id);
-      if (!p.isFree && (p.status === 'active' || p.status === 'paused')) open = false;
+      if (!p.isFree && ['ready', 'active', 'paused'].includes(p.status)) open = false;
     }
   }
   for (const d of deps) {

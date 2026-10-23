@@ -1,7 +1,6 @@
 import { DomainError } from '../errors.ts';
 import { daysBetween } from '../time.ts';
 
-export const MAX_PROJECT_DAYS = 31;
 export const MAX_PROJECT_DOMAINS = 3;
 
 export interface DomainRef {
@@ -46,29 +45,23 @@ export type PromotionGap =
   | 'GROUP_MISSING'
   | 'TASK_MISSING'
   | 'TASK_DURATION_MISSING'
-  | 'DATES_MISSING'
-  | 'DATES_INVERTED'
-  | 'PROJECT_TOO_LONG';
+  | 'DATES_INVERTED';
 
 export const GAP_LABELS: Record<PromotionGap, string> = {
   SUCCESS_CRITERION_MISSING: 'Critère de succès (oui / non) manquant',
   GROUP_MISSING: 'Au moins un groupe',
   TASK_MISSING: 'Au moins une tâche',
   TASK_DURATION_MISSING: 'Toutes les tâches doivent avoir une durée',
-  DATES_MISSING: 'Date de début et date de fin',
   DATES_INVERTED: 'La fin doit être après le début',
-  PROJECT_TOO_LONG: 'Projet de plus d’un mois : à découper',
 };
 
-/** RB-02 as a checklist shown on the project page: what makes an idea ready to become active. */
+/** RB-02 as a checklist shown on the project page: what a project needs before becoming a month project. */
 export const READINESS_LABELS: Record<PromotionGap, string> = {
   SUCCESS_CRITERION_MISSING: 'Un critère de succès (oui / non)',
   GROUP_MISSING: 'Au moins un groupe',
   TASK_MISSING: 'Au moins une tâche',
   TASK_DURATION_MISSING: 'Une durée sur chaque tâche',
-  DATES_MISSING: 'Une date de début et une date de fin',
-  DATES_INVERTED: 'La fin après le début',
-  PROJECT_TOO_LONG: '31 jours au plus entre début et fin',
+  DATES_INVERTED: 'La fin après le début (dates facultatives)',
 };
 
 export function readiness(p: PromotionInput): { code: PromotionGap; label: string; ok: boolean }[] {
@@ -78,15 +71,15 @@ export function readiness(p: PromotionInput): { code: PromotionGap; label: strin
     .map((code) => ({
       code,
       label: READINESS_LABELS[code],
-      // Not ticked by default: « every task has a duration » needs tasks, « ≤ 31 days » needs dates.
-      ok:
-        !gaps.has(code) &&
-        !(code === 'TASK_DURATION_MISSING' && gaps.has('TASK_MISSING')) &&
-        !(code === 'PROJECT_TOO_LONG' && gaps.has('DATES_MISSING')),
+      // Not ticked by default: « every task has a duration » needs tasks.
+      ok: !gaps.has(code) && !(code === 'TASK_DURATION_MISSING' && gaps.has('TASK_MISSING')),
     }));
 }
 
-/** RB-02 (DM-86, DM-23): what is missing to promote an idea (or to keep a project active). */
+/**
+ * RB-02 revised (decision D-42): what a project needs to become « actif » (= projet du mois).
+ * Dates are optional: the month is the time box. An idea may go « prêt » without it (flagged as incomplete).
+ */
 export function promotionGaps(p: PromotionInput): PromotionGap[] {
   const gaps: PromotionGap[] = [];
   if (!p.successCriterion.trim()) gaps.push('SUCCESS_CRITERION_MISSING');
@@ -94,9 +87,7 @@ export function promotionGaps(p: PromotionInput): PromotionGap[] {
   const live = p.tasks.filter((t) => t.status !== 'cancelled');
   if (live.length < 1) gaps.push('TASK_MISSING');
   if (live.some((t) => t.durationMin === null)) gaps.push('TASK_DURATION_MISSING');
-  if (!p.startDate || !p.dueDate) gaps.push('DATES_MISSING');
-  else if (daysBetween(p.startDate, p.dueDate) < 0) gaps.push('DATES_INVERTED');
-  else if (daysBetween(p.startDate, p.dueDate) > MAX_PROJECT_DAYS) gaps.push('PROJECT_TOO_LONG');
+  if (p.startDate && p.dueDate && daysBetween(p.startDate, p.dueDate) < 0) gaps.push('DATES_INVERTED');
   return gaps;
 }
 
@@ -111,21 +102,6 @@ export function assertPromotable(p: PromotionInput, code = 'PROMOTION_INCOMPLETE
   }
 }
 
-/** RB-08 (DM-93): "projet du mois" only if the project has tasks, all with a duration. */
-export function canFlagMonth(tasks: { durationMin: number | null; status: string }[]): boolean {
-  const live = tasks.filter((t) => t.status !== 'cancelled');
-  return live.length > 0 && live.every((t) => t.durationMin !== null);
-}
-
-export function assertCanFlagMonth(tasks: { durationMin: number | null; status: string }[]): void {
-  if (!canFlagMonth(tasks)) {
-    throw new DomainError(
-      'MONTH_FLAG_REQUIRES_TASKS',
-      'Projet du mois : il faut des tâches, toutes avec une durée.',
-    );
-  }
-}
-
 /** RB-12: completing a project requires answering "critère de succès atteint ?". */
 export function assertCompletion(success: unknown): asserts success is boolean {
   if (typeof success !== 'boolean') {
@@ -133,24 +109,28 @@ export function assertCompletion(success: unknown): asserts success is boolean {
   }
 }
 
+// Decision D-42 lifecycle: Idée → Prêt (backlog) → Actif (projet du mois) → Terminé, plus En pause / Abandonné.
+// idea → ready only through « Promouvoir »; ready → active only through the month plan; → done only via « Terminer ».
 const TRANSITIONS: Record<string, string[]> = {
-  idea: ['abandoned'], // idea → active only through promote (RB-02)
-  active: ['paused', 'abandoned'], // → done only through complete (RB-12)
-  paused: ['active', 'abandoned'],
-  done: ['active'],
+  idea: ['abandoned'],
+  ready: ['idea', 'paused', 'abandoned'],
+  active: ['ready', 'paused', 'abandoned'],
+  paused: ['ready', 'abandoned'],
+  done: ['ready'],
   abandoned: ['idea'],
 };
 
-/** DM-89 status lifecycle: Idée → Actif → En pause → Terminé / Abandonné. */
 export function assertStatusTransition(from: string, to: string): void {
   if (from === to) return;
   if (!TRANSITIONS[from]?.includes(to)) {
     const hint =
-      to === 'active' && from === 'idea'
+      to === 'ready' && from === 'idea'
         ? ' Utilise « Promouvoir ».'
-        : to === 'done'
-          ? ' Utilise « Terminer ».'
-          : '';
+        : to === 'active'
+          ? ' Choisis-le comme projet du mois (Planifier › Mois).'
+          : to === 'done'
+            ? ' Utilise « Terminer ».'
+            : '';
     throw new DomainError('INVALID_STATUS_TRANSITION', `Passage ${from} → ${to} impossible.${hint}`);
   }
 }

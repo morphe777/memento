@@ -7,7 +7,7 @@ import { getPlanRow, planItemsOf, setWeekItems } from './planning.ts';
 import { getProjectRow, serializeProjects } from './projects.ts';
 import { getTask, listTasks } from './tasks.ts';
 
-const LIVE = new Set(['active', 'paused']);
+const LIVE = new Set(['ready', 'active', 'paused']);
 
 export function listBoardTasks(ctx: Ctx, f: { projectId?: string } = {}) {
   const monday = weekMonday(currentWeek(ctxNow(ctx)));

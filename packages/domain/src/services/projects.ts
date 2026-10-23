@@ -5,7 +5,6 @@ import { assertFound, DomainError } from '../errors.ts';
 import { blockedProjectIds } from '../rules/availability.ts';
 import { assertNoCycle } from '../rules/graph.ts';
 import {
-  assertCanFlagMonth,
   assertCompletion,
   assertStatusTransition,
   GAP_LABELS,
@@ -16,7 +15,7 @@ import {
 } from '../rules/projects.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
 import { withTemplate } from '../settings.ts';
-import { parisDate } from '../time.ts';
+import { monthOf, parisDate } from '../time.ts';
 import { refreshObjectiveProgress } from './referential.ts';
 
 const { project, projectGroup, group, domain, task, projectDependency, objective } = schema;
@@ -109,6 +108,19 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
         doneMin: by('done')?.minutes ?? 0,
         withoutDuration: (by('todo')?.noDuration ?? 0) + (by('done')?.noDuration ?? 0),
       },
+      /** RB-02 gaps (D-42): a « prêt » project with gaps is flagged « à compléter ». */
+      gaps: promotionGaps({
+        successCriterion: r.successCriterion,
+        startDate: r.startDate,
+        dueDate: r.dueDate,
+        groupCount: mine.length,
+        tasks: [
+          ...Array.from({ length: (by('todo')?.n ?? 0) + (by('done')?.n ?? 0) }, (_, i) => ({
+            durationMin: i < (by('todo')?.noDuration ?? 0) + (by('done')?.noDuration ?? 0) ? null : 1,
+            status: 'todo',
+          })),
+        ],
+      }),
     };
   });
 }
@@ -179,10 +191,10 @@ export function assertActiveInvariant(ctx: Ctx, id: string) {
   if (gaps.length) throw activeGapError(gaps);
 }
 
-const activeGapError = (gaps: PromotionGap[]) =>
+const activeGapError = (gaps: PromotionGap[], code = 'ACTIVE_PROJECT_INCOMPLETE') =>
   new DomainError(
-    gaps.includes('PROJECT_TOO_LONG') ? 'PROJECT_TOO_LONG' : 'ACTIVE_PROJECT_INCOMPLETE',
-    `Projet actif : ${gaps.map((g) => GAP_LABELS[g]).join(' · ')}`,
+    code,
+    `Projet du mois : ${gaps.map((g) => GAP_LABELS[g]).join(' · ')}`,
     gaps.map((g) => ({ code: g, label: GAP_LABELS[g] })),
   );
 
@@ -206,11 +218,6 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
         ctx.db.select().from(objective).where(eq(objective.id, fields.objectiveId)).get(),
         'objective',
         fields.objectiveId,
-      );
-    if (fields.monthFlag)
-      throw new DomainError(
-        'MONTH_FLAG_REQUIRES_TASKS',
-        'Ajoute des tâches avant de cocher « projet du mois ».',
       );
     const id = newId();
     ctx.db
@@ -239,15 +246,6 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
     if (patch.status !== undefined) assertStatusTransition(before.status, patch.status);
     if (patch.primaryDomainId)
       resolveProjectDomains(groupDomainsOf(ctx, before.groupIds), patch.primaryDomainId);
-    if (patch.monthFlag) {
-      assertCanFlagMonth(
-        ctx.db
-          .select({ durationMin: task.durationMin, status: task.status })
-          .from(task)
-          .where(eq(task.projectId, id))
-          .all(),
-      ); // RB-08
-    }
     const set: Partial<typeof project.$inferInsert> = {
       ...patch,
       updatedAt: ctxNowIso(ctx),
@@ -262,10 +260,12 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
         );
       set.positionInObjective = nextPositionInObjective(ctx, patch.objectiveId);
     }
-    if (patch.status === 'active' && before.status === 'done') {
+    if (patch.status === 'ready' && before.status === 'done') {
       set.success = null;
       set.completedAt = null;
     }
+    // Leaving the month (back to backlog, pause, abandon, idea): the project is no longer a month project.
+    if (patch.status && patch.status !== before.status && before.status !== 'done') set.monthFlag = null;
     ctx.db.update(project).set(set).where(eq(project.id, id)).run();
     assertActiveInvariant(ctx, id);
     const after = getProject(ctx, id);
@@ -308,27 +308,16 @@ export function setProjectGroups(ctx: Ctx, id: string, groupIds: string[], prima
 export const getProjectReadiness = (ctx: Ctx, id: string) =>
   readiness(promotionInput(ctx, getProjectRow(ctx, id)));
 
-/** RB-02: idea → active, or 422 with the list of gaps. */
+/** D-42: « Promouvoir » = idée → prêt (backlog). Never blocked: a prêt project with RB-02 gaps is « à compléter ». */
 export function promoteProject(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getProject(ctx, id);
-    if (before.status !== 'idea' && before.status !== 'paused') {
-      throw new DomainError(
-        'INVALID_STATUS_TRANSITION',
-        'Seule une idée (ou un projet en pause) peut être activée.',
-      );
-    }
-    const gaps = promotionGaps(promotionInput(ctx, getProjectRow(ctx, id)));
-    if (gaps.length) {
-      throw new DomainError(
-        'PROMOTION_INCOMPLETE',
-        `Il manque : ${gaps.map((g) => GAP_LABELS[g]).join(' · ')}`,
-        gaps.map((g) => ({ code: g, label: GAP_LABELS[g] })),
-      );
+    if (before.status !== 'idea') {
+      throw new DomainError('INVALID_STATUS_TRANSITION', 'Seule une idée peut être promue en projet prêt.');
     }
     ctx.db
       .update(project)
-      .set({ status: 'active', updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) })
+      .set({ status: 'ready', updatedAt: ctxNowIso(ctx), lastTouchedAt: ctxNowIso(ctx) })
       .where(eq(project.id, id))
       .run();
     const after = getProject(ctx, id);
@@ -343,10 +332,10 @@ export function completeProject(ctx: Ctx, id: string, success: unknown) {
   assertCompletion(success);
   return tx(ctx, () => {
     const before = getProject(ctx, id);
-    if (before.status !== 'active' && before.status !== 'paused') {
+    if (!['active', 'ready', 'paused'].includes(before.status)) {
       throw new DomainError(
         'INVALID_STATUS_TRANSITION',
-        'Seul un projet actif ou en pause peut être terminé.',
+        'Seul un projet prêt, actif ou en pause peut être terminé.',
       );
     }
     ctx.db
@@ -365,6 +354,103 @@ export function completeProject(ctx: Ctx, id: string, success: unknown) {
     audit(ctx, 'project', id, 'complete', before, after);
     refreshObjectiveProgress(ctx, after.objectiveId);
     return after;
+  });
+}
+
+/**
+ * D-42 (Planifier › Mois): choose a project for a month, or drop it (month = null).
+ * Choosing needs RB-02 complete. Current month → « actif » ; a later month → stays « prêt », planned (monthFlag);
+ * the month roll activates it on the 1st. Dropping a month project sends it back to « prêt ».
+ */
+export function setProjectMonth(ctx: Ctx, id: string, month: string | null) {
+  return tx(ctx, () => {
+    const before = getProject(ctx, id);
+    const current = monthOf(parisDate(ctxNow(ctx)));
+    const set: Partial<typeof project.$inferInsert> = {
+      updatedAt: ctxNowIso(ctx),
+      lastTouchedAt: ctxNowIso(ctx),
+    };
+    if (month) {
+      if (!['ready', 'active'].includes(before.status))
+        throw new DomainError(
+          'INVALID_STATUS_TRANSITION',
+          'Seul un projet prêt peut devenir projet du mois.',
+        );
+      if (month < current) throw new DomainError('MONTH_IN_PAST', 'Ce mois est déjà passé.');
+      const gaps = promotionGaps(promotionInput(ctx, getProjectRow(ctx, id)));
+      if (gaps.length) throw activeGapError(gaps, 'MONTH_PROJECT_INCOMPLETE');
+      set.monthFlag = month;
+      set.status = month === current ? 'active' : 'ready';
+    } else {
+      if (before.status === 'done')
+        throw new DomainError('INVALID_STATUS_TRANSITION', 'Projet déjà terminé.');
+      set.monthFlag = null;
+      if (before.status === 'active') set.status = 'ready';
+    }
+    ctx.db.update(project).set(set).where(eq(project.id, id)).run();
+    const after = getProject(ctx, id);
+    audit(ctx, 'project', id, 'month', before, after);
+    refreshObjectiveProgress(ctx, after.objectiveId);
+    return after;
+  });
+}
+
+/**
+ * D-42 month roll (worker, 1st of the month, after the monthly report): unfinished projects of a past month go
+ * back to « prêt » (remembering their month, shown first in the next month plan); projects planned for this
+ * month become « actif » when RB-02 is complete. Idempotent.
+ */
+export function rollMonth(ctx: Ctx, month: string) {
+  return tx(ctx, () => {
+    const rows = ctx.db
+      .select()
+      .from(project)
+      .where(inArray(project.status, ['active', 'ready']))
+      .all();
+    let backToReady = 0;
+    let activated = 0;
+    for (const r of rows) {
+      if (r.status === 'active' && r.monthFlag !== month) {
+        ctx.db
+          .update(project)
+          .set({
+            status: 'ready',
+            previousMonthFlag: r.monthFlag,
+            monthFlag: null,
+            updatedAt: ctxNowIso(ctx),
+          })
+          .where(eq(project.id, r.id))
+          .run();
+        audit(
+          ctx,
+          'project',
+          r.id,
+          'month_end',
+          { status: r.status, monthFlag: r.monthFlag },
+          { status: 'ready', monthFlag: null },
+        );
+        backToReady += 1;
+      } else if (
+        r.status === 'ready' &&
+        r.monthFlag === month &&
+        !promotionGaps(promotionInput(ctx, r)).length
+      ) {
+        ctx.db
+          .update(project)
+          .set({ status: 'active', updatedAt: ctxNowIso(ctx) })
+          .where(eq(project.id, r.id))
+          .run();
+        audit(ctx, 'project', r.id, 'month_start', { status: 'ready' }, { status: 'active' });
+        activated += 1;
+      } else if (r.status === 'ready' && r.monthFlag && r.monthFlag < month) {
+        ctx.db
+          .update(project)
+          .set({ monthFlag: null, updatedAt: ctxNowIso(ctx) })
+          .where(eq(project.id, r.id))
+          .run();
+      }
+    }
+    return { backToReady, activated };
   });
 }
 
@@ -500,17 +586,35 @@ const OPEN_OBJECTIVE = new Set(['active', 'paused']);
  * quarter, each objective with its ordered project path (abandoned projects left out). Ready to display.
  */
 export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) {
+  // Closed objectives: only those of the current year (user request 23/10/2026).
+  const year = parisDate(ctxNow(ctx)).slice(0, 4);
   const objectives = ctx.db
     .select()
     .from(objective)
     .orderBy(asc(objective.deadline))
     .all()
-    .filter((o) => f.includeClosed || OPEN_OBJECTIVE.has(o.status));
+    .filter((o) => OPEN_OBJECTIVE.has(o.status) || (f.includeClosed && o.deadline.slice(0, 4) === year));
+  const ranks = new Map(
+    ctx.db
+      .select()
+      .from(domain)
+      .all()
+      .map((d) => [d.id, d.priorityRank]),
+  );
+  /** Colour of an objective on the map: the domain most of its path serves (ties → higher priority). */
+  const dominant = (path: { domainIds: string[] }[]) => {
+    const count = new Map<string, number>();
+    for (const p of path) if (p.domainIds[0]) count.set(p.domainIds[0], (count.get(p.domainIds[0]) ?? 0) + 1);
+    return (
+      [...count].sort((a, b) => b[1] - a[1] || (ranks.get(a[0]) ?? 99) - (ranks.get(b[0]) ?? 99))[0]?.[0] ??
+      null
+    );
+  };
   const metas = ctx.db.select().from(schema.metaObjective).orderBy(asc(schema.metaObjective.createdAt)).all();
-  const withPath = objectives.map((o) => ({
-    ...o,
-    path: getObjectivePath(ctx, o.id).filter((p) => p.status !== 'abandoned'),
-  }));
+  const withPath = objectives.map((o) => {
+    const path = getObjectivePath(ctx, o.id).filter((p) => p.status !== 'abandoned');
+    return { ...o, domainId: dominant(path), path };
+  });
   const lanes = [
     ...metas
       .filter((m) => f.includeClosed || m.status === 'active' || m.status === 'paused')

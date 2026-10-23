@@ -105,7 +105,9 @@ export function listGroups(ctx: Ctx) {
     return {
       ...g,
       projectCount: mine.reduce((s, c) => s + c.n, 0),
-      activeProjectCount: mine.filter((c) => c.status === 'active').reduce((s, c) => s + c.n, 0),
+      activeProjectCount: mine
+        .filter((c) => c.status === 'active' || c.status === 'ready')
+        .reduce((s, c) => s + c.n, 0),
       ideaCount: mine.filter((c) => c.status === 'idea').reduce((s, c) => s + c.n, 0),
     };
   });
