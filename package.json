@@ -1,0 +1,35 @@
+{
+  "name": "memento",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.15.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel --filter @memento/api --filter @memento/web dev",
+    "build": "pnpm --filter @memento/web build",
+    "start": "pnpm --filter @memento/api start",
+    "worker": "pnpm --filter @memento/worker start",
+    "mcp": "pnpm --filter @memento/mcp start",
+    "db:generate": "pnpm --filter @memento/db generate",
+    "db:migrate": "pnpm --filter @memento/db migrate",
+    "db:seed": "pnpm --filter @memento/domain seed",
+    "db:demo": "pnpm --filter @memento/domain demo",
+    "user:set-password": "pnpm --filter @memento/api user:set-password",
+    "token:create": "pnpm --filter @memento/api token:create",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "check": "pnpm lint && pnpm typecheck && pnpm test"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.2",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.19.2",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}

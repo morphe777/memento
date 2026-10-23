@@ -1,0 +1,13 @@
+{
+  "name": "@memento/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx --env-file-if-exists=../../.env src/index.ts"
+  },
+  "dependencies": {
+    "@memento/db": "workspace:*",
+    "@memento/domain": "workspace:*"
+  }
+}
