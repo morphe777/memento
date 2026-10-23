@@ -4,13 +4,19 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Tabs } from './ui.tsx';
 
-export function Markdown({ text }: { text: string }) {
+/** `plain`: links rendered as text, for Markdown shown inside a link (cards). */
+export function Markdown({ text, plain = false }: { text: string; plain?: boolean }) {
   return (
     <div className="md">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          a: ({ node: _n, ...props }) => <a {...props} target="_blank" rel="noreferrer noopener" />,
+          a: ({ node: _n, ...props }) =>
+            plain ? (
+              <span>{props.children}</span>
+            ) : (
+              <a {...props} target="_blank" rel="noreferrer noopener" />
+            ),
         }}
       >
         {text}

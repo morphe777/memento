@@ -15,7 +15,13 @@ import { Loading } from './components/ui.tsx';
 import { ApiError } from './lib/api.ts';
 import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
-import { DomainPage, DomainsPage, ObjectivePage, ObjectivesPage } from './pages/objectives.tsx';
+import {
+  DomainPage,
+  DomainsPage,
+  MetaObjectivePage,
+  ObjectivePage,
+  ObjectivesPage,
+} from './pages/objectives.tsx';
 import { PlanPage } from './pages/plan.tsx';
 import { IdeasPage, InboxPage, ProjectPage, ProjectsPage } from './pages/projects.tsx';
 import { ReportPage, ReportsPage } from './pages/reports.tsx';
@@ -80,6 +86,13 @@ const objectiveRoute = createRoute({
   path: '/objectifs/$id',
   component: function Objective() {
     return <ObjectivePage id={objectiveRoute.useParams().id} />;
+  },
+});
+const metaObjectiveRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/meta-objectifs/$id',
+  component: function MetaObjective() {
+    return <MetaObjectivePage id={metaObjectiveRoute.useParams().id} />;
   },
 });
 const projectsRoute = createRoute({
@@ -161,6 +174,7 @@ const routeTree = rootRoute.addChildren([
   inboxRoute,
   objectivesRoute,
   objectiveRoute,
+  metaObjectiveRoute,
   projectsRoute,
   projectRoute,
   tasksRoute,

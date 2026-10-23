@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
-import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
+import { DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { LockIcon, Resources, useSortSensors } from '../components/tasks.tsx';
 import {
@@ -122,7 +122,15 @@ export function ObjectivesPage() {
           items.length || meta ? (
             <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
               <div className="flex flex-wrap items-baseline gap-2.5">
-                <h2 className="h2-bin">{meta ? meta.title : 'Sans méta-objectif'}</h2>
+                <h2 className="h2-bin">
+                  {meta ? (
+                    <Link to="/meta-objectifs/$id" params={{ id: meta.id }}>
+                      {meta.title}
+                    </Link>
+                  ) : (
+                    'Sans méta-objectif'
+                  )}
+                </h2>
                 {meta?.horizonDate && (
                   <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
                     horizon {fmtDate(meta.horizonDate)}
@@ -427,8 +435,12 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
     }
     onClose();
   };
+  const navigate = useNavigate();
   const remove = useAction(() => del(`/meta-objectives/${meta!.id}`), {
-    onSuccess: onClose,
+    onSuccess: () => {
+      onClose();
+      navigate({ to: '/objectifs' });
+    },
     toast: 'Méta-objectif supprimé.',
   });
   return (
@@ -724,18 +736,22 @@ export function DomainsPage() {
                   </span>
                   <span className="text-[18px] font-semibold">{d.name}</span>
                 </span>
-                <span
-                  className="text-[14px] leading-relaxed"
-                  style={{
-                    color: d.description ? 'var(--text-2)' : 'var(--text-ghost)',
-                    display: '-webkit-box',
-                    WebkitLineClamp: 4,
-                    WebkitBoxOrient: 'vertical',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {d.description || 'Pas encore de description.'}
-                </span>
+                {d.description ? (
+                  <div
+                    className="domain-card-md"
+                    style={{
+                      maxHeight: 96,
+                      overflow: 'hidden',
+                      maskImage: 'linear-gradient(#000 70%, transparent)',
+                    }}
+                  >
+                    <Markdown text={d.description} plain />
+                  </div>
+                ) : (
+                  <span className="text-[14px]" style={{ color: 'var(--text-ghost)' }}>
+                    Pas encore de description.
+                  </span>
+                )}
                 <span className="text-[13px] mt-auto" style={{ color: 'var(--text-faint)' }}>
                   {n('active')} actif{n('active') > 1 ? 's' : ''} · {n('ready')} prêt
                   {n('ready') > 1 ? 's' : ''} · {n('idea')} idée{n('idea') > 1 ? 's' : ''}
@@ -981,9 +997,17 @@ function ObjectivesMapView({
             <Fragment key={l.meta?.id ?? 'none'}>
               <div className="bin flex flex-col gap-1.5" style={{ padding: '14px 14px 16px' }}>
                 <div className="flex items-start justify-between gap-1">
-                  <span className="text-[16px] font-bold leading-snug">
-                    {l.meta ? l.meta.title : 'Sans méta-objectif'}
-                  </span>
+                  {l.meta ? (
+                    <Link
+                      to="/meta-objectifs/$id"
+                      params={{ id: l.meta.id }}
+                      className="text-[16px] font-bold leading-snug"
+                    >
+                      {l.meta.title}
+                    </Link>
+                  ) : (
+                    <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
+                  )}
                   {l.meta && (
                     <button
                       type="button"
@@ -1026,11 +1050,68 @@ function ObjectivesMapView({
   );
 }
 
-/** « + Objectif » from Planifier › Trimestre: same creation drawer as on the Objectifs page. */
-export function ObjectivePanelForQuarter({ onClose }: { onClose: () => void }) {
-  const metas = useQuery({
-    queryKey: ['meta-objectives'],
-    queryFn: () => get<MetaObjective[]>('/meta-objectives'),
+/** Méta-objectif page: description under the title (the heart of the long-term goal), its objectives. */
+export function MetaObjectivePage({ id }: { id: string }) {
+  const meta = useQuery({
+    queryKey: ['meta-objective', id],
+    queryFn: () => get<MetaObjective>(`/meta-objectives/${id}`),
   });
-  return <ObjectivePanel open onClose={onClose} metas={metas.data ?? []} />;
+  const map = useQuery({
+    queryKey: ['objectives-map', true],
+    queryFn: () => get<ObjectivesMap>('/objectives/map?includeClosed=true'),
+  });
+  const [editing, setEditing] = useState(false);
+  const saveDescription = useAction(
+    (description: string) => patch(`/meta-objectives/${id}`, { description }),
+    { toast: 'Description enregistrée.' },
+  );
+  if (meta.isError) return <ErrorBox error={meta.error} />;
+  if (!meta.data) return <Loading />;
+  const m = meta.data;
+  const objectives = map.data?.lanes.find((l) => l.meta?.id === id)?.objectives ?? [];
+  const open = objectives.filter((o) => o.status === 'active' || o.status === 'paused');
+  const avg = open.length ? Math.round(open.reduce((a, o) => a + o.progressPct, 0) / open.length) : 0;
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <Breadcrumb items={[{ label: 'Objectifs', to: '/objectifs' }, { label: m.title }]} />
+        <PageHeader
+          eyebrow={`Méta-objectif${m.horizonDate ? ` · horizon ${fmtDate(m.horizonDate)}` : ''} · ${STATUS_LABEL[m.status]}`}
+          title={m.title}
+          actions={
+            <button type="button" className="btn" onClick={() => setEditing(true)}>
+              <PencilIcon /> Modifier
+            </button>
+          }
+        />
+      </div>
+      <DescriptionBlock
+        text={m.description}
+        lines={16}
+        saving={saveDescription.isPending}
+        emptyLabel="Pas encore de description : pourquoi ce cap compte, à quoi ressemble la réussite, l'horizon."
+        onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
+      />
+      <section className="bin flex flex-col gap-3">
+        <div className="flex flex-wrap items-baseline gap-2.5">
+          <h2 className="h2-bin">Objectifs</h2>
+          <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+            {open.length} ouvert{open.length > 1 ? 's' : ''} · avancement moyen {avg} %
+          </span>
+        </div>
+        {objectives.length === 0 && <Empty>Aucun objectif rattaché. Rattache-en depuis leur fiche.</Empty>}
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))' }}>
+          {objectives.map((o) => (
+            <div key={o.id} className="flex flex-col gap-1">
+              <span className="label-caps px-1" style={{ fontSize: 11 }}>
+                {quarterLabel(o.quarter)}
+              </span>
+              <MapObjective o={o} />
+            </div>
+          ))}
+        </div>
+      </section>
+      {editing && <MetaPanel open meta={m} onClose={() => setEditing(false)} />}
+    </div>
+  );
 }

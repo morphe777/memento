@@ -3,13 +3,19 @@
 // between quarters (POST /objectives/{id}/quarter).
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { Empty, ErrorBox, InfoTip, Loading, PageHeader, Section } from '../components/ui.tsx';
+import {
+  AiProposeButton,
+  Empty,
+  ErrorBox,
+  InfoTip,
+  Loading,
+  PageHeader,
+  Section,
+} from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { QuarterPlanningPage } from '../lib/types.ts';
-import { ObjectivePanelForQuarter } from './objectives.tsx';
 
 type Row = QuarterPlanningPage['chosen'][number];
 const label = (q: string) => `T${q.slice(-1)} ${q.slice(0, 4)}`;
@@ -30,7 +36,6 @@ export function QuarterPlanPage({ trimestre, tabs }: { trimestre?: string; tabs:
 
 function QuarterPlan({ page, tabs }: { page: QuarterPlanningPage; tabs: React.ReactNode }) {
   const navigate = useNavigate();
-  const [creating, setCreating] = useState(false);
   const move = useAction((v: { id: string; quarter: string }) =>
     post(`/objectives/${v.id}/quarter`, { quarter: v.quarter }),
   );
@@ -64,11 +69,7 @@ function QuarterPlan({ page, tabs }: { page: QuarterPlanningPage; tabs: React.Re
             </span>
           }
           title="Planifier le trimestre"
-          actions={
-            <button type="button" className="btn" onClick={() => setCreating(true)}>
-              + Objectif
-            </button>
-          }
+          actions={<AiProposeButton />}
         />
       </div>
       <div className="flex flex-wrap gap-6 items-start">
@@ -166,7 +167,7 @@ function QuarterPlan({ page, tabs }: { page: QuarterPlanningPage; tabs: React.Re
           </Section>
           <Section
             title="Méta-objectifs"
-            info="Coché automatiquement quand au moins un objectif du trimestre sert ce méta-objectif."
+            info="Tous tes méta-objectifs actifs, pour information : chacun se coche tout seul dès qu'un objectif du trimestre le sert. Aucune obligation de tous les couvrir."
           >
             {page.metas.length === 0 && (
               <span className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
@@ -220,7 +221,6 @@ function QuarterPlan({ page, tabs }: { page: QuarterPlanningPage; tabs: React.Re
           </Section>
         </aside>
       </div>
-      {creating && <ObjectivePanelForQuarter onClose={() => setCreating(false)} />}
     </div>
   );
 }

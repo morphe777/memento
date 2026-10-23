@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
 import { useSortSensors } from '../components/tasks.tsx';
 import {
@@ -627,7 +627,7 @@ function DomainsConfig() {
       <Section
         title="Domaines de vie"
         aside="glisser pour changer l'ordre de priorité"
-        info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. La description dit ce qui entre dans le domaine : l'IA s'en sert pour classer les projets. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
+        info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. La description de chaque domaine se rédige sur sa page (Domaines). Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
       >
         <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
           Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
@@ -699,7 +699,6 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
     weight: d.weight,
     colorLight: d.colorLight,
     colorDark: d.colorDark,
-    description: d.description,
   });
   useEffect(
     () =>
@@ -708,7 +707,6 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
         weight: d.weight,
         colorLight: d.colorLight,
         colorDark: d.colorDark,
-        description: d.description,
       }),
     [d],
   );
@@ -760,13 +758,6 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
       >
         {d.archived ? 'Désarchiver' : 'Archiver'}
       </button>
-      <textarea
-        value={f.description}
-        onChange={(e) => setF({ ...f, description: e.target.value })}
-        aria-label={`Description du domaine ${d.name}`}
-        placeholder="Ce qui entre dans ce domaine, et ce qui n'y entre pas (l'IA s'en sert pour classer les projets)."
-        style={{ flex: '1 1 100%', minHeight: 64, fontSize: 14 }}
-      />
     </>
   );
 }
@@ -784,6 +775,12 @@ function GroupsConfig() {
     toast: 'Groupe enregistré.',
   });
   const remove = useAction((id: string) => del(`/groups/${id}`), { toast: 'Groupe supprimé.' });
+  const [sortBy, setSortBy] = useState<'domain' | 'alpha'>('domain');
+  const rank = (id: string) => dl.get(id)?.priorityRank ?? 99;
+  const sorted = [...(groups.data ?? [])].sort(
+    (a, b) =>
+      (sortBy === 'domain' ? rank(a.domainId) - rank(b.domainId) : 0) || a.name.localeCompare(b.name, 'fr'),
+  );
   return (
     <>
       <Section
@@ -791,46 +788,72 @@ function GroupsConfig() {
         aside="rangement libre · un groupe = un domaine"
         info="Les groupes rangent les projets. Chaque groupe appartient à un domaine, et un projet tire ses domaines de ses groupes. Un groupe qui contient encore des projets ne peut pas être supprimé."
       >
+        <div className="self-start">
+          <Tabs
+            value={sortBy}
+            onChange={setSortBy}
+            options={[
+              { value: 'domain', label: 'Par domaine' },
+              { value: 'alpha', label: 'Alphabétique' },
+            ]}
+          />
+        </div>
         <div className="card overflow-hidden">
-          {(groups.data ?? []).map((g) => (
-            <div
-              key={g.id}
-              className="flex flex-wrap items-center gap-3"
-              style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
-            >
-              <span className="dot" style={{ background: dl.color(g.domainId) }} />
-              <input
-                defaultValue={g.name}
-                aria-label="Nom du groupe"
-                onBlur={(e) =>
-                  e.target.value !== g.name && update.mutate({ id: g.id, body: { name: e.target.value } })
-                }
-                style={{ flex: '1 1 180px' }}
-              />
-              <select
-                value={g.domainId}
-                onChange={(e) => update.mutate({ id: g.id, body: { domainId: e.target.value } })}
-                aria-label="Domaine"
+          {sorted.map((g, i) => (
+            <Fragment key={g.id}>
+              {sortBy === 'domain' && g.domainId !== sorted[i - 1]?.domainId && (
+                <div
+                  className="flex items-center gap-2 text-[12px] font-semibold uppercase"
+                  style={{
+                    padding: '8px 12px',
+                    letterSpacing: '0.08em',
+                    color: 'var(--text-muted)',
+                    background: 'var(--surface-2)',
+                    borderBottom: '1px solid var(--divider)',
+                  }}
+                >
+                  <span className="dot" style={{ background: dl.color(g.domainId) }} />
+                  {dl.name(g.domainId)}
+                </div>
+              )}
+              <div
+                className="flex flex-wrap items-center gap-3"
+                style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
               >
-                {dl.domains.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-              <span className="text-[12px]" style={{ color: 'var(--text-faint)', width: 90 }}>
-                {g.projectCount} projet(s)
-              </span>
-              <button
-                type="button"
-                className="btn btn-sm btn-ghost"
-                disabled={g.projectCount > 0}
-                title={g.projectCount ? 'Contient des projets' : 'Supprimer'}
-                onClick={() => remove.mutate(g.id)}
-              >
-                Supprimer
-              </button>
-            </div>
+                <span className="dot" style={{ background: dl.color(g.domainId) }} />
+                <input
+                  defaultValue={g.name}
+                  aria-label="Nom du groupe"
+                  onBlur={(e) =>
+                    e.target.value !== g.name && update.mutate({ id: g.id, body: { name: e.target.value } })
+                  }
+                  style={{ flex: '1 1 180px' }}
+                />
+                <select
+                  value={g.domainId}
+                  onChange={(e) => update.mutate({ id: g.id, body: { domainId: e.target.value } })}
+                  aria-label="Domaine"
+                >
+                  {dl.domains.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-[12px]" style={{ color: 'var(--text-faint)', width: 90 }}>
+                  {g.projectCount} projet(s)
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-ghost"
+                  disabled={g.projectCount > 0}
+                  title={g.projectCount ? 'Contient des projets' : 'Supprimer'}
+                  onClick={() => remove.mutate(g.id)}
+                >
+                  Supprimer
+                </button>
+              </div>
+            </Fragment>
           ))}
         </div>
       </Section>

@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
+  AiProposeButton,
   DomainBars,
   Duration,
   ErrorBox,
@@ -86,7 +87,6 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
   const proposeAction = useAction(() => post(`/week-plans/${w}/propose`), {
     toast: 'Proposition du moteur prête.',
   });
-  const validate = useAction(() => post(`/week-plans/${w}/validate`), { toast: 'Semaine validée.' });
 
   const toggle = (taskId: string, kind: 'week' | 'bonus') => {
     const current = page.items.map((i) => ({ taskId: i.taskId, kind: i.kind }));
@@ -131,6 +131,23 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
             </span>
           }
           title="Planifier la semaine"
+          actions={
+            <>
+              {!validated && (!page.plan?.proposedAt || settings.data?.['ui.show_recalculate']) && (
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ minHeight: 44 }}
+                  onClick={() => proposeAction.mutate(undefined)}
+                  disabled={proposeAction.isPending}
+                  title="Recalcule la proposition avec les données du moment (tâches ajoutées ou faites, budget, priorités). Tes choix sont conservés."
+                >
+                  {page.plan?.proposedAt ? 'Recalculer' : 'Proposer'}
+                </button>
+              )}
+              <AiProposeButton />
+            </>
+          }
         />
       </div>
 
@@ -176,49 +193,6 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         </div>
 
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
-          {/* Actions over the Budget card, same width (user request 23/10/2026). */}
-          <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
-            <button
-              type="button"
-              className="btn btn-disabled-v2"
-              disabled
-              aria-disabled="true"
-              title="v2 : une IA (via le MCP) proposera le plan en expliquant ses choix. Aujourd'hui, seul le moteur propose."
-              style={{ minHeight: 44 }}
-            >
-              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
-                <path
-                  d="M8 1.5l1.6 4.2 4.4.3-3.4 2.8 1.1 4.3L8 10.7l-3.7 2.4 1.1-4.3L2 6l4.4-.3z"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.3"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              Proposer avec l'IA
-            </button>
-            {!validated && (!page.plan?.proposedAt || settings.data?.['ui.show_recalculate']) && (
-              <button
-                type="button"
-                className="btn"
-                style={{ minHeight: 44 }}
-                onClick={() => proposeAction.mutate(undefined)}
-                disabled={proposeAction.isPending}
-                title="Recalcule la proposition avec les données du moment (tâches ajoutées ou faites, budget, priorités). Tes choix sont conservés."
-              >
-                {page.plan?.proposedAt ? 'Recalculer' : 'Proposer'}
-              </button>
-            )}
-            <button
-              type="button"
-              className="btn btn-primary"
-              style={{ minHeight: 44, padding: '0 12px' }}
-              onClick={() => validate.mutate(undefined)}
-              disabled={validate.isPending}
-            >
-              {validated ? '✓ Semaine validée' : 'Valider la semaine'}
-            </button>
-          </div>
           <section className="card flex flex-col gap-2.5" style={{ padding: '18px 20px' }}>
             <div className="flex justify-between items-baseline">
               <h2 className="h2">Budget</h2>
