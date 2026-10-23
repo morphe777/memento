@@ -1,6 +1,7 @@
 // Mémento REST API (dossier de dev §8). The only entry point to business logic (F-26): routes are thin
 // adapters around @memento/domain services.
 import { existsSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
 import fastifyRateLimit from '@fastify/rate-limit';
@@ -18,6 +19,8 @@ import {
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import * as A from './auth.ts';
+
+const GUIDE_FILE = resolve(import.meta.dirname, '../../../docs/api/guide-ia.md');
 
 export interface AppOptions {
   db: Db;
@@ -124,7 +127,12 @@ export async function buildApp(opts: AppOptions) {
       const tag = (t: string) => ({ tags: [t] });
 
       // ---------- Health, auth ----------
-      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: '0.1.0' }));
+      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: '0.9.0' }));
+      // Guide for AI clients (docs/api/guide-ia.md), also served by the MCP tool get_guide.
+      r.get('/guide', { schema: tag('Système') }, async () => ({
+        format: 'markdown',
+        markdown: await readFile(GUIDE_FILE, 'utf8'),
+      }));
       api.get('/openapi.json', { schema: { hide: true } }, async () => app.swagger());
 
       r.post(
@@ -441,6 +449,10 @@ export async function buildApp(opts: AppOptions) {
         D.listTasks(ctx(req), req.query),
       );
       r.get('/inbox', { schema: tag('Tâches') }, async (req) => D.listInbox(ctx(req)));
+      r.get('/experiences', { schema: tag('Expériences') }, async (req) => D.getExperiencesPage(ctx(req)));
+      r.post('/experiences', { schema: { ...tag('Expériences'), body: D.experienceIdea } }, async (req) =>
+        D.addExperienceIdea(ctx(req), req.body),
+      );
       r.get('/tasks/board', { schema: { ...tag('Tâches'), querystring: D.boardQuery } }, async (req) =>
         D.listBoardTasks(ctx(req), req.query),
       );

@@ -2,6 +2,7 @@ import { openDb, runMigrations, schema } from '@memento/db';
 import { describe, expect, it } from 'vitest';
 import type { DomainError } from '../src/errors.ts';
 import {
+  addExperienceIdea,
   addProjectDependency,
   addTaskDependency,
   buildEngineInput,
@@ -19,6 +20,7 @@ import {
   deleteTask,
   generateReport,
   getExecution,
+  getExperiencesPage,
   getMonthPlanningPage,
   getObjective,
   getObjectivesMap,
@@ -656,6 +658,27 @@ describe('D-53 importance d’un projet', () => {
       scoreCandidates(buildEngineInput(ctx, '2026-W45')).map((s) => [s.taskId, s.parts.V]),
     );
     expect(after.get(ht[0].id)! / after.get(lt[0].id)!).toBeCloseTo(2);
+  });
+});
+
+describe('D-54 Expériences', () => {
+  it('target over the window, memories, planned and reserve', () => {
+    const ctx = makeCtx(); // Friday 23 Oct 2026, W43; window 4 weeks from Monday 28 Sep
+    const old = createTask(ctx, { title: 'Escalade', durationMin: 120, isExperience: true });
+    ctx.setNow('2026-09-10T08:00:00.000Z');
+    completeTask(ctx, old.id);
+    ctx.setNow('2026-10-23T08:00:00.000Z');
+    const recent = createTask(ctx, { title: 'Concert', durationMin: 120, isExperience: true });
+    completeTask(ctx, recent.id);
+    createTask(ctx, { title: 'Parapente', durationMin: 120, isExperience: true, dueDate: '2026-11-07' });
+    const idea = addExperienceIdea(ctx, { title: 'Plongée' });
+    expect(idea.isExperience).toBe(true);
+    const page = getExperiencesPage(ctx);
+    expect(page.doneInWindow).toBe(1);
+    expect(page.lived.map((t) => t.title)).toEqual(['Concert', 'Escalade']);
+    expect(page.planned.map((t) => t.title)).toEqual(['Parapente']);
+    expect(page.reserve.map((t) => t.title)).toEqual(['Plongée']);
+    expect(page.months.at(-1)).toEqual({ month: '2026-10', count: 1 });
   });
 });
 

@@ -63,6 +63,8 @@ describe('MCP L6', () => {
     const names = body.result.tools.map((t: { name: string }) => t.name);
     for (const n of [
       'search',
+      'get_guide',
+      'get_experiences',
       'get_context',
       'create_idea',
       'create_project',
@@ -97,6 +99,11 @@ describe('MCP L6', () => {
     expect((await api.inject({ url: '/api/v1/changes?actor=ai', headers: { cookie } })).json()).toHaveLength(
       0,
     );
+  });
+
+  it('get_guide returns the AI guide as Markdown', async () => {
+    const res = (await rpc('tools/call', { name: 'get_guide', arguments: {} })).body;
+    expect(res.result.content[0].text).toMatch(/^# Mémento — guide de l'API pour une IA/);
   });
 
   it('business errors come back as tool errors with the readable code', async () => {
