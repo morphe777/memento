@@ -37,3 +37,4 @@ export type BoardTask = ReturnType<typeof D.listBoardTasks>[number];
 export type ObjectivesMap = ReturnType<typeof D.getObjectivesMap>;
 export type MonthPlanningPage = ReturnType<typeof D.getMonthPlanningPage>;
 export type InboxPage = ReturnType<typeof D.listInbox>;
+export type QuarterPlanningPage = ReturnType<typeof D.getQuarterPlanningPage>;

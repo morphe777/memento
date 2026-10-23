@@ -411,12 +411,13 @@ export function Breadcrumb({
   );
 }
 
-const SEARCH_GROUPS: { key: keyof SearchResult; label: string }[] = [
-  { key: 'objective', label: 'Objectifs' },
-  { key: 'project', label: 'Projets' },
-  { key: 'idea', label: 'Idées' },
-  { key: 'task', label: 'Tâches' },
-  { key: 'inbox', label: 'Inbox' },
+// Each kind of result has its own colour and badge, so that the blocks are told apart at a glance.
+const SEARCH_GROUPS: { key: keyof SearchResult; label: string; badge: string; color: string }[] = [
+  { key: 'objective', label: 'Objectifs', badge: 'Objectif', color: '#6B4FD8' },
+  { key: 'project', label: 'Projets', badge: 'Projet', color: '#2F6FDB' },
+  { key: 'idea', label: 'Idées', badge: 'Idée', color: '#C98A12' },
+  { key: 'task', label: 'Tâches', badge: 'Tâche', color: '#2F8F62' },
+  { key: 'inbox', label: 'Inbox', badge: 'Inbox', color: '#7A7A75' },
 ];
 
 function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -513,9 +514,13 @@ function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }
             const rows = (res.data?.[g.key] ?? []) as { id: string; title: string }[];
             if (!rows.length) return null;
             return (
-              <div key={g.key} className="py-2">
-                <div className="label-caps px-5 py-1" style={{ fontSize: 11 }}>
-                  {g.label}
+              <div key={g.key} className="py-2" style={{ borderTop: '1px solid var(--divider)' }}>
+                <div
+                  className="label-caps px-5 py-1 flex items-center gap-2"
+                  style={{ fontSize: 11, color: g.color }}
+                >
+                  <span className="dot" style={{ background: g.color }} />
+                  {g.label} · {rows.length}
                 </div>
                 {rows.map((r) => {
                   i++;
@@ -526,10 +531,26 @@ function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }
                       type="button"
                       onMouseEnter={() => setCursor(idx)}
                       onClick={() => go(flat[idx])}
-                      className="w-full text-left border-0 px-5 text-[15px] cursor-pointer"
-                      style={{ minHeight: 40, background: cursor === idx ? 'var(--bin)' : 'transparent' }}
+                      className="w-full flex items-center gap-3 text-left border-0 px-5 text-[15px] cursor-pointer"
+                      style={{
+                        minHeight: 40,
+                        background: cursor === idx ? 'var(--bin)' : 'transparent',
+                        boxShadow: cursor === idx ? `inset 3px 0 0 ${g.color}` : undefined,
+                      }}
                     >
-                      {r.title}
+                      <span
+                        className="text-[11px] font-semibold rounded-full flex-none"
+                        style={{
+                          color: g.color,
+                          border: `1px solid ${g.color}`,
+                          padding: '1px 8px',
+                          minWidth: 64,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {g.badge}
+                      </span>
+                      <span className="min-w-0 truncate">{r.title}</span>
                     </button>
                   );
                 })}

@@ -53,14 +53,17 @@ const weekRoute = route('/semaine', WeekPage);
 const planRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planifier',
-  validateSearch: (s: Record<string, unknown>): { semaine?: string; vue?: 'mois'; mois?: string } => ({
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { semaine?: string; vue?: 'mois' | 'trimestre'; mois?: string; trimestre?: string } => ({
     semaine: str(s.semaine),
-    vue: s.vue === 'mois' ? 'mois' : undefined,
+    vue: s.vue === 'mois' || s.vue === 'trimestre' ? s.vue : undefined,
     mois: str(s.mois),
+    trimestre: str(s.trimestre),
   }),
   component: function Plan() {
-    const { semaine, vue, mois } = planRoute.useSearch();
-    return <PlanPage semaine={semaine} vue={vue} mois={mois} />;
+    const { semaine, vue, mois, trimestre } = planRoute.useSearch();
+    return <PlanPage semaine={semaine} vue={vue} mois={mois} trimestre={trimestre} />;
   },
 });
 const inboxRoute = createRoute({

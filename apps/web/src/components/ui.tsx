@@ -1,6 +1,7 @@
 // Shared components (dossier de dev §11), values copied from the validated mockups.
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { fmtMin } from '../lib/format.ts';
 import { useDomainLookup } from '../lib/hooks.ts';
 
@@ -394,11 +395,14 @@ export const SAVE_HINT = 'Enregistré en fermant · Échap pour annuler';
 
 /**
  * Small circled « i » that explains a setting (hover, focus or tap). A span, not a button, so that it is never
- * the control targeted by an enclosing <label>.
+ * the control targeted by an enclosing <label>. The bubble is rendered in a portal on top of everything
+ * (drawers included) and kept inside the viewport.
  */
-export function InfoTip({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {
+export function InfoTip({ children }: { children: ReactNode; align?: 'left' | 'right' }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLSpanElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
@@ -411,6 +415,17 @@ export function InfoTip({ children, align = 'left' }: { children: ReactNode; ali
       document.removeEventListener('pointerdown', close);
       document.removeEventListener('keydown', close);
     };
+  }, [open]);
+  useLayoutEffect(() => {
+    if (!open || !ref.current || !pop.current) return setPos(null);
+    const r = ref.current.getBoundingClientRect();
+    const w = pop.current.offsetWidth;
+    const h = pop.current.offsetHeight;
+    const margin = 8;
+    const left = Math.min(Math.max(margin, r.left - 8), window.innerWidth - w - margin);
+    const below = r.bottom + 6;
+    const top = below + h > window.innerHeight - margin ? Math.max(margin, r.top - h - 6) : below;
+    setPos({ left, top });
   }, [open]);
   return (
     <span
@@ -441,11 +456,18 @@ export function InfoTip({ children, align = 'left' }: { children: ReactNode; ali
         <circle cx="8" cy="5" r="0.95" fill="currentColor" />
         <path d="M8 7.3v4.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
       </svg>
-      {open && (
-        <span role="tooltip" className={`info-pop ${align === 'right' ? 'align-right' : ''}`}>
-          {children}
-        </span>
-      )}
+      {open &&
+        createPortal(
+          <span
+            ref={pop}
+            role="tooltip"
+            className="info-pop"
+            style={{ left: pos?.left ?? -9999, top: pos?.top ?? -9999 }}
+          >
+            {children}
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }

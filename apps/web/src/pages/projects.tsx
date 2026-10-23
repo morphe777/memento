@@ -29,7 +29,7 @@ import {
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { toast, useAction, useDomainLookup, useGroups, useMe } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
 import type { InboxPage as InboxPageData, Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
 import { TaskBoard, TaskTable, type TaskView, useBoardTasks } from './tasks.tsx';
 import { Chevron } from './week.tsx';
@@ -87,7 +87,11 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
 
 export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: View; filtre?: string }) {
   const navigate = useNavigate();
-  const view: View = filtre === 'a-completer' ? 'list' : (vue ?? 'tree');
+  const settings = useSettings();
+  const view: View =
+    filtre === 'a-completer' ? 'list' : (vue ?? settings.data?.['ui.projects_default_view'] ?? 'tree');
+  const [domainFilter, setDomainFilter] = useState<string[]>([]);
+  const byDomain = (p: Project) => !domainFilter.length || p.domainIds.some((d) => domainFilter.includes(d));
   const [status, setStatus] = useState('active,ready,paused');
   const incomplete = useQuery({
     queryKey: ['projects', 'ready'],
@@ -112,7 +116,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
   const list =
     filtre === 'a-completer'
       ? (incomplete.data ?? [])
-      : (q.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe));
+      : (q.data ?? []).filter((p) => (!groupe || p.groupIds.includes(groupe)) && byDomain(p));
   const nIncomplete = incomplete.data?.length ?? 0;
   return (
     <div className="flex flex-col gap-6">
@@ -187,13 +191,62 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
           </>
         )}
       </div>
+      {filtre !== 'a-completer' && <DomainFilter value={domainFilter} onChange={setDomainFilter} />}
       {q.isError && <ErrorBox error={q.error} />}
       {view === 'tree' && <ProjectTree projects={list} />}
       {view === 'list' && <ProjectTable projects={list} />}
       {view === 'kanban' && (
-        <Kanban projects={(all.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe))} />
+        <Kanban
+          projects={(all.data ?? []).filter((p) => (!groupe || p.groupIds.includes(groupe)) && byDomain(p))}
+        />
       )}
       <NewProjectPanel open={creating} onClose={() => setCreating(false)} defaultGroup={groupe} />
+    </div>
+  );
+}
+
+/** Multi-select domain filter (several domains at once; none selected = all). */
+function DomainFilter({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const dl = useDomainLookup();
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par domaine">
+      <button
+        type="button"
+        aria-pressed={!value.length}
+        onClick={() => onChange([])}
+        className="rounded-full text-[13px] cursor-pointer"
+        style={{
+          minHeight: 32,
+          padding: '0 12px',
+          border: `1px solid ${value.length ? 'var(--border)' : 'var(--text)'}`,
+          background: value.length ? 'var(--surface)' : 'var(--bin)',
+          fontWeight: value.length ? 400 : 600,
+        }}
+      >
+        Tous les domaines
+      </button>
+      {dl.domains.map((d) => {
+        const on = value.includes(d.id);
+        return (
+          <button
+            key={d.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== d.id) : [...value, d.id])}
+            className="flex items-center gap-1.5 rounded-full text-[13px] cursor-pointer"
+            style={{
+              minHeight: 32,
+              padding: '0 12px',
+              border: `1px solid ${on ? dl.colorOf(d) : 'var(--border)'}`,
+              background: on ? 'var(--bin)' : 'var(--surface)',
+              fontWeight: on ? 600 : 400,
+            }}
+          >
+            <span className="dot" style={{ background: dl.colorOf(d) }} />
+            {d.name}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -353,8 +406,12 @@ function Kanban({ projects }: { projects: Project[] }) {
   );
 }
 
+/** Cards shown per Kanban column before « + N autres ». */
+const KANBAN_VISIBLE = 6;
+
 function KanbanColumn({ id, label, projects }: { id: string; label: string; projects: Project[] }) {
   const { setNodeRef, isOver } = useDroppable({ id });
+  const [showAll, setShowAll] = useState(false);
   return (
     <section
       ref={setNodeRef}
@@ -370,9 +427,21 @@ function KanbanColumn({ id, label, projects }: { id: string; label: string; proj
           {projects.length}
         </span>
       </div>
-      {projects.map((p) => (
+      {(showAll ? projects : projects.slice(0, KANBAN_VISIBLE)).map((p) => (
         <KanbanCard key={p.id} p={p} />
       ))}
+      {projects.length > KANBAN_VISIBLE && (
+        <button
+          type="button"
+          className="flex items-center gap-2 border-0 bg-transparent text-left cursor-pointer text-[13px]"
+          style={{ color: 'var(--text-muted)', minHeight: 32, padding: '0 4px' }}
+          aria-expanded={showAll}
+          onClick={() => setShowAll((v) => !v)}
+        >
+          <Chevron open={showAll} size={12} />
+          {showAll ? 'Réduire' : `+ ${projects.length - KANBAN_VISIBLE} autres`}
+        </button>
+      )}
     </section>
   );
 }
@@ -533,14 +602,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
             </span>
           }
           title={p.title}
-          actions={
-            <>
-              <ProjectActions p={p} />
-              <button type="button" className="btn" onClick={() => setEditing(true)}>
-                <PencilIcon /> Modifier
-              </button>
-            </>
-          }
+          actions={<ProjectActions p={p} />}
         />
       </div>
       <DescriptionBlock
@@ -603,7 +665,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
           </div>
         </section>
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 300px', maxWidth: 420 }}>
-          <ProjectInfo p={p} />
+          <ProjectInfo p={p} onEdit={() => setEditing(true)} />
           <Section>
             <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
           </Section>
@@ -619,7 +681,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
 }
 
 /** Read-only facts of the project (edit through « Modifier »). */
-function ProjectInfo({ p }: { p: ProjectDetail }) {
+function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
   const dl = useDomainLookup();
   const me = useMe();
   const today = me.data?.today;
@@ -641,17 +703,28 @@ function ProjectInfo({ p }: { p: ProjectDetail }) {
   );
   const ready = p.readiness.every((r) => r.ok);
   return (
-    <section className="card" style={{ padding: '6px 18px 8px' }}>
+    <section className="card relative" style={{ padding: '6px 48px 8px 18px' }}>
+      <button
+        type="button"
+        className="icon-btn absolute"
+        style={{ top: 8, right: 8 }}
+        aria-label="Modifier le projet"
+        title="Modifier le projet"
+        onClick={onEdit}
+      >
+        <PencilIcon />
+      </button>
       {(p.status === 'idea' || p.status === 'ready' || p.status === 'paused') && (
         <div
           className="flex flex-col gap-1.5"
           style={{ padding: '12px 0', borderBottom: '1px solid var(--divider)' }}
         >
           <span className="label-caps flex items-center gap-1.5" style={{ fontSize: 11 }}>
-            Pour devenir projet du mois
+            Projet complet ?
             <InfoTip>
-              Une idée passe « prêt » avec « Promouvoir », même incomplète. Pour devenir projet du mois
-              (actif), tout doit être coché. Les dates sont facultatives : le mois sert de limite.
+              Ce qu'un projet doit avoir pour être complet. Une idée peut passer « prêt » sans l'être : elle
+              est alors signalée « à compléter ». Seul un projet complet peut devenir projet du mois (actif).
+              Les dates sont facultatives : le mois sert de limite.
             </InfoTip>
           </span>
           {p.readiness.map((r) => (
