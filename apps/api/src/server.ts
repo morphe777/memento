@@ -1,4 +1,5 @@
-import { openDb, runMigrations } from '@memento/db';
+import { dirname } from 'node:path';
+import { openDb, resolveDbFile, runMigrations } from '@memento/db';
 import { seed } from '@memento/domain';
 import { buildApp } from './app.ts';
 
@@ -10,6 +11,7 @@ const app = await buildApp({
   sqlite,
   cookieSecure: process.env.MEMENTO_COOKIE_SECURE === 'true',
   logger: true,
+  backupDir: dirname(resolveDbFile()),
 });
 const port = Number(process.env.MEMENTO_API_PORT ?? 4500);
 const host = process.env.MEMENTO_HOST ?? '127.0.0.1';

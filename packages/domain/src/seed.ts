@@ -16,6 +16,13 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
           .values({ id: newId(), ...d, priorityRank: i + 1, weight: defaultWeight(i + 1) })
           .run();
         domains++;
+      } else if (!exists.description) {
+        // D-49: propose a description for domains that have none yet (never overwrites).
+        ctx.db
+          .update(schema.domain)
+          .set({ description: d.description })
+          .where(eq(schema.domain.id, exists.id))
+          .run();
       }
     });
     for (const [domainName, names] of Object.entries(SEED_GROUPS)) {
