@@ -14,12 +14,14 @@ import {
   PageHeader,
   Panel,
   SAVE_HINT,
+  Tabs,
   useDomainRows,
 } from '../components/ui.tsx';
 import { get, patch, post, put } from '../lib/api.ts';
 import { fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
-import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
+import { useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
 import type { PageTask, PlanningPage } from '../lib/types.ts';
+import { MonthPlanPage } from './plan-month.tsx';
 import { Chevron } from './week.tsx';
 
 /** Default week to plan: the current one Monday–Thursday, the next one from Friday (display choice only). */
@@ -28,7 +30,25 @@ export function defaultPlanningWeek(currentWeek: string, today: string) {
   return day === 5 || day === 6 || day === 0 ? shiftIsoWeek(currentWeek, 1) : currentWeek;
 }
 
-export function PlanPage({ semaine }: { semaine?: string }) {
+export function PlanPage({ semaine, vue, mois }: { semaine?: string; vue?: 'mois'; mois?: string }) {
+  const navigate = useNavigate();
+  const tabs = (
+    <div>
+      <Tabs
+        value={vue ?? 'semaine'}
+        onChange={(v) => navigate({ to: '/planifier', search: v === 'mois' ? { vue: 'mois' } : {} })}
+        options={[
+          { value: 'semaine', label: 'Semaine' },
+          { value: 'mois', label: 'Mois' },
+        ]}
+      />
+    </div>
+  );
+  if (vue === 'mois') return <MonthPlanPage mois={mois} tabs={tabs} />;
+  return <WeekPlanPage semaine={semaine} tabs={tabs} />;
+}
+
+function WeekPlanPage({ semaine, tabs }: { semaine?: string; tabs: React.ReactNode }) {
   const me = useMe();
   const week = semaine ?? (me.data ? defaultPlanningWeek(me.data.currentWeek, me.data.today) : undefined);
   const q = useQuery({
@@ -38,10 +58,11 @@ export function PlanPage({ semaine }: { semaine?: string }) {
   });
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data || !week) return <Loading />;
-  return <Plan page={q.data} />;
+  return <Plan page={q.data} tabs={tabs} />;
 }
 
-function Plan({ page }: { page: PlanningPage }) {
+function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
+  const settings = useSettings();
   const navigate = useNavigate();
   const dl = useDomainLookup();
   const w = page.isoWeek;
@@ -69,7 +90,8 @@ function Plan({ page }: { page: PlanningPage }) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
+      <div className="flex flex-col gap-3">
+        {tabs}
         <Breadcrumb
           items={[{ label: 'Planifier', to: '/planifier' }, { label: `Semaine ${weekNumber(w)}` }]}
         />
@@ -117,7 +139,7 @@ function Plan({ page }: { page: PlanningPage }) {
                 </svg>
                 Proposer avec l'IA · v2
               </button>
-              {!validated && (
+              {!validated && (!page.plan?.proposedAt || settings.data?.['ui.show_recalculate']) && (
                 <button
                   type="button"
                   className="btn"
@@ -166,7 +188,7 @@ function Plan({ page }: { page: PlanningPage }) {
                   {g.key === 'inbox'
                     ? 'Inbox vide.'
                     : g.key === 'month'
-                      ? 'Aucun projet du mois : coche « projet du mois » sur un projet actif.'
+                      ? 'Aucun projet du mois : choisis-les dans Planifier › Mois.'
                       : 'Rien d’autre à proposer.'}
                 </div>
               )}

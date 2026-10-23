@@ -51,6 +51,7 @@ export function shiftIsoWeek(isoWeek: string, n: number): string {
 
 export const STATUS_LABEL: Record<string, string> = {
   idea: 'Idée',
+  ready: 'Prêt',
   active: 'Actif',
   paused: 'En pause',
   done: 'Terminé',

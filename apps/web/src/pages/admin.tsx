@@ -240,7 +240,13 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
     />
   );
   const keys: Record<string, (keyof Settings)[]> = {
-    budget: ['budget.weekly_min', 'theme', 'ui.breadcrumb'],
+    budget: [
+      'budget.weekly_min',
+      'theme',
+      'ui.breadcrumb',
+      'ui.show_recalculate',
+      'inbox.recurring_horizon_days',
+    ],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
     alertes: [
       'guards.window_weeks',
@@ -272,6 +278,30 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               onChange={(e) => setS({ ...s, 'budget.weekly_min': Math.round(Number(e.target.value) * 60) })}
             />
           </Field>
+          <Field
+            label="Inbox : récurrentes « plus tard » au-delà de (jours)"
+            info="Une tâche récurrente dont la deadline est plus loin que ce nombre de jours quitte la liste principale de l'Inbox et va dans l'encadré « Récurrentes plus tard »."
+          >
+            <input
+              type="number"
+              min={0}
+              max={365}
+              value={s['inbox.recurring_horizon_days']}
+              onChange={(e) => setS({ ...s, 'inbox.recurring_horizon_days': Number(e.target.value) })}
+            />
+          </Field>
+          <label className="flex items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              checked={s['ui.show_recalculate']}
+              onChange={(e) => setS({ ...s, 'ui.show_recalculate': e.target.checked })}
+            />
+            Afficher le bouton « Recalculer » dans Planifier
+            <InfoTip>
+              Refait la proposition du moteur avec les données du moment (tes choix sont gardés). Masqué par
+              défaut : la proposition par l'IA le remplacera.
+            </InfoTip>
+          </label>
           <label className="flex items-center gap-2 text-[14px]">
             <input
               type="checkbox"
@@ -468,6 +498,21 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       <button type="button" className="btn btn-primary self-start" onClick={submit} disabled={save.isPending}>
         Enregistrer
       </button>
+      {tab === 'budget' && (
+        <div className="flex flex-col gap-2 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
+          <span className="label-caps flex items-center gap-1.5">
+            Données
+            <InfoTip>
+              Télécharge toutes les données (domaines, objectifs, projets, tâches, plans, rapports, réglages,
+              journal) dans un fichier JSON : une sauvegarde lisible par d'autres outils. Aucun secret n'y
+              figure (ni mot de passe, ni session, ni jeton).
+            </InfoTip>
+          </span>
+          <a className="btn self-start hover:no-underline" href="/api/v1/export" download>
+            Exporter toutes les données (JSON)
+          </a>
+        </div>
+      )}
     </Section>
   );
 }

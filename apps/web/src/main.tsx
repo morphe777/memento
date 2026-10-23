@@ -53,10 +53,14 @@ const weekRoute = route('/semaine', WeekPage);
 const planRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planifier',
-  validateSearch: (s: Record<string, unknown>): { semaine?: string } => ({ semaine: str(s.semaine) }),
+  validateSearch: (s: Record<string, unknown>): { semaine?: string; vue?: 'mois'; mois?: string } => ({
+    semaine: str(s.semaine),
+    vue: s.vue === 'mois' ? 'mois' : undefined,
+    mois: str(s.mois),
+  }),
   component: function Plan() {
-    const { semaine } = planRoute.useSearch();
-    return <PlanPage semaine={semaine} />;
+    const { semaine, vue, mois } = planRoute.useSearch();
+    return <PlanPage semaine={semaine} vue={vue} mois={mois} />;
   },
 });
 const inboxRoute = createRoute({
@@ -78,15 +82,18 @@ const objectiveRoute = createRoute({
 const projectsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projets',
-  validateSearch: (s: Record<string, unknown>): { groupe?: string; vue?: 'tree' | 'list' | 'kanban' } => ({
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { groupe?: string; vue?: 'tree' | 'list' | 'kanban'; filtre?: string } => ({
     groupe: str(s.groupe),
+    filtre: str(s.filtre),
     vue: ['tree', 'list', 'kanban'].includes(String(s.vue))
       ? (s.vue as 'tree' | 'list' | 'kanban')
       : undefined,
   }),
   component: function Projects() {
-    const { groupe, vue } = projectsRoute.useSearch();
-    return <ProjectsPage groupe={groupe} vue={vue} />;
+    const { groupe, vue, filtre } = projectsRoute.useSearch();
+    return <ProjectsPage groupe={groupe} vue={vue} filtre={filtre} />;
   },
 });
 const taskView = (v: unknown): TaskView | undefined => (v === 'table' || v === 'kanban' ? v : undefined);

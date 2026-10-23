@@ -30,8 +30,9 @@ import {
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe } from '../lib/hooks.ts';
-import type { Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
+import type { InboxPage as InboxPageData, Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
 import { TaskBoard, TaskTable, type TaskView, useBoardTasks } from './tasks.tsx';
+import { Chevron } from './week.tsx';
 
 type View = 'tree' | 'list' | 'kanban';
 
@@ -84,10 +85,15 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
   );
 }
 
-export function ProjectsPage({ groupe, vue }: { groupe?: string; vue?: View }) {
+export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: View; filtre?: string }) {
   const navigate = useNavigate();
-  const view: View = vue ?? 'tree';
-  const [status, setStatus] = useState('active,paused');
+  const view: View = filtre === 'a-completer' ? 'list' : (vue ?? 'tree');
+  const [status, setStatus] = useState('active,ready,paused');
+  const incomplete = useQuery({
+    queryKey: ['projects', 'ready'],
+    queryFn: () => get<Project[]>('/projects?status=ready'),
+    select: (ps) => ps.filter((p) => p.gaps.length > 0),
+  });
   const [month, setMonth] = useState('');
   const q = useQuery({
     queryKey: ['projects', status, month],
@@ -103,7 +109,11 @@ export function ProjectsPage({ groupe, vue }: { groupe?: string; vue?: View }) {
   const dl = useDomainLookup();
   const [creating, setCreating] = useState(false);
   const group = groups.data?.find((g) => g.id === groupe);
-  const list = (q.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe));
+  const list =
+    filtre === 'a-completer'
+      ? (incomplete.data ?? [])
+      : (q.data ?? []).filter((p) => !groupe || p.groupIds.includes(groupe));
+  const nIncomplete = incomplete.data?.length ?? 0;
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -120,11 +130,29 @@ export function ProjectsPage({ groupe, vue }: { groupe?: string; vue?: View }) {
         />
         <PageHeader
           eyebrow={group ? `Groupe · ${dl.name(group.domainId)}` : 'Domaine › Groupe › Projet'}
-          title={group ? group.name : 'Projets'}
+          title={filtre === 'a-completer' ? 'Projets prêts à compléter' : group ? group.name : 'Projets'}
           actions={
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-              + Projet / idée
-            </button>
+            <>
+              {nIncomplete > 0 && filtre !== 'a-completer' && (
+                <Link
+                  to="/projets"
+                  search={{ filtre: 'a-completer' }}
+                  className="text-[13px] font-semibold flex items-center gap-1.5"
+                  style={{ color: 'var(--status-red)' }}
+                >
+                  {nIncomplete} projet{nIncomplete > 1 ? 's' : ''} prêt{nIncomplete > 1 ? 's' : ''} à
+                  compléter avant d'en faire un projet du mois →
+                </Link>
+              )}
+              {filtre === 'a-completer' && (
+                <Link to="/projets" className="btn">
+                  Tous les projets
+                </Link>
+              )}
+              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                + Projet / idée
+              </button>
+            </>
           }
         />
       </div>
@@ -138,11 +166,13 @@ export function ProjectsPage({ groupe, vue }: { groupe?: string; vue?: View }) {
             { value: 'kanban', label: 'Kanban' },
           ]}
         />
-        {view !== 'kanban' && (
+        {view !== 'kanban' && filtre !== 'a-completer' && (
           <>
             <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Statut">
-              <option value="active,paused">Actifs et en pause</option>
-              <option value="active">Actifs</option>
+              <option value="active,ready,paused">Actifs, prêts et en pause</option>
+              <option value="active">Actifs (projets du mois)</option>
+              <option value="ready">Prêts</option>
+              <option value="paused">En pause</option>
               <option value="idea">Idées</option>
               <option value="done,abandoned">Terminés / abandonnés</option>
               <option value="">Tous</option>
@@ -279,18 +309,24 @@ function ProjectTable({ projects }: { projects: Project[] }) {
 
 const KANBAN = [
   { status: 'idea', label: 'Idées' },
-  { status: 'active', label: 'Actifs' },
+  { status: 'ready', label: 'Prêts' },
+  { status: 'active', label: 'Actifs (du mois)' },
   { status: 'paused', label: 'En pause' },
   { status: 'done', label: 'Terminés' },
 ] as const;
 
-/** Kanban by project status (decision D-19, pending Q-11). Moving a card calls the matching API action. */
+/** Kanban by project status (D-19, D-42). Moving a card calls the matching API action. */
 function Kanban({ projects }: { projects: Project[] }) {
   const sensors = useSortSensors();
+  const me = useMe();
   const [completing, setCompleting] = useState<Project | null>(null);
   const move = useAction(async ({ p, to }: { p: Project; to: string }) => {
-    if (to === 'active' && (p.status === 'idea' || p.status === 'paused'))
-      return post(`/projects/${p.id}/promote`);
+    if (to === 'ready' && p.status === 'idea') return post(`/projects/${p.id}/promote`);
+    if (to === 'active') {
+      if (p.status === 'paused') await patch(`/projects/${p.id}`, { status: 'ready' });
+      return post(`/projects/${p.id}/month`, { month: me.data?.today.slice(0, 7) });
+    }
+    if (to === 'ready' && p.status === 'active') return post(`/projects/${p.id}/month`, { month: null });
     return patch(`/projects/${p.id}`, { status: to });
   });
   const onDragEnd = (e: DragEndEvent) => {
@@ -302,7 +338,7 @@ function Kanban({ projects }: { projects: Project[] }) {
   };
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))' }}>
         {KANBAN.map((c) => (
           <KanbanColumn
             key={c.status}
@@ -606,16 +642,16 @@ function ProjectInfo({ p }: { p: ProjectDetail }) {
   const ready = p.readiness.every((r) => r.ok);
   return (
     <section className="card" style={{ padding: '6px 18px 8px' }}>
-      {(p.status === 'idea' || p.status === 'paused') && (
+      {(p.status === 'idea' || p.status === 'ready' || p.status === 'paused') && (
         <div
           className="flex flex-col gap-1.5"
           style={{ padding: '12px 0', borderBottom: '1px solid var(--divider)' }}
         >
           <span className="label-caps flex items-center gap-1.5" style={{ fontSize: 11 }}>
-            Pour devenir actif
+            Pour devenir projet du mois
             <InfoTip>
-              Une idée devient un projet actif avec « Promouvoir en projet », seulement quand tout est coché.
-              Un projet actif reste soumis aux mêmes règles, sauf « au moins une tâche ».
+              Une idée passe « prêt » avec « Promouvoir », même incomplète. Pour devenir projet du mois
+              (actif), tout doit être coché. Les dates sont facultatives : le mois sert de limite.
             </InfoTip>
           </span>
           {p.readiness.map((r) => (
@@ -642,7 +678,9 @@ function ProjectInfo({ p }: { p: ProjectDetail }) {
             </span>
           ))}
           <span className="text-[12px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
-            {ready ? 'Prêt : tu peux le promouvoir.' : 'Complète via « Modifier » et la liste des tâches.'}
+            {ready
+              ? 'Complet : il peut devenir projet du mois.'
+              : 'Complète via « Modifier » et la liste des tâches.'}
           </span>
         </div>
       )}
@@ -729,34 +767,55 @@ function ProjectInfo({ p }: { p: ProjectDetail }) {
 }
 
 function ProjectActions({ p }: { p: ProjectDetail }) {
+  const me = useMe();
   const [completing, setCompleting] = useState(false);
   const [gaps, setGaps] = useState<{ code: string; label: string }[] | null>(null);
-  const promote = useAction(() => post(`/projects/${p.id}/promote`), {
-    toast: 'Idée promue en projet actif.',
+  const promote = useAction(() => post(`/projects/${p.id}/promote`), { toast: 'Idée promue : projet prêt.' });
+  const month = useAction((m: string | null) => post(`/projects/${p.id}/month`, { month: m }), {
+    toast: 'Projets du mois mis à jour.',
   });
   const status = useAction((s: string) => patch(`/projects/${p.id}`, { status: s }));
-  const doPromote = () =>
-    promote.mutate(undefined, {
+  const makeMonth = () =>
+    month.mutate(me.data?.today.slice(0, 7) ?? null, {
       onError: (e) => {
         if (e instanceof ApiError && Array.isArray(e.details)) setGaps(e.details as never);
       },
     });
   return (
     <>
-      {(p.status === 'idea' || p.status === 'paused') && (
-        <button type="button" className="btn btn-primary" onClick={doPromote}>
-          {p.status === 'idea' ? 'Promouvoir en projet' : 'Réactiver'}
+      {p.status === 'idea' && (
+        <button type="button" className="btn btn-primary" onClick={() => promote.mutate(undefined)}>
+          Promouvoir en projet prêt
+        </button>
+      )}
+      {p.status === 'ready' && (
+        <button type="button" className="btn btn-primary" onClick={makeMonth}>
+          {p.monthFlag ? `Prévu pour ${p.monthFlag} · le faire ce mois-ci` : 'Projet du mois'}
         </button>
       )}
       {p.status === 'active' && (
-        <>
-          <button type="button" className="btn" onClick={() => status.mutate('paused')}>
-            Mettre en pause
-          </button>
-          <button type="button" className="btn btn-primary" onClick={() => setCompleting(true)}>
-            Terminer
-          </button>
-        </>
+        <button type="button" className="btn" onClick={() => month.mutate(null)}>
+          Retirer du mois
+        </button>
+      )}
+      {(p.status === 'active' || p.status === 'ready') && (
+        <button type="button" className="btn" onClick={() => status.mutate('paused')}>
+          Mettre en pause
+        </button>
+      )}
+      {p.status === 'paused' && (
+        <button type="button" className="btn btn-primary" onClick={() => status.mutate('ready')}>
+          Reprendre
+        </button>
+      )}
+      {['active', 'ready', 'paused'].includes(p.status) && (
+        <button
+          type="button"
+          className={p.status === 'active' ? 'btn btn-primary' : 'btn'}
+          onClick={() => setCompleting(true)}
+        >
+          Terminer
+        </button>
       )}
       {p.status !== 'abandoned' && p.status !== 'done' && (
         <button type="button" className="btn btn-ghost" onClick={() => status.mutate('abandoned')}>
@@ -769,7 +828,7 @@ function ProjectActions({ p }: { p: ProjectDetail }) {
         </button>
       )}
       {p.status === 'done' && (
-        <button type="button" className="btn" onClick={() => status.mutate('active')}>
+        <button type="button" className="btn" onClick={() => status.mutate('ready')}>
           Rouvrir
         </button>
       )}
@@ -777,7 +836,7 @@ function ProjectActions({ p }: { p: ProjectDetail }) {
       <Panel
         open={!!gaps}
         onClose={() => setGaps(null)}
-        title="Pas encore prêt à devenir un projet"
+        title="Pas encore prêt pour le mois"
         side={false}
         width={480}
       >
@@ -797,7 +856,6 @@ function ProjectActions({ p }: { p: ProjectDetail }) {
 /** « Modifier le projet »: every editable field in one dialog (description is edited in place under the title). */
 function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
-  const me = useMe();
   const dl = useDomainLookup();
   const groups = useGroups();
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: () => get<Objective[]>('/objectives') });
@@ -809,7 +867,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
     objectiveId: p.objectiveId ?? '',
     sequenceMode: p.sequenceMode,
     isFree: p.isFree,
-    monthFlag: !!p.monthFlag,
   });
   const [groupIds, setGroupIds] = useState(p.groupIds);
   const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
@@ -819,7 +876,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
       groupIds.map((g) => groups.data?.find((x) => x.id === g)?.domainId).filter((x): x is string => !!x),
     ),
   ];
-  const month = me.data?.today.slice(0, 7) ?? '';
   const snapshot = () => JSON.stringify({ f, groupIds, primary });
   const initial = useRef(snapshot());
   const save = useAction(
@@ -839,7 +895,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         objectiveId: f.objectiveId || null,
         sequenceMode: f.sequenceMode,
         isFree: f.isFree,
-        monthFlag: f.monthFlag ? (p.monthFlag ?? month) : null,
       });
     },
     { toast: 'Projet enregistré.' },
@@ -880,7 +935,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         </Field>
         <Field
           label="Fin"
-          info="Un projet actif dure 31 jours au plus : au-delà, découpe-le en plusieurs projets."
+          info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
         >
           <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
         </Field>
@@ -913,10 +968,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} />
           Libre dans le chemin de l'objectif (n'attend pas les projets placés avant lui)
-        </label>
-        <label className="flex items-center gap-2 text-[14px]">
-          <input type="checkbox" checked={f.monthFlag} onChange={(e) => set('monthFlag', e.target.checked)} />
-          Projet du mois {p.monthFlag ? `(${p.monthFlag})` : month ? `(${month})` : ''}
         </label>
       </div>
       <div className="field">
@@ -987,7 +1038,7 @@ export function IdeasPage() {
   const groups = useGroups();
   const navigate = useNavigate();
   const promote = useAction((id: string) => post(`/projects/${id}/promote`), {
-    toast: 'Idée promue en projet actif.',
+    toast: 'Idée promue : projet prêt.',
   });
   const drop = useAction((id: string) => patch(`/projects/${id}`, { status: 'abandoned' }), {
     toast: 'Idée abandonnée.',
@@ -1068,9 +1119,12 @@ export function IdeasPage() {
 
 export function InboxPage({ tache }: { tache?: string }) {
   const navigate = useNavigate();
-  const q = useQuery({ queryKey: ['tasks', 'inbox'], queryFn: () => get<Task[]>('/tasks?projectId=inbox') });
+  const q = useQuery({ queryKey: ['tasks', 'inbox', 'page'], queryFn: () => get<InboxPageData>('/inbox') });
   const [showDone, setShowDone] = useState(false);
+  const [showLater, setShowLater] = useState(false);
   const dl = useDomainLookup();
+  const open = (id: string) => navigate({ to: '/inbox', search: { tache: id } });
+  const color = (t: Task) => dl.color(t.domainId);
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -1081,7 +1135,7 @@ export function InboxPage({ tache }: { tache?: string }) {
           actions={
             <label className="flex items-center gap-2 text-[14px]">
               <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />{' '}
-              Afficher les faites
+              Afficher les tâches réalisées ce mois-ci
             </label>
           }
         />
@@ -1094,19 +1148,38 @@ export function InboxPage({ tache }: { tache?: string }) {
             background: 'var(--surface-2)',
           }}
         >
-          <QuickAdd projectId={null} placeholder="Capturer une tâche (Entrée)…" />
+          <QuickAdd projectId={null} placeholder="Capturer une tâche (Entrée)…" withSchedule />
         </div>
         {q.isLoading && <Loading />}
         {q.data && (
           <TaskList
-            tasks={q.data}
+            tasks={showDone ? [...q.data.open, ...q.data.doneThisMonth] : q.data.open}
             projectId={null}
             showDone={showDone}
-            color={(t) => dl.color(t.domainId)}
-            onOpen={(id) => navigate({ to: '/inbox', search: { tache: id } })}
+            color={color}
+            onOpen={open}
           />
         )}
       </section>
+      {q.data && q.data.later.length > 0 && (
+        <section className="card overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setShowLater((v) => !v)}
+            aria-expanded={showLater}
+            className="w-full flex items-center gap-2.5 border-0 text-left cursor-pointer"
+            style={{ padding: '14px 18px', background: 'var(--surface)' }}
+          >
+            <Chevron open={showLater} />
+            <span className="h2">Récurrentes plus tard · {q.data.later.length}</span>
+            <InfoTip>
+              Tâches récurrentes dont la deadline est à plus de {q.data.horizonDays} jours. Elles reviennent
+              dans la liste principale à l'approche de leur deadline. Réglable dans Configuration › Général.
+            </InfoTip>
+          </button>
+          {showLater && <TaskList tasks={q.data.later} projectId={null} color={color} onOpen={open} />}
+        </section>
+      )}
       <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/inbox', search: {} })} />
     </div>
   );

@@ -11,8 +11,9 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 
 ## En attente de ta réponse (structurant)
 
-- **Q-A · États d'un projet** (proposition du 23/10) : Idée (bac à sable) → **Prêt** (backlog considéré, sans dates) → **Actif = projet du mois** → Terminé / Abandonné, plus En pause. Les dates ne sont plus exigées pour promouvoir. À trancher : un projet du mois non fini en fin de mois reste-t-il Actif (reconduit) ou repasse-t-il en Prêt ?
-- **Q-B · Corrélation santé / productivité** : quelles applications de suivi (sommeil, nutrition, activité…) et par quel canal (export, API, n8n) ? Le contexte des semaines est déjà stocké et figé dans les rapports (D-39).
+- **Q-C · Objectifs du trimestre** : faut-il une planification du trimestre (choisir les objectifs à suivre, comme le mois choisit les projets) ? Aujourd'hui « Planifier › Mois » montre seulement les objectifs du trimestre et ce qui les fait avancer.
+- **Q-D · Import** : l'export JSON existe ; faut-il un import (restauration) depuis ce fichier ?
+- **Corrélation santé / productivité** : mise de côté. Mémento reste fournisseur de données via l'API (rapports, plans de semaine et leur contexte, tâches, journal).
 
 ## À valider sur l'usage (v0.1)
 

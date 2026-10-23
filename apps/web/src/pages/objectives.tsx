@@ -69,8 +69,11 @@ export function ObjectivesPage() {
   const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<'map' | 'list'>('map');
   const dl = useDomainLookup();
+  const me = useMe();
+  const year = me.data?.today.slice(0, 4);
+  // Closed objectives: only those of the current year.
   const list = (objectives.data ?? []).filter(
-    (o) => showClosed || o.status === 'active' || o.status === 'paused',
+    (o) => o.status === 'active' || o.status === 'paused' || (showClosed && o.deadline.slice(0, 4) === year),
   );
   const groups = [
     ...(metas.data ?? []).map((m) => ({
@@ -109,7 +112,7 @@ export function ObjectivesPage() {
         />
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />{' '}
-          Afficher les objectifs clos
+          Afficher les objectifs clos cette année
         </label>
       </div>
       {objectives.isError && <ErrorBox error={objectives.error} />}
@@ -825,7 +828,10 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
 function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][number] }) {
   const dl = useDomainLookup();
   return (
-    <div className="card flex flex-col gap-2" style={{ padding: '12px 14px' }}>
+    <div
+      className="card flex flex-col gap-2"
+      style={{ padding: '12px 14px 12px 12px', borderLeft: `4px solid ${dl.color(o.domainId)}` }}
+    >
       <div className="flex items-start justify-between gap-2">
         <Link to="/objectifs/$id" params={{ id: o.id }} className="text-[15px] font-semibold leading-snug">
           {o.title}
