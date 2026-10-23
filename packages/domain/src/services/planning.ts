@@ -440,7 +440,15 @@ export function patchWeek(ctx: Ctx, isoWeek: string, budgetMin: number | null, b
       })
       .where(eq(weekPlan.id, plan.id))
       .run();
-    audit(ctx, 'week_plan', plan.id, 'budget', { budgetMin: plan.budgetMin }, { budgetMin: value });
+    const after = getPlanRow(ctx, isoWeek)!;
+    audit(
+      ctx,
+      'week_plan',
+      plan.id,
+      'budget',
+      { isoWeek, budgetMin: plan.budgetMin, budgetReason: plan.budgetReason },
+      { isoWeek, budgetMin: after.budgetMin, budgetReason: after.budgetReason },
+    );
     return getPlanningPage(ctx, isoWeek);
   });
 }

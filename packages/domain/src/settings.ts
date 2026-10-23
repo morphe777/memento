@@ -31,6 +31,7 @@ export const settingsSchema = z.object({
   'templates.project': z.string().max(4000),
   'templates.task': z.string().max(4000),
   theme: z.enum(['auto', 'light', 'dark']),
+  'ui.breadcrumb': z.boolean(),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -58,6 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
     '## Résultat attendu en 1 phrase\n\n## Critère de succès (oui / non)\n\n## Contexte en 2 lignes\n\n## Ressources\n',
   'templates.task': '## Quoi faire, concrètement\n\n## Où / avec quoi (lien)\n',
   theme: 'auto', // NF-06
+  'ui.breadcrumb': false, // user request 23/10/2026: off by default, links are everywhere
 };
 
 export const settingsPatchSchema = settingsSchema.partial();
