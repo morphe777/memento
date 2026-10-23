@@ -1,0 +1,170 @@
+import { openDb, runMigrations, schema } from '@memento/db';
+import { seed } from '@memento/domain';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { buildApp } from '../src/app.ts';
+import { createToken, setUserPassword } from '../src/auth.ts';
+
+const PASSWORD = 'correct horse battery';
+
+async function setup() {
+  const { db, sqlite } = openDb(':memory:');
+  runMigrations(db);
+  seed({ db, sqlite, actor: 'me' });
+  await setUserPassword(db, 'mehdi', PASSWORD);
+  const app = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent' });
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/v1/auth/login',
+    payload: { login: 'mehdi', password: PASSWORD },
+  });
+  const cookie = `memento_session=${res.cookies.find((c) => c.name === 'memento_session')!.value}`;
+  return { app, db, cookie };
+}
+
+describe('API L0 — auth', () => {
+  let s: Awaited<ReturnType<typeof setup>>;
+  beforeEach(async () => {
+    s = await setup();
+  });
+
+  it('logs in with an httpOnly SameSite=Strict cookie; password and session stored hashed', async () => {
+    const res = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'mehdi', password: PASSWORD },
+    });
+    expect(res.statusCode).toBe(200);
+    const c = res.cookies.find((x) => x.name === 'memento_session')!;
+    expect(c.httpOnly).toBe(true);
+    expect(c.sameSite).toBe('Strict');
+    const user = s.db.select().from(schema.appUser).get()!;
+    expect(user.passwordHash.startsWith('$argon2id$')).toBe(true);
+    const sessions = s.db.select().from(schema.session).all();
+    expect(sessions.every((x) => x.id !== c.value && x.id.length === 64)).toBe(true);
+  });
+
+  it('refuses bad credentials and rate-limits login', async () => {
+    const codes = [];
+    for (let i = 0; i < 6; i++) {
+      const r = await s.app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        payload: { login: 'mehdi', password: 'wrong' },
+      });
+      codes.push(r.statusCode);
+    }
+    expect(codes.slice(0, 3)).toEqual([401, 401, 401]);
+    expect(codes).toContain(429);
+  });
+
+  it('protects routes (401) and serves health + OpenAPI publicly', async () => {
+    expect((await s.app.inject({ url: '/api/v1/domains' })).statusCode).toBe(401);
+    expect((await s.app.inject({ url: '/api/v1/health' })).json()).toMatchObject({ ok: true });
+    const spec = (await s.app.inject({ url: '/api/v1/openapi.json' })).json();
+    expect(spec.openapi).toMatch(/^3\./);
+    expect(Object.keys(spec.paths)).toContain('/api/v1/projects/{id}/promote');
+  });
+
+  it('returns the 8 domains in order to a logged-in user', async () => {
+    const res = await s.app.inject({ url: '/api/v1/domains', headers: { cookie: s.cookie } });
+    expect(res.json().map((d: { name: string }) => d.name)[0]).toBe('Santé');
+    expect(res.json()).toHaveLength(8);
+  });
+
+  it('logout invalidates the session', async () => {
+    await s.app.inject({ method: 'POST', url: '/api/v1/auth/logout', headers: { cookie: s.cookie } });
+    expect((await s.app.inject({ url: '/api/v1/domains', headers: { cookie: s.cookie } })).statusCode).toBe(
+      401,
+    );
+  });
+});
+
+describe('API — tokens (AI / robots)', () => {
+  it('bearer token acts as ai:<name>; read-only tokens cannot write; revoked tokens are refused', async () => {
+    const s = await setup();
+    const rw = createToken(s.db, 'claude', 'read_write');
+    const ro = createToken(s.db, 'n8n', 'read');
+    expect(
+      s.db
+        .select()
+        .from(schema.apiToken)
+        .all()
+        .every((t) => !t.tokenHash.includes(rw.token)),
+    ).toBe(true);
+    const auth = (t: string) => ({ authorization: `Bearer ${t}` });
+    const created = await s.app.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      headers: auth(rw.token),
+      payload: { title: 'Capture IA', durationMin: 30 },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json().createdBy).toBe('ai:claude');
+    const changes = await s.app.inject({ url: '/api/v1/changes?actor=ai', headers: { cookie: s.cookie } });
+    expect(changes.json()[0]).toMatchObject({ actor: 'ai:claude', title: 'Capture IA' });
+    expect(
+      (
+        await s.app.inject({
+          method: 'POST',
+          url: '/api/v1/tasks',
+          headers: auth(ro.token),
+          payload: { title: 'x' },
+        })
+      ).statusCode,
+    ).toBe(403);
+    expect((await s.app.inject({ url: '/api/v1/tasks', headers: auth(ro.token) })).statusCode).toBe(200);
+    // Tokens cannot manage tokens or settings (interface only).
+    expect((await s.app.inject({ url: '/api/v1/tokens', headers: auth(rw.token) })).statusCode).toBe(403);
+    expect(
+      (await s.app.inject({ method: 'PATCH', url: '/api/v1/settings', headers: auth(rw.token), payload: {} }))
+        .statusCode,
+    ).toBe(403);
+    await s.app.inject({ method: 'DELETE', url: `/api/v1/tokens/${rw.id}`, headers: { cookie: s.cookie } });
+    expect((await s.app.inject({ url: '/api/v1/tasks', headers: auth(rw.token) })).statusCode).toBe(401);
+  });
+});
+
+describe('API L1 — business errors', () => {
+  it('promoting an idea without task returns 422 with the list of gaps', async () => {
+    const s = await setup();
+    const groups = (await s.app.inject({ url: '/api/v1/groups', headers: { cookie: s.cookie } })).json();
+    const idea = (
+      await s.app.inject({
+        method: 'POST',
+        url: '/api/v1/projects',
+        headers: { cookie: s.cookie },
+        payload: { title: 'Clim', groupIds: [groups[0].id] },
+      })
+    ).json();
+    const res = await s.app.inject({
+      method: 'POST',
+      url: `/api/v1/projects/${idea.id}/promote`,
+      headers: { cookie: s.cookie },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('PROMOTION_INCOMPLETE');
+    expect(res.json().details.map((d: { code: string }) => d.code)).toContain('TASK_MISSING');
+  });
+
+  it('validation errors are 400, unknown ids 404', async () => {
+    const s = await setup();
+    expect(
+      (
+        await s.app.inject({
+          method: 'POST',
+          url: '/api/v1/tasks',
+          headers: { cookie: s.cookie },
+          payload: { title: '' },
+        })
+      ).statusCode,
+    ).toBe(400);
+    expect(
+      (
+        await s.app.inject({
+          url: '/api/v1/projects/00000000-0000-4000-8000-000000000000',
+          headers: { cookie: s.cookie },
+        })
+      ).statusCode,
+    ).toBe(404);
+  });
+});
