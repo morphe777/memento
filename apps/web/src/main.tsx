@@ -131,7 +131,8 @@ const reportRoute = createRoute({
     return <ReportPage id={reportRoute.useParams().id} />;
   },
 });
-const reviewRoute = route('/a-revoir', ReviewPage);
+const reviewRoute = route('/journal', ReviewPage);
+const oldReviewRoute = route('/a-revoir', () => <Navigate to="/journal" />);
 const configIndexRoute = route('/configuration', () => (
   <Navigate to="/configuration/$onglet" params={{ onglet: 'budget' }} />
 ));
@@ -159,6 +160,7 @@ const routeTree = rootRoute.addChildren([
   reportsRoute,
   reportRoute,
   reviewRoute,
+  oldReviewRoute,
   configIndexRoute,
   configRoute,
 ]);

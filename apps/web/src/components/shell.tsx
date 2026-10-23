@@ -37,10 +37,10 @@ const NAV: { section: string; items: { to: string; label: string }[] }[] = [
     ],
   },
   {
-    section: 'Revoir',
+    section: 'Suivi',
     items: [
       { to: '/rapports', label: 'Rapports' },
-      { to: '/a-revoir', label: 'À revoir' },
+      { to: '/journal', label: 'Journal' },
     ],
   },
 ];
@@ -177,7 +177,7 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
                   }}
                 >
                   {i.label}
-                  {i.to === '/a-revoir' && (me.data?.unreviewed ?? 0) > 0 && (
+                  {i.to === '/journal' && (me.data?.unreviewed ?? 0) > 0 && (
                     <span
                       className="mono text-[11px] rounded-full px-2"
                       style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}

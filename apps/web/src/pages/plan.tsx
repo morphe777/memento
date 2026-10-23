@@ -101,7 +101,7 @@ function Plan({ page }: { page: PlanningPage }) {
                 className="btn btn-disabled-v2"
                 disabled
                 aria-disabled="true"
-                title="Disponible en v2"
+                title="v2 : une IA (via le MCP) proposera le plan en expliquant ses choix. Aujourd'hui, seul le moteur propose."
                 style={{ minHeight: 44 }}
               >
                 <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16">
@@ -282,6 +282,8 @@ function ProjectCard({
   const [open, setOpen] = useState(false);
   const hidden = card.hidden.length;
   const nb = `${hidden} ${hidden > 1 ? 'autres tâches' : 'autre tâche'}`;
+  const inbox = !card.projectId;
+  const dueHidden = card.hiddenDueCount;
   return (
     <div
       className="overflow-hidden"
@@ -320,7 +322,14 @@ function ProjectCard({
       ))}
       {hidden > 0 && (
         <>
-          {open && (
+          {open && inbox && (
+            <div style={{ background: 'var(--surface-2)' }}>
+              {card.hiddenTasks.map((t) => (
+                <PlanTaskRow key={t.taskId} t={t} projectId={null} onToggle={onToggle} busy={busy} />
+              ))}
+            </div>
+          )}
+          {open && !inbox && (
             <div style={{ background: 'var(--surface-2)' }}>
               {card.hidden.map((h) => (
                 <div
@@ -350,11 +359,18 @@ function ProjectCard({
               padding: '0 18px',
               background: 'var(--surface)',
               fontSize: 13,
-              color: 'var(--text-faint)',
+              color: dueHidden && !open ? 'var(--late-text)' : 'var(--text-faint)',
+              fontWeight: dueHidden && !open ? 600 : undefined,
             }}
           >
             <Chevron open={open} size={12} />
-            {open ? `Masquer les ${nb}` : `+ ${nb} dans le projet`}
+            {open ? `Masquer les ${nb}` : `+ ${nb} ${inbox ? "dans l'Inbox" : 'dans le projet'}`}
+            {dueHidden > 0 && !open && (
+              <span className="flex items-center gap-1.5 ml-auto">
+                <WarnIcon />
+                dont {dueHidden} avec une deadline cette semaine : à prendre en compte
+              </span>
+            )}
           </button>
         </>
       )}
@@ -414,9 +430,9 @@ function PlanTaskRow({
         style={{
           minWidth: 104,
           fontWeight: 600,
-          background: week ? 'var(--inverse-bg)' : 'var(--surface)',
-          color: week ? 'var(--inverse-text)' : 'var(--text)',
-          borderColor: week ? 'var(--inverse-bg)' : 'var(--btn-border)',
+          background: week ? 'var(--primary)' : 'var(--surface)',
+          color: week ? 'var(--primary-text)' : 'var(--text)',
+          borderColor: week ? 'var(--primary)' : 'var(--btn-border)',
         }}
       >
         {week ? '✓ Semaine' : '+ Semaine'}
@@ -486,5 +502,23 @@ function BudgetPanel({ open, onClose, page }: { open: boolean; onClose: () => vo
         </button>
       </div>
     </Panel>
+  );
+}
+
+function WarnIcon() {
+  return (
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 16 16"
+      aria-hidden
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+    >
+      <path d="M8 1.8 15 14H1Z" strokeLinejoin="round" />
+      <path d="M8 6.2v3.6" strokeLinecap="round" />
+      <circle cx="8" cy="11.8" r="0.4" fill="currentColor" />
+    </svg>
   );
 }

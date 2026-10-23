@@ -4,7 +4,11 @@ import type * as D from '@memento/domain';
 export type Domain = ReturnType<typeof D.listDomains>[number];
 export type Group = ReturnType<typeof D.listGroups>[number];
 export type Project = ReturnType<typeof D.getProject>;
-export type ProjectDetail = Project & { dependsOn: string[]; resources: Resource[] };
+export type ProjectDetail = Project & {
+  dependsOn: string[];
+  resources: Resource[];
+  readiness: ReturnType<typeof D.getProjectReadiness>;
+};
 export type Task = ReturnType<typeof D.getTask>;
 export type TaskDetail = Task & { resources: Resource[] };
 export type Objective = ReturnType<typeof D.getObjective>;
