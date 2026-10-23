@@ -344,6 +344,7 @@ export async function buildApp(opts: AppOptions) {
           ...D.getProject(c, req.params.id),
           dependsOn: D.listProjectDependencies(c, req.params.id),
           resources: D.listResources(c, 'project', [req.params.id]),
+          readiness: D.getProjectReadiness(c, req.params.id),
         };
       });
       r.post('/projects', { schema: { ...tag('Projets'), body: D.projectCreate } }, async (req) =>

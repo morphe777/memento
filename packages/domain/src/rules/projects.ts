@@ -60,6 +60,32 @@ export const GAP_LABELS: Record<PromotionGap, string> = {
   PROJECT_TOO_LONG: 'Projet de plus d’un mois : à découper',
 };
 
+/** RB-02 as a checklist shown on the project page: what makes an idea ready to become active. */
+export const READINESS_LABELS: Record<PromotionGap, string> = {
+  SUCCESS_CRITERION_MISSING: 'Un critère de succès (oui / non)',
+  GROUP_MISSING: 'Au moins un groupe',
+  TASK_MISSING: 'Au moins une tâche',
+  TASK_DURATION_MISSING: 'Une durée sur chaque tâche',
+  DATES_MISSING: 'Une date de début et une date de fin',
+  DATES_INVERTED: 'La fin après le début',
+  PROJECT_TOO_LONG: '31 jours au plus entre début et fin',
+};
+
+export function readiness(p: PromotionInput): { code: PromotionGap; label: string; ok: boolean }[] {
+  const gaps = new Set(promotionGaps(p));
+  return (Object.keys(READINESS_LABELS) as PromotionGap[])
+    .filter((c) => c !== 'DATES_INVERTED' || gaps.has(c))
+    .map((code) => ({
+      code,
+      label: READINESS_LABELS[code],
+      // Not ticked by default: « every task has a duration » needs tasks, « ≤ 31 days » needs dates.
+      ok:
+        !gaps.has(code) &&
+        !(code === 'TASK_DURATION_MISSING' && gaps.has('TASK_MISSING')) &&
+        !(code === 'PROJECT_TOO_LONG' && gaps.has('DATES_MISSING')),
+    }));
+}
+
 /** RB-02 (DM-86, DM-23): what is missing to promote an idea (or to keep a project active). */
 export function promotionGaps(p: PromotionInput): PromotionGap[] {
   const gaps: PromotionGap[] = [];

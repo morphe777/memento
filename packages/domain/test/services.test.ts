@@ -22,6 +22,7 @@ import {
   getObjective,
   getPlanningPage,
   getProject,
+  getProjectReadiness,
   getSettings,
   listBoardTasks,
   listChanges,
@@ -323,6 +324,39 @@ describe('L3 planification', () => {
     const after = setWeekItems(ctx, '2026-W45', [{ taskId: inbox.id, kind: 'week' }, ...chosen]);
     const pvAfter = after.groups[1].cards.find((c) => c.projectId === pv.id)!;
     expect(pvAfter.tasks.length).toBe(Math.min(visible + 1, 3));
+  });
+
+  it('D-37: Inbox shows 3 tasks by closest deadline and warns about a hidden deadline of the week', () => {
+    const ctx = makeCtx('2026-10-30T08:00:00.000Z'); // planning W45 (2–8 Nov)
+    for (const [i, due] of ['2026-11-06', '2026-11-03', '2026-11-20', '2026-11-04', '2026-11-05'].entries())
+      createTask(ctx, { title: `Inbox ${i}`, durationMin: 30, dueDate: due });
+    const inbox = () => getPlanningPage(ctx, '2026-W45').groups.find((g) => g.key === 'inbox')!.cards[0];
+    let c = inbox();
+    expect(c.tasks.map((t) => t.title)).toEqual(['Inbox 1', 'Inbox 3', 'Inbox 4']);
+    expect(c.hiddenTasks.map((t) => t.title)).toEqual(['Inbox 0', 'Inbox 2']);
+    expect(c.hiddenDueCount).toBe(1);
+    proposeWeek(ctx, '2026-W45'); // mandatory deadlines are pre-checked, so they stay visible
+    c = inbox();
+    expect(c.tasks).toHaveLength(4);
+    expect(c.hiddenDueCount).toBe(0);
+  });
+
+  it('RB-02 readiness checklist lists what an idea still needs', () => {
+    const ctx = makeCtx();
+    const idea = createProject(ctx, { title: 'PV', groupIds: [lookups(ctx).group('Travaux').id] });
+    const missing = (id: string) =>
+      getProjectReadiness(ctx, id)
+        .filter((r) => !r.ok)
+        .map((r) => r.code);
+    expect(missing(idea.id)).toEqual([
+      'SUCCESS_CRITERION_MISSING',
+      'TASK_MISSING',
+      'TASK_DURATION_MISSING',
+      'DATES_MISSING',
+      'PROJECT_TOO_LONG',
+    ]);
+    const { project } = activeProject(ctx, 'Prêt', 'Travaux', 1);
+    expect(missing(project.id)).toEqual([]);
   });
 
   it('refuses a locked task (RB-06) and never blocks an overflow (RB-14)', () => {

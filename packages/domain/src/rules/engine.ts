@@ -299,7 +299,14 @@ export interface PageCard {
   objectiveTitle: string | null;
   tasks: PageTask[];
   hidden: { taskId: string; title: string; durationMin: number | null }[];
+  /** Inbox only: the folded tasks are selectable too (any Inbox task is available). */
+  hiddenTasks: PageTask[];
+  /** Inbox only: folded tasks whose deadline falls this week or earlier (warning on the fold). */
+  hiddenDueCount: number;
 }
+
+/** Inbox bin shows this many tasks (closest deadlines first); chosen tasks always stay visible (D-37). */
+export const INBOX_VISIBLE = 3;
 
 export interface PageGroup {
   key: 'inbox' | 'month' | 'consider';
@@ -367,16 +374,19 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     };
   };
 
-  // Inbox: candidates sorted by deadline then score.
-  const inboxRows = P.inboxTasks
+  // Inbox: candidates sorted by deadline then score; the first INBOX_VISIBLE (plus chosen ones) are shown.
+  const inboxSorted = P.inboxTasks
     .filter((t) => t.status === 'todo')
     .sort(
       (a, b) =>
         (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') ||
         allScored(b).score - allScored(a).score ||
         a.id.localeCompare(b.id),
-    )
-    .map((t) => row(t, false));
+    );
+  const inboxRows = inboxSorted.map((t) => row(t, false));
+  const inboxShown = inboxRows.filter((r, i) => i < INBOX_VISIBLE || r.selection);
+  const inboxFolded = inboxRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection));
+  const dueById = new Map(inboxSorted.map((t) => [t.id, t.dueDate]));
 
   const card = (p: EngineProject, visibleBase: number): { card: PageCard; best: number } => {
     const ptasks = P.tasksByProject.get(p.id) ?? [];
@@ -403,6 +413,8 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         objectiveTitle: p.objectiveTitle,
         tasks: visible.map((t) => row(t, !avail.has(t.id) && !chosenSet.has(t.id))),
         hidden: pending.slice(k).map((t) => ({ taskId: t.id, title: t.title, durationMin: t.durationMin })),
+        hiddenTasks: [],
+        hiddenDueCount: 0,
       },
     };
   };
@@ -455,8 +467,17 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
               domainId: null,
               objectiveId: null,
               objectiveTitle: null,
-              tasks: inboxRows,
-              hidden: [],
+              tasks: inboxShown,
+              hidden: inboxFolded.map((r) => ({
+                taskId: r.taskId,
+                title: r.title,
+                durationMin: r.durationMin,
+              })),
+              hiddenTasks: inboxFolded,
+              hiddenDueCount: inboxFolded.filter((r) => {
+                const due = dueById.get(r.taskId);
+                return !!due && due <= P.sunday;
+              }).length,
             },
           ]
         : [],
