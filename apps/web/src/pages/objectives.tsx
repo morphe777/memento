@@ -4,7 +4,7 @@ import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { LockIcon, Resources, useSortSensors } from '../components/tasks.tsx';
@@ -16,13 +16,22 @@ import {
   Loading,
   PageHeader,
   Panel,
+  SAVE_HINT,
   Section,
   StatusPill,
+  Tabs,
 } from '../components/ui.tsx';
 import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
-import type { MetaObjective, Objective, PathProject, Project, Resource } from '../lib/types.ts';
+import { toast, useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
+import type {
+  MetaObjective,
+  Objective,
+  ObjectivesMap,
+  PathProject,
+  Project,
+  Resource,
+} from '../lib/types.ts';
 
 function Progress({ pct }: { pct: number }) {
   return (
@@ -58,6 +67,7 @@ export function ObjectivesPage() {
     { toast: 'Description enregistrée.' },
   );
   const [showClosed, setShowClosed] = useState(false);
+  const [view, setView] = useState<'map' | 'list'>('map');
   const dl = useDomainLookup();
   const list = (objectives.data ?? []).filter(
     (o) => showClosed || o.status === 'active' || o.status === 'paused',
@@ -88,111 +98,118 @@ export function ObjectivesPage() {
           }
         />
       </div>
-      <label className="flex items-center gap-2 text-[14px]">
-        <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />{' '}
-        Afficher les objectifs clos
-      </label>
+      <div className="flex flex-wrap items-center gap-4">
+        <Tabs
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'map', label: 'Carte' },
+            { value: 'list', label: 'Liste' },
+          ]}
+        />
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />{' '}
+          Afficher les objectifs clos
+        </label>
+      </div>
       {objectives.isError && <ErrorBox error={objectives.error} />}
-      {groups.map(({ meta, items }) =>
-        items.length || meta ? (
-          <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
-            <div className="flex flex-wrap items-baseline gap-2.5">
-              <h2 className="h2-bin">{meta ? meta.title : 'Sans méta-objectif'}</h2>
-              {meta?.horizonDate && (
-                <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-                  horizon {fmtDate(meta.horizonDate)}
-                </span>
-              )}
-              {meta && <StatusPill>{STATUS_LABEL[meta.status]}</StatusPill>}
-              {meta && (
-                <button
-                  type="button"
-                  className="icon-btn ml-auto"
-                  aria-label={`Modifier le méta-objectif ${meta.title}`}
-                  title="Modifier le méta-objectif"
-                  onClick={() => setEditingMeta(meta)}
-                >
-                  <PencilIcon />
-                </button>
-              )}
-            </div>
-            {meta && (
-              <DescriptionBlock
-                text={meta.description}
-                lines={3}
-                emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
-                onSave={(description, done) =>
-                  saveMetaDescription.mutate({ id: meta.id, description }, { onSuccess: done })
-                }
-              />
-            )}
-            {items.length === 0 && (
-              <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
-                Aucun objectif trimestriel rattaché.
-              </div>
-            )}
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
-            >
-              {items.map((o) => {
-                const ps = (projects.data ?? []).filter((p) => p.objectiveId === o.id);
-                const doms = [...new Set(ps.flatMap((p) => p.domainIds.slice(0, 1)))];
-                return (
-                  <Link
-                    key={o.id}
-                    to="/objectifs/$id"
-                    params={{ id: o.id }}
-                    className="card flex flex-col gap-2.5 hover:no-underline"
-                    style={{ padding: '16px 18px' }}
+      {view === 'map' && <ObjectivesMapView includeClosed={showClosed} onEditMeta={setEditingMeta} />}
+      {view === 'list' &&
+        groups.map(({ meta, items }) =>
+          items.length || meta ? (
+            <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
+              <div className="flex flex-wrap items-baseline gap-2.5">
+                <h2 className="h2-bin">{meta ? meta.title : 'Sans méta-objectif'}</h2>
+                {meta?.horizonDate && (
+                  <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+                    horizon {fmtDate(meta.horizonDate)}
+                  </span>
+                )}
+                {meta && <StatusPill>{STATUS_LABEL[meta.status]}</StatusPill>}
+                {meta && (
+                  <button
+                    type="button"
+                    className="icon-btn ml-auto"
+                    aria-label={`Modifier le méta-objectif ${meta.title}`}
+                    title="Modifier le méta-objectif"
+                    onClick={() => setEditingMeta(meta)}
                   >
-                    <div className="flex justify-between items-start gap-3">
-                      <span className="text-[16px] font-semibold hover:underline">{o.title}</span>
-                      <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
-                        {o.quarter}
-                      </span>
-                    </div>
-                    <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-                      {o.smartIndicator
-                        ? `${o.smartIndicator} → ${o.smartTarget}`
-                        : 'Indicateur SMART à préciser'}{' '}
-                      · deadline {fmtDate(o.deadline)}
-                    </div>
-                    <Progress pct={o.progressPct} />
-                    <div
-                      className="flex items-center gap-2 text-[12px]"
-                      style={{ color: 'var(--text-faint)' }}
+                    <PencilIcon />
+                  </button>
+                )}
+              </div>
+              {meta && (
+                <DescriptionBlock
+                  text={meta.description}
+                  lines={3}
+                  emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
+                  onSave={(description, done) =>
+                    saveMetaDescription.mutate({ id: meta.id, description }, { onSuccess: done })
+                  }
+                />
+              )}
+              {items.length === 0 && (
+                <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
+                  Aucun objectif trimestriel rattaché.
+                </div>
+              )}
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
+              >
+                {items.map((o) => {
+                  const ps = (projects.data ?? []).filter((p) => p.objectiveId === o.id);
+                  const doms = [...new Set(ps.flatMap((p) => p.domainIds.slice(0, 1)))];
+                  return (
+                    <Link
+                      key={o.id}
+                      to="/objectifs/$id"
+                      params={{ id: o.id }}
+                      className="card flex flex-col gap-2.5 hover:no-underline"
+                      style={{ padding: '16px 18px' }}
                     >
-                      {doms.map((d) => (
-                        <span
-                          key={d}
-                          className="dot"
-                          style={{ background: dl.color(d) }}
-                          title={dl.name(d)}
-                        />
-                      ))}
-                      {ps.length} projet{ps.length > 1 ? 's' : ''} · criticité {o.criticality}/3 ·{' '}
-                      {STATUS_LABEL[o.status]}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
-          </section>
-        ) : null,
-      )}
+                      <div className="flex justify-between items-start gap-3">
+                        <span className="text-[16px] font-semibold hover:underline">{o.title}</span>
+                        <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
+                          {o.quarter}
+                        </span>
+                      </div>
+                      <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                        {o.smartIndicator
+                          ? `${o.smartIndicator} → ${o.smartTarget}`
+                          : 'Indicateur SMART à préciser'}{' '}
+                        · deadline {fmtDate(o.deadline)}
+                      </div>
+                      <Progress pct={o.progressPct} />
+                      <div
+                        className="flex items-center gap-2 text-[12px]"
+                        style={{ color: 'var(--text-faint)' }}
+                      >
+                        {doms.map((d) => (
+                          <span
+                            key={d}
+                            className="dot"
+                            style={{ background: dl.color(d) }}
+                            title={dl.name(d)}
+                          />
+                        ))}
+                        {ps.length} projet{ps.length > 1 ? 's' : ''} · criticité {o.criticality}/3 ·{' '}
+                        {STATUS_LABEL[o.status]}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null,
+        )}
       <ObjectivePanel
         open={creating === 'objective'}
         onClose={() => setCreating(null)}
         metas={metas.data ?? []}
       />
       <MetaPanel open={creating === 'meta'} onClose={() => setCreating(null)} />
-      <MetaPanel
-        key={editingMeta?.id}
-        open={!!editingMeta}
-        meta={editingMeta ?? undefined}
-        onClose={() => setEditingMeta(null)}
-      />
+      {editingMeta && <MetaPanel open meta={editingMeta} onClose={() => setEditingMeta(null)} />}
     </div>
   );
 }
@@ -222,23 +239,24 @@ function ObjectivePanel({
     description: '',
   };
   const [f, setF] = useState(empty);
+  const initial = useRef('');
   useEffect(() => {
     if (!open) return;
-    setF(
-      objective
-        ? {
-            title: objective.title,
-            metaObjectiveId: objective.metaObjectiveId ?? '',
-            smartIndicator: objective.smartIndicator,
-            smartTarget: objective.smartTarget,
-            smartCurrent: objective.smartCurrent,
-            deadline: objective.deadline,
-            criticality: objective.criticality,
-            status: objective.status,
-            description: objective.description,
-          }
-        : { ...empty, description: settings.data?.['templates.objective'] ?? '' },
-    );
+    const start = objective
+      ? {
+          title: objective.title,
+          metaObjectiveId: objective.metaObjectiveId ?? '',
+          smartIndicator: objective.smartIndicator,
+          smartTarget: objective.smartTarget,
+          smartCurrent: objective.smartCurrent,
+          deadline: objective.deadline,
+          criticality: objective.criticality,
+          status: objective.status,
+          description: objective.description,
+        }
+      : { ...empty, description: settings.data?.['templates.objective'] ?? '' };
+    initial.current = JSON.stringify(start);
+    setF(start);
   }, [open]);
   const save = useAction(
     () => {
@@ -257,13 +275,21 @@ function ObjectivePanel({
     toast: 'Objectif supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  /** D-40: an edit is saved when the drawer closes (outside click, ✕); Escape discards. A creation needs « Créer ». */
+  const close = () => {
+    if (objective && JSON.stringify(f) !== initial.current) {
+      if (!f.title.trim() || !f.deadline) return toast('Titre et deadline sont obligatoires.', 'error');
+      save.mutate(undefined);
+    }
+    onClose();
+  };
   return (
     <Panel
       open={open}
-      onClose={onClose}
+      onClose={close}
+      onCancel={onClose}
+      hint={objective ? SAVE_HINT : undefined}
       title={objective ? 'Modifier l’objectif' : 'Nouvel objectif trimestriel'}
-      side={false}
-      width={640}
     >
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
@@ -334,14 +360,16 @@ function ObjectivePanel({
         </Field>
       )}
       <div className="flex flex-wrap gap-2 items-center">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!f.title.trim() || !f.deadline || save.isPending}
-          onClick={() => save.mutate(undefined)}
-        >
-          Enregistrer
-        </button>
+        {!objective && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!f.title.trim() || !f.deadline || save.isPending}
+            onClick={() => save.mutate(undefined)}
+          >
+            Créer
+          </button>
+        )}
         {objective && (
           <button
             type="button"
@@ -381,6 +409,7 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
   useEffect(() => {
     if (open && !meta) setDescription(settings.data?.['templates.meta_objective'] ?? '');
   }, [open]);
+  const initial = useRef(JSON.stringify({ title, horizonDate, status }));
   const save = useAction(
     () =>
       meta
@@ -388,6 +417,13 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
         : post('/meta-objectives', { title, horizonDate: horizonDate || null, description }),
     { onSuccess: onClose, toast: meta ? 'Méta-objectif enregistré.' : 'Méta-objectif créé.' },
   );
+  const close = () => {
+    if (meta && JSON.stringify({ title, horizonDate, status }) !== initial.current) {
+      if (!title.trim()) return toast('Le titre est obligatoire.', 'error');
+      save.mutate(undefined);
+    }
+    onClose();
+  };
   const remove = useAction(() => del(`/meta-objectives/${meta!.id}`), {
     onSuccess: onClose,
     toast: 'Méta-objectif supprimé.',
@@ -395,10 +431,10 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
   return (
     <Panel
       open={open}
-      onClose={onClose}
+      onClose={close}
+      onCancel={onClose}
+      hint={meta ? SAVE_HINT : undefined}
       title={meta ? 'Modifier le méta-objectif' : 'Nouveau méta-objectif (~1 an et +)'}
-      side={false}
-      width={600}
     >
       <Field label="Titre">
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
@@ -430,14 +466,16 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
         </Field>
       )}
       <div className="flex flex-wrap gap-2 items-center">
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!title.trim() || save.isPending}
-          onClick={() => save.mutate(undefined)}
-        >
-          {meta ? 'Enregistrer' : 'Créer'}
-        </button>
+        {!meta && (
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={!title.trim() || save.isPending}
+            onClick={() => save.mutate(undefined)}
+          >
+            Créer
+          </button>
+        )}
         {meta && (
           <button
             type="button"
@@ -746,6 +784,208 @@ export function DomainPage({ id }: { id: string }) {
         {related.map((p) => row(p, true))}
         {related.length === 0 && <Empty>Aucun projet connexe.</Empty>}
       </section>
+    </div>
+  );
+}
+
+// ---------- Carte (meta-objectives × quarters, project paths) ----------
+
+const quarterLabel = (q: string) => `T${q.slice(-1)} ${q.slice(0, 4)}`;
+
+function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][number]['path'][number] }) {
+  const base = {
+    width: 16,
+    height: 16,
+    borderRadius: 999,
+    flex: 'none' as const,
+    display: 'grid',
+    placeItems: 'center',
+    fontSize: 10,
+    color: '#fff',
+  };
+  if (p.status === 'done')
+    return (
+      <span title="Terminé" style={{ ...base, background: 'var(--status-green)' }}>
+        ✓
+      </span>
+    );
+  if (p.status === 'active') return <span title="Actif" style={{ ...base, background: 'var(--primary)' }} />;
+  if (p.status === 'paused')
+    return (
+      <span
+        title="En pause"
+        style={{ ...base, border: '2px solid var(--text-ghost)', color: 'var(--text-ghost)' }}
+      >
+        ॥
+      </span>
+    );
+  return <span title="Idée" style={{ ...base, border: '1.5px dashed var(--text-ghost)' }} />;
+}
+
+function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][number] }) {
+  const dl = useDomainLookup();
+  return (
+    <div className="card flex flex-col gap-2" style={{ padding: '12px 14px' }}>
+      <div className="flex items-start justify-between gap-2">
+        <Link to="/objectifs/$id" params={{ id: o.id }} className="text-[15px] font-semibold leading-snug">
+          {o.title}
+        </Link>
+        {o.status !== 'active' && <StatusPill>{STATUS_LABEL[o.status]}</StatusPill>}
+      </div>
+      <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        <span className="flex-1 min-w-0 truncate">
+          {o.smartIndicator ? `${o.smartIndicator} : ${o.smartCurrent || '—'} → ${o.smartTarget || '—'}` : ''}
+        </span>
+        <span className="mono flex-none">{fmtDate(o.deadline)}</span>
+      </div>
+      <Progress pct={o.progressPct} />
+      {o.path.length === 0 ? (
+        <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+          Aucun projet sur ce chemin
+        </span>
+      ) : (
+        <ol className="m-0 p-0 list-none flex flex-col" style={{ borderTop: '1px solid var(--divider)' }}>
+          {o.path.map((p, i) => (
+            <li
+              key={p.id}
+              className="flex items-center gap-2 text-[13px]"
+              style={{
+                minHeight: 30,
+                borderBottom: i < o.path.length - 1 ? '1px solid var(--divider)' : undefined,
+              }}
+            >
+              <span className="mono text-[11px] flex-none" style={{ width: 14, color: 'var(--text-ghost)' }}>
+                {i + 1}
+              </span>
+              <PathStatus p={p} />
+              <span className="dot" style={{ background: dl.color(p.domainIds[0]), width: 6, height: 6 }} />
+              <Link
+                to="/projets/$id"
+                params={{ id: p.id }}
+                className="flex-1 min-w-0 truncate"
+                style={{
+                  color:
+                    p.status === 'done'
+                      ? 'var(--text-faint)'
+                      : p.status === 'idea'
+                        ? 'var(--text-muted)'
+                        : 'var(--text)',
+                  fontWeight: p.status === 'active' ? 600 : 400,
+                }}
+                title={p.title}
+              >
+                {p.title}
+              </Link>
+              {p.monthFlag && (
+                <span title={`Projet du mois (${p.monthFlag})`} style={{ color: 'var(--experience)' }}>
+                  ★
+                </span>
+              )}
+              {p.blocked && (
+                <span style={{ color: 'var(--text-ghost)' }}>
+                  <LockIcon />
+                </span>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
+function ObjectivesMapView({
+  includeClosed,
+  onEditMeta,
+}: {
+  includeClosed: boolean;
+  onEditMeta: (m: MetaObjective) => void;
+}) {
+  const q = useQuery({
+    queryKey: ['objectives-map', includeClosed],
+    queryFn: () => get<ObjectivesMap>(`/objectives/map${includeClosed ? '?includeClosed=true' : ''}`),
+  });
+  if (q.isError) return <ErrorBox error={q.error} />;
+  if (!q.data) return <Loading />;
+  const { quarters, lanes } = q.data;
+  if (!lanes.length) return <Empty>Aucun objectif pour l'instant.</Empty>;
+  const cols = `220px repeat(${Math.max(1, quarters.length)}, minmax(280px, 1fr))`;
+  const legend: [ReactNode, string][] = [
+    [<PathStatus key="d" p={{ status: 'done' } as never} />, 'terminé'],
+    [<PathStatus key="a" p={{ status: 'active' } as never} />, 'actif'],
+    [<PathStatus key="p" p={{ status: 'paused' } as never} />, 'en pause'],
+    [<PathStatus key="i" p={{ status: 'idea' } as never} />, 'idée'],
+    [
+      <span key="s" style={{ color: 'var(--experience)' }}>
+        ★
+      </span>,
+      'projet du mois',
+    ],
+    [<LockIcon key="l" />, 'attend le projet précédent'],
+  ];
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        {legend.map(([icon, label]) => (
+          <span key={label} className="flex items-center gap-1.5">
+            {icon}
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="overflow-x-auto">
+        <div className="grid gap-3" style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}>
+          <span />
+          {quarters.map((qt) => (
+            <div key={qt} className="label-caps px-1" style={{ fontSize: 12 }}>
+              {quarterLabel(qt)}
+            </div>
+          ))}
+          {lanes.map((l) => (
+            <Fragment key={l.meta?.id ?? 'none'}>
+              <div className="bin flex flex-col gap-1.5" style={{ padding: '14px 14px 16px' }}>
+                <div className="flex items-start justify-between gap-1">
+                  <span className="text-[16px] font-bold leading-snug">
+                    {l.meta ? l.meta.title : 'Sans méta-objectif'}
+                  </span>
+                  {l.meta && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 28, height: 28 }}
+                      aria-label={`Modifier ${l.meta.title}`}
+                      onClick={() => onEditMeta(l.meta!)}
+                    >
+                      <PencilIcon />
+                    </button>
+                  )}
+                </div>
+                {l.meta?.horizonDate && (
+                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                    horizon {fmtDate(l.meta.horizonDate)}
+                  </span>
+                )}
+                {l.meta && l.meta.status !== 'active' && (
+                  <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
+                )}
+              </div>
+              {quarters.map((qt) => (
+                <div
+                  key={qt}
+                  className="flex flex-col gap-3 rounded-[14px]"
+                  style={{ background: 'var(--bin)', padding: 8, opacity: 1 }}
+                >
+                  {l.objectives
+                    .filter((o) => o.quarter === qt)
+                    .map((o) => (
+                      <MapObjective key={o.id} o={o} />
+                    ))}
+                </div>
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

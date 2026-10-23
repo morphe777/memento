@@ -78,6 +78,15 @@ export function DescriptionBlock({
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              // Escape leaves the description editor only, not the drawer around it.
+              if (e.key === 'Escape') {
+                e.stopPropagation();
+                e.nativeEvent.stopImmediatePropagation();
+                setDraft(text);
+                setEditing(false);
+              }
+            }}
             aria-label="Description"
             className="mono"
             style={{ minHeight: 280, fontSize: 14, lineHeight: 1.55, fontWeight: 400 }}

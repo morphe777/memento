@@ -18,13 +18,13 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDateShort, STATUS_LABEL } from '../lib/format.ts';
-import { useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
-import { ConfirmDialog, Duration, ExperienceBadge, Field, Panel, TaskCheck } from './ui.tsx';
+import { ConfirmDialog, Duration, ExperienceBadge, Field, Panel, SAVE_HINT, TaskCheck } from './ui.tsx';
 
 export function LockIcon() {
   return (
@@ -287,11 +287,14 @@ export function TaskDrawer({ taskId, onClose }: { taskId: string | null; onClose
     enabled: !!taskId,
   });
   const t = q.data;
-  return (
-    <Panel open={!!taskId} onClose={onClose} title={t ? t.title : 'Tâche'} width={560}>
-      {t && <TaskForm key={`${t.id}-${t.updatedAt}`} t={t} onClose={onClose} />}
-    </Panel>
-  );
+  if (!taskId) return null;
+  if (!t || t.id !== taskId)
+    return (
+      <Panel open onClose={onClose} title="Tâche">
+        <span style={{ color: 'var(--text-ghost)' }}>Chargement…</span>
+      </Panel>
+    );
+  return <TaskForm key={t.id} t={t} onClose={onClose} />;
 }
 
 function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
@@ -306,18 +309,27 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     domainId: t.domainId ?? '',
   });
   const inbox = !t.projectId;
-  const save = useAction(
-    () =>
-      patch(`/tasks/${t.id}`, {
-        title: f.title,
-        durationMin: f.durationMin,
-        isExperience: f.isExperience,
-        isFree: f.isFree,
-        dueDate: f.dueDate || null,
-        ...(inbox ? { recurrenceRule: f.recurrenceRule || null, domainId: f.domainId || null } : {}),
-      }),
-    { toast: 'Tâche enregistrée.' },
-  );
+  const body = () => ({
+    title: f.title,
+    durationMin: f.durationMin,
+    isExperience: f.isExperience,
+    isFree: f.isFree,
+    dueDate: f.dueDate || null,
+    ...(inbox ? { recurrenceRule: f.recurrenceRule || null, domainId: f.domainId || null } : {}),
+  });
+  const initial = useRef(JSON.stringify(body()));
+  const save = useAction((b: ReturnType<typeof body>) => patch(`/tasks/${t.id}`, b), {
+    toast: 'Tâche enregistrée.',
+  });
+  /** D-40: closing (click outside, ✕) saves the fields if they changed; Escape discards. */
+  const close = () => {
+    const b = body();
+    if (JSON.stringify(b) !== initial.current) {
+      if (!b.title.trim()) return toast('Le titre est obligatoire.', 'error');
+      save.mutate(b);
+    }
+    onClose();
+  };
   const complete = useAction(() => post(`/tasks/${t.id}/${t.status === 'done' ? 'uncomplete' : 'complete'}`));
   const cancel = useAction(
     () => patch(`/tasks/${t.id}`, { status: t.status === 'cancelled' ? 'todo' : 'cancelled' }),
@@ -343,7 +355,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
   const rmDep = useAction((id: string) => del(`/tasks/${t.id}/dependencies/${id}`));
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
-    <>
+    <Panel open onClose={close} onCancel={onClose} title={t.title} hint={SAVE_HINT}>
       <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
         {STATUS_LABEL[t.status]} · créée par {t.createdBy === 'me' ? 'moi' : t.createdBy}{' '}
         {t.locked && '· verrouillée (attend la tâche précédente)'}
@@ -406,14 +418,6 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         </div>
       )}
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() => save.mutate(undefined)}
-          disabled={save.isPending}
-        >
-          Enregistrer
-        </button>
         <button type="button" className="btn" onClick={() => complete.mutate(undefined)}>
           {t.status === 'done' ? 'Rouvrir' : 'Marquer faite'}
         </button>
@@ -490,7 +494,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         </select>
       </div>
       <Resources ownerType="task" ownerId={t.id} resources={t.resources} />
-    </>
+    </Panel>
   );
 }
 

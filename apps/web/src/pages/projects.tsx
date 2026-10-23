@@ -2,7 +2,7 @@
 import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
@@ -22,6 +22,7 @@ import {
   Loading,
   PageHeader,
   Panel,
+  SAVE_HINT,
   Section,
   StatusPill,
   Tabs,
@@ -420,7 +421,7 @@ export function NewProjectPanel({
     },
   });
   return (
-    <Panel open={open} onClose={onClose} title="Nouvelle idée / nouveau projet" side={false} width={640}>
+    <Panel open={open} onClose={onClose} title="Nouvelle idée / nouveau projet">
       <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
         Tout commence en idée : un titre et un groupe suffisent. Tu la promeus en projet quand elle est prête
         (critère de succès, dates, tâches).
@@ -572,12 +573,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
           </Section>
         </aside>
       </div>
-      <ProjectEditPanel
-        key={`${p.id}-${p.updatedAt}`}
-        p={p}
-        open={editing}
-        onClose={() => setEditing(false)}
-      />
+      {editing && <ProjectEditPanel p={p} open onClose={() => setEditing(false)} />}
       <TaskDrawer
         taskId={tache ?? null}
         onClose={() => navigate({ to: '/projets/$id', params: { id }, search: { vue } })}
@@ -824,6 +820,8 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
     ),
   ];
   const month = me.data?.today.slice(0, 7) ?? '';
+  const snapshot = () => JSON.stringify({ f, groupIds, primary });
+  const initial = useRef(snapshot());
   const save = useAction(
     async () => {
       const groupsChanged =
@@ -844,8 +842,17 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         monthFlag: f.monthFlag ? (p.monthFlag ?? month) : null,
       });
     },
-    { onSuccess: onClose, toast: 'Projet enregistré.' },
+    { toast: 'Projet enregistré.' },
   );
+  /** D-40: click outside / ✕ saves (if changed and valid), Escape discards. */
+  const close = () => {
+    if (snapshot() !== initial.current) {
+      if (!f.title.trim()) return toast('Le titre est obligatoire.', 'error');
+      if (!groupIds.length) return toast('Au moins un groupe.', 'error');
+      save.mutate(undefined);
+    }
+    onClose();
+  };
   const remove = useAction(() => del(`/projects/${p.id}`), {
     onSuccess: () => navigate({ to: '/projets' }),
     toast: 'Projet supprimé.',
@@ -853,7 +860,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' };
   return (
-    <Panel open={open} onClose={onClose} title="Modifier le projet" side={false} width={760}>
+    <Panel open={open} onClose={close} onCancel={onClose} title="Modifier le projet" hint={SAVE_HINT}>
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
       </Field>
@@ -937,17 +944,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         className="flex flex-wrap gap-2 items-center pt-3"
         style={{ borderTop: '1px solid var(--border)' }}
       >
-        <button
-          type="button"
-          className="btn btn-primary"
-          disabled={!f.title.trim() || !groupIds.length || save.isPending}
-          onClick={() => save.mutate(undefined)}
-        >
-          Enregistrer
-        </button>
-        <button type="button" className="btn" onClick={onClose}>
-          Annuler
-        </button>
         <button
           type="button"
           className="btn btn-ghost btn-danger ml-auto"
