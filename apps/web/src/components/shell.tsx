@@ -496,11 +496,16 @@ function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }
           }}
           placeholder="Rechercher un objectif, un projet, une tâche…"
           aria-label="Rechercher"
-          className="border-0 rounded-none text-[17px]"
+          className="text-[17px]"
           style={{
+            // Inline on purpose: the global input style (border, radius) would win over utility classes.
             padding: '16px 20px',
             minHeight: 56,
-            borderBottom: '1px solid var(--border)',
+            borderWidth: '0 0 1px 0',
+            borderStyle: 'solid',
+            borderColor: 'var(--border)',
+            borderRadius: 0,
+            background: 'transparent',
             outline: 'none',
           }}
         />

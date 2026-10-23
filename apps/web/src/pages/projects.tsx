@@ -663,6 +663,8 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
   );
 }
 
+const IMPORTANCE_LABEL = { low: 'Basse', normal: 'Normale', high: 'Haute' } as const;
+
 /** Read-only facts of the project (edit through « Modifier »). */
 function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
   const dl = useDomainLookup();
@@ -811,6 +813,12 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
         </span>,
       )}
       {row(
+        'Importance',
+        <span style={{ color: p.importance === 'high' ? 'var(--late-text)' : undefined }}>
+          {IMPORTANCE_LABEL[p.importance]}
+        </span>,
+      )}
+      {row(
         'Organisation',
         <span>
           {p.sequenceMode === 'sequential' ? 'Séquentiel' : 'Parallèle'}
@@ -923,6 +931,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
     objectiveId: p.objectiveId ?? '',
     sequenceMode: p.sequenceMode,
     isFree: p.isFree,
+    importance: p.importance,
   });
   const [groupIds, setGroupIds] = useState(p.groupIds);
   const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
@@ -951,6 +960,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         objectiveId: f.objectiveId || null,
         sequenceMode: f.sequenceMode,
         isFree: f.isFree,
+        importance: f.importance,
       });
     },
     { toast: 'Projet enregistré.' },
@@ -1020,6 +1030,19 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
           </select>
         </Field>
       </div>
+      <Field
+        label="Importance"
+        info="Priorité propre au projet, indépendante du domaine : Basse ×0,5, Normale ×1, Haute ×1,5 sur la valeur du score. Un projet Santé « basse » peut ainsi passer après un projet Famille « haute »."
+      >
+        <select
+          value={f.importance}
+          onChange={(e) => set('importance', e.target.value as typeof f.importance)}
+        >
+          <option value="low">Basse</option>
+          <option value="normal">Normale</option>
+          <option value="high">Haute</option>
+        </select>
+      </Field>
       <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} />

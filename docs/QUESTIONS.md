@@ -11,7 +11,6 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 
 ## En attente de ta réponse (structurant)
 
-- **Q-E · Priorité propre à un projet** (proposition) : ajouter sur chaque projet une **importance** Basse / Normale / Haute (×0,5 / ×1 / ×1,5 sur la valeur V du score), indépendante du domaine. Un projet Santé « basse » peut ainsi passer après un projet Famille « haute ». Par défaut Normale ; l'objectif garde sa criticité. Visible dans la fiche et dans Planifier.
 - **Q-F · Page Expériences** (proposition) : une page « Expériences » avec la cible (ex. 2 sur 4 semaines), les expériences vécues (souvenirs, avec date et note facultative), celles prévues, et une réserve d'idées d'expériences. À décider après quelques semaines d'usage du badge Expérience.
 - **Corrélation santé / productivité** : mise de côté. Mémento reste fournisseur de données via l'API.
 

@@ -229,7 +229,7 @@ const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> 
 
 const WEIGHT_INFO: Record<string, string> = {
   value:
-    "V : poids du domaine principal + 50 % des autres domaines, × criticité de l'objectif. Mesure « est-ce important pour moi ».",
+    "V : poids du domaine principal + 50 % des autres domaines, × criticité de l'objectif, × importance du projet (basse 0,5 · normale 1 · haute 1,5). Mesure « est-ce important pour moi ».",
   urgency: 'U : se rapproche de 1 quand la deadline de la tâche (sinon la fin du projet) approche.',
   delay: 'R : retard du projet sur son rythme prévu (projets du mois). Fait remonter ce qui glisse.',
   continuity: "C : 1 si une tâche du projet a été faite ces 2 dernières semaines. Favorise l'élan.",
