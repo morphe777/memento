@@ -29,3 +29,4 @@ export interface Me {
   currentWeek: string;
   unreviewed: number;
 }
+export type BoardTask = ReturnType<typeof D.listBoardTasks>[number];

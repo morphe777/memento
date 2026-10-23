@@ -18,6 +18,7 @@ import {
   getPlanningPage,
   getProject,
   getSettings,
+  listBoardTasks,
   listChanges,
   listDomains,
   listTasks,
@@ -31,6 +32,7 @@ import {
   search,
   seed,
   setProjectGroups,
+  setTaskInCurrentWeek,
   setWeekItems,
   tx,
   updateGroup,
@@ -416,6 +418,37 @@ describe('L4 exécution', () => {
     expect(delta()).toBeLessThan(0);
     replanProject(ctx, p.id);
     expect(delta()).toBe(0);
+  });
+});
+
+describe('vues Tableau / Kanban des tâches (D-33)', () => {
+  it('derives columns from state; adding to the current week follows the plan rules (RB-06)', () => {
+    const ctx = makeCtx(); // Friday 23 Oct 2026, W43
+    const { project: pv, tasks } = activeProject(ctx, 'Cuisine', 'Travaux', 3);
+    const idea = createProject(ctx, { title: 'Idée', groupIds: [lookups(ctx).group('Travaux').id] });
+    createTask(ctx, { projectId: idea.id, title: 'Tâche d’idée', durationMin: 30 });
+    const inbox = createTask(ctx, { title: 'Inbox', durationMin: 30 });
+    const col = () => Object.fromEntries(listBoardTasks(ctx).map((t) => [t.title, t.bucket]));
+    expect(col()).toEqual({
+      'Cuisine 1': 'todo',
+      'Cuisine 2': 'waiting',
+      'Cuisine 3': 'waiting',
+      Inbox: 'todo',
+    });
+    expect(errCode(() => setTaskInCurrentWeek(ctx, tasks[1].id, true))).toBe('TASK_LOCKED');
+    expect(setTaskInCurrentWeek(ctx, tasks[0].id, true).inPlan).toBe(true);
+    // Choosing the first task unlocks the next one (D-18).
+    expect(col()).toMatchObject({ 'Cuisine 1': 'week', 'Cuisine 2': 'todo' });
+    completeTask(ctx, inbox.id);
+    expect(col().Inbox).toBe('done');
+    setTaskInCurrentWeek(ctx, tasks[0].id, false);
+    expect(col()['Cuisine 1']).toBe('todo');
+    expect(listBoardTasks(ctx, { projectId: pv.id }).every((t) => t.colorDomainId === pv.domainIds[0])).toBe(
+      true,
+    );
+    // Done before Monday: no longer on the board.
+    ctx.setNow('2026-10-27T08:00:00.000Z');
+    expect(col().Inbox).toBeUndefined();
   });
 });
 

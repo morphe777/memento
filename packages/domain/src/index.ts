@@ -4,6 +4,7 @@ export * from './rules/index.ts';
 export * from './schemas.ts';
 export * from './seed.ts';
 export * from './seed-data.ts';
+export * from './services/board.ts';
 export * from './services/changes.ts';
 export * from './services/jobs.ts';
 export * from './services/planning.ts';

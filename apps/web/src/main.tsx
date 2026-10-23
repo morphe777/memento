@@ -19,6 +19,7 @@ import { DomainPage, DomainsPage, ObjectivePage, ObjectivesPage } from './pages/
 import { PlanPage } from './pages/plan.tsx';
 import { IdeasPage, InboxPage, ProjectPage, ProjectsPage } from './pages/projects.tsx';
 import { ReportPage, ReportsPage } from './pages/reports.tsx';
+import { TasksPage, type TaskView } from './pages/tasks.tsx';
 import { WeekPage } from './pages/week.tsx';
 
 const queryClient = new QueryClient({
@@ -88,12 +89,29 @@ const projectsRoute = createRoute({
     return <ProjectsPage groupe={groupe} vue={vue} />;
   },
 });
+const taskView = (v: unknown): TaskView | undefined => (v === 'table' || v === 'kanban' ? v : undefined);
 const projectRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/projets/$id',
-  validateSearch: (s: Record<string, unknown>): { tache?: string } => ({ tache: str(s.tache) }),
+  validateSearch: (s: Record<string, unknown>): { tache?: string; vue?: TaskView } => ({
+    tache: str(s.tache),
+    vue: taskView(s.vue),
+  }),
   component: function Project() {
-    return <ProjectPage id={projectRoute.useParams().id} tache={projectRoute.useSearch().tache} />;
+    const { tache, vue } = projectRoute.useSearch();
+    return <ProjectPage id={projectRoute.useParams().id} tache={tache} vue={vue} />;
+  },
+});
+const tasksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/taches',
+  validateSearch: (s: Record<string, unknown>): { tache?: string; vue?: TaskView } => ({
+    tache: str(s.tache),
+    vue: taskView(s.vue),
+  }),
+  component: function Tasks() {
+    const { tache, vue } = tasksRoute.useSearch();
+    return <TasksPage tache={tache} vue={vue} />;
   },
 });
 const domainsRoute = route('/domaines', DomainsPage);
@@ -134,6 +152,7 @@ const routeTree = rootRoute.addChildren([
   objectiveRoute,
   projectsRoute,
   projectRoute,
+  tasksRoute,
   domainsRoute,
   domainRoute,
   ideasRoute,

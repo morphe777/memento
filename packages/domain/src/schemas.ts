@@ -120,6 +120,8 @@ export const taskListQuery = z.object({
   projectId: z.string().optional(), // uuid or "inbox"
   status: z.string().optional(),
 });
+export const boardQuery = z.object({ projectId: uuid.optional() });
+export const weekToggleBody = z.object({ inWeek: z.boolean() });
 export const dependencyBody = z.object({ dependsOnId: uuid });
 
 export const resourceCreate = z.object({
