@@ -1,0 +1,56 @@
+# Mémento — stack de production (Portainer ou docker compose).
+# Une seule image, trois conteneurs : API + interface web, worker (jobs planifiés), serveur MCP (IA).
+# Données : bind vers /home/morphe/Dockers/Memento (base SQLite memento.db, sauvegardes avant import).
+# Réseau local / VPN uniquement : ne pas exposer sur Internet.
+
+x-memento: &memento
+  image: morphe777/memento:latest
+  restart: unless-stopped
+  volumes:
+    - /home/morphe/Dockers/Memento:/data
+  environment: &env
+    TZ: Europe/Paris
+    MEMENTO_DB_FILE: /data/memento.db
+
+services:
+  memento:
+    <<: *memento
+    container_name: memento
+    ports:
+      - "4500:4500"
+    environment:
+      <<: *env
+      MEMENTO_HOST: 0.0.0.0
+      MEMENTO_API_PORT: "4500"
+      # true derrière NGINX Proxy Manager en HTTPS (cookie de session « Secure »)
+      MEMENTO_COOKIE_SECURE: "false"
+
+  memento-worker:
+    <<: *memento
+    container_name: memento-worker
+    command: ["node_modules/.bin/tsx", "apps/worker/src/index.ts"]
+    healthcheck:
+      disable: true
+    depends_on:
+      memento:
+        condition: service_healthy
+
+  memento-mcp:
+    <<: *memento
+    container_name: memento-mcp
+    command: ["node_modules/.bin/tsx", "apps/mcp/src/index.ts"]
+    ports:
+      - "4502:4502"
+    environment:
+      <<: *env
+      MEMENTO_API_URL: http://memento:4500/api/v1
+      MEMENTO_MCP_HOST: 0.0.0.0
+      MEMENTO_MCP_PORT: "4502"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4502/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      memento:
+        condition: service_healthy
