@@ -934,7 +934,10 @@ function ObjectivesMapView({
         ))}
       </div>
       <div className="overflow-x-auto">
-        <div className="grid gap-3" style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}>
+        <div
+          className="grid gap-3"
+          style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
+        >
           <span />
           {quarters.map((qt) => (
             <div key={qt} className="label-caps px-1" style={{ fontSize: 12 }}>
