@@ -6,7 +6,10 @@ export const ALLOWED_DURATIONS = [30, 60, 120] as const;
 export function checkTaskDuration(durationMin: number | null | undefined): void {
   if (durationMin === null || durationMin === undefined) return;
   if (durationMin > 120) {
-    throw new DomainError('TASK_TOO_LONG', 'Tâche de plus de 2 h : à découper en tâches de 30 min, 1 h ou 2 h.');
+    throw new DomainError(
+      'TASK_TOO_LONG',
+      'Tâche de plus de 2 h : à découper en tâches de 30 min, 1 h ou 2 h.',
+    );
   }
   if (!(ALLOWED_DURATIONS as readonly number[]).includes(durationMin)) {
     throw new DomainError('INVALID_DURATION', 'Durée possible : 30 min, 1 h ou 2 h.');
@@ -19,6 +22,9 @@ export function budgetMinutes(tasks: { durationMin: number | null; isExperience:
 }
 
 /** RB-14 (CH-08): overflow never blocks, it is only reported. */
-export function budgetStatus(plannedMin: number, budgetMin: number): { overMin: number; remainingMin: number } {
+export function budgetStatus(
+  plannedMin: number,
+  budgetMin: number,
+): { overMin: number; remainingMin: number } {
   return { overMin: Math.max(0, plannedMin - budgetMin), remainingMin: Math.max(0, budgetMin - plannedMin) };
 }

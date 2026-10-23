@@ -20,7 +20,9 @@ export function availableTaskIds(
   const status = new Map(ordered.map((t) => [t.id, t.status]));
   const satisfied = (id: string) => status.get(id) === 'done' || chosen.has(id) || doneElsewhere.has(id);
   const depsOk = (id: string) =>
-    deps.filter((d) => d.taskId === id).every((d) => satisfied(d.dependsOnTaskId) || status.get(d.dependsOnTaskId) === 'cancelled');
+    deps
+      .filter((d) => d.taskId === id)
+      .every((d) => satisfied(d.dependsOnTaskId) || status.get(d.dependsOnTaskId) === 'cancelled');
   const out = new Set<string>();
   let chainOpen = true;
   for (const t of ordered) {
@@ -37,13 +39,20 @@ export function availableTaskIds(
  * non-free project placed before it is active or paused, or while an explicit prerequisite is not done.
  */
 export function blockedProjectIds(
-  projects: { id: string; objectiveId: string | null; positionInObjective: number; isFree: boolean; status: string }[],
+  projects: {
+    id: string;
+    objectiveId: string | null;
+    positionInObjective: number;
+    isFree: boolean;
+    status: string;
+  }[],
   deps: { projectId: string; dependsOnProjectId: string }[],
 ): Set<string> {
   const blocked = new Set<string>();
   const status = new Map(projects.map((p) => [p.id, p.status]));
   const byObjective = new Map<string, typeof projects>();
-  for (const p of projects) if (p.objectiveId) byObjective.set(p.objectiveId, [...(byObjective.get(p.objectiveId) ?? []), p]);
+  for (const p of projects)
+    if (p.objectiveId) byObjective.set(p.objectiveId, [...(byObjective.get(p.objectiveId) ?? []), p]);
   for (const list of byObjective.values()) {
     const ordered = [...list].sort((a, b) => a.positionInObjective - b.positionInObjective);
     let open = true;

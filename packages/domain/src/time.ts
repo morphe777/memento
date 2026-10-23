@@ -6,7 +6,12 @@ export const nowIso = (): string => new Date().toISOString();
 
 /** Calendar date in Europe/Paris for a given instant. */
 export function parisDate(at: Date = new Date()): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit' }).format(at);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(at);
 }
 
 const toUtc = (d: string): number => Date.parse(`${d}T00:00:00Z`);
@@ -63,7 +68,8 @@ export function shiftMonth(m: string, n: number): string {
   return d.toISOString().slice(0, 7);
 }
 
-export const quarterOf = (d: string): string => `${d.slice(0, 4)}-Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1}`;
+export const quarterOf = (d: string): string =>
+  `${d.slice(0, 4)}-Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1}`;
 export function quarterStart(q: string): string {
   const [y, n] = [q.slice(0, 4), Number(q.slice(6))];
   return `${y}-${String((n - 1) * 3 + 1).padStart(2, '0')}-01`;
@@ -75,12 +81,27 @@ export const isValidQuarter = (q: string): boolean => /^\d{4}-Q[1-4]$/.test(q);
 export const isValidDate = (d: string): boolean =>
   /^\d{4}-\d{2}-\d{2}$/.test(d) && !Number.isNaN(toUtc(d)) && fromUtc(toUtc(d)) === d;
 
-const FR_MONTHS = ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'];
+const FR_MONTHS = [
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
 const FR_DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
 export const frDay = (d: string): string => FR_DAYS[isoDay(d) - 1];
-export const frShort = (d: string): string => `${Number(d.slice(8, 10))} ${FR_MONTHS[Number(d.slice(5, 7)) - 1]}`;
+export const frShort = (d: string): string =>
+  `${Number(d.slice(8, 10))} ${FR_MONTHS[Number(d.slice(5, 7)) - 1]}`;
 /** "26 oct. – 1 nov." */
-export const frWeekRange = (key: string): string => `${frShort(weekMonday(key))} – ${frShort(weekSunday(key))}`;
+export const frWeekRange = (key: string): string =>
+  `${frShort(weekMonday(key))} – ${frShort(weekSunday(key))}`;
 
 /** "30 min", "1 h", "1 h 30" (mockups' format). */
 export function fmtMin(m: number): string {

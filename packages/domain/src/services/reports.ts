@@ -27,24 +27,44 @@ const { report, task, project, objective, metaObjective, domain, weekPlan, weekP
 export const REPORT_SCHEMA_VERSION = 1;
 type Kind = 'week' | 'month' | 'quarter';
 
-const FR_MONTH_LONG = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
+const FR_MONTH_LONG = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
 export const monthLabel = (m: string) => `${FR_MONTH_LONG[Number(m.slice(5, 7)) - 1]} ${m.slice(0, 4)}`;
 
 function domainTable(ctx: Ctx) {
   return ctx.db.select().from(domain).orderBy(asc(domain.priorityRank)).all();
 }
 const domainView = (d: { name: string; colorLight: string; colorDark: string } | undefined) =>
-  d ? { name: d.name, colorLight: d.colorLight, colorDark: d.colorDark } : { name: 'Inbox', colorLight: INBOX_COLORS.light, colorDark: INBOX_COLORS.dark };
+  d
+    ? { name: d.name, colorLight: d.colorLight, colorDark: d.colorDark }
+    : { name: 'Inbox', colorLight: INBOX_COLORS.light, colorDark: INBOX_COLORS.dark };
 
 /** Done tasks in [from, to) enriched for indicators. */
 function doneTasksBetween(ctx: Ctx, from: string, to: string, bonusIds: Set<string> = new Set()) {
   const rows = ctx.db
     .select()
     .from(task)
-    .where(and(eq(task.status, 'done'), gte(task.doneAt, `${from}T00:00:00`), lt(task.doneAt, `${to}T00:00:00`)))
+    .where(
+      and(eq(task.status, 'done'), gte(task.doneAt, `${from}T00:00:00`), lt(task.doneAt, `${to}T00:00:00`)),
+    )
     .all();
   const pids = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
-  const projects = serializeProjects(ctx, pids.length ? ctx.db.select().from(project).where(inArray(project.id, pids)).all() : []);
+  const projects = serializeProjects(
+    ctx,
+    pids.length ? ctx.db.select().from(project).where(inArray(project.id, pids)).all() : [],
+  );
   const objectives = ctx.db.select().from(objective).all();
   return rows.map((t): DoneTask & { projectId: string | null } => {
     const p = projects.find((x) => x.id === t.projectId);
@@ -72,11 +92,22 @@ function hoursByDomain(ctx: Ctx, done: DoneTask[]) {
 }
 
 function existing(ctx: Ctx, kind: Kind, periodKey: string) {
-  return ctx.db.select().from(report).where(and(eq(report.kind, kind), eq(report.periodKey, periodKey))).get();
+  return ctx.db
+    .select()
+    .from(report)
+    .where(and(eq(report.kind, kind), eq(report.periodKey, periodKey)))
+    .get();
 }
 
 function insertReport(ctx: Ctx, kind: Kind, periodKey: string, payload: Record<string, unknown>) {
-  const row = { id: newId(), kind, periodKey, generatedAt: ctxNowIso(ctx), payload: { schemaVersion: REPORT_SCHEMA_VERSION, ...payload }, schemaVersion: REPORT_SCHEMA_VERSION };
+  const row = {
+    id: newId(),
+    kind,
+    periodKey,
+    generatedAt: ctxNowIso(ctx),
+    payload: { schemaVersion: REPORT_SCHEMA_VERSION, ...payload },
+    schemaVersion: REPORT_SCHEMA_VERSION,
+  };
   ctx.db.insert(report).values(row).run();
   return row;
 }
@@ -88,7 +119,9 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   const monday = weekMonday(isoWeek);
   const nextMonday = addDays(monday, 7);
   const plan = ctx.db.select().from(weekPlan).where(eq(weekPlan.isoWeek, isoWeek)).get();
-  const items = plan ? ctx.db.select().from(weekPlanItem).where(eq(weekPlanItem.weekPlanId, plan.id)).all() : [];
+  const items = plan
+    ? ctx.db.select().from(weekPlanItem).where(eq(weekPlanItem.weekPlanId, plan.id)).all()
+    : [];
   const bonusIds = new Set(items.filter((i) => i.kind === 'bonus').map((i) => i.taskId));
   const done = doneTasksBetween(ctx, monday, nextMonday, bonusIds);
   const budgetMin = plan?.budgetMin ?? s['budget.weekly_min'];
@@ -100,9 +133,13 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   const byDomain = minutesByDomain(done);
 
   const window = s['experience.window_weeks'];
-  const expWindow = doneTasksBetween(ctx, addDays(monday, -7 * (window - 1)), nextMonday).filter((t) => t.isExperience).length;
+  const expWindow = doneTasksBetween(ctx, addDays(monday, -7 * (window - 1)), nextMonday).filter(
+    (t) => t.isExperience,
+  ).length;
   const prevReport = existing(ctx, 'week', shiftWeek(isoWeek, -1));
-  const prevPayload = prevReport?.payload as { tasksDone?: { count: number }; objectives?: { id: string; progressPct: number }[] } | undefined;
+  const prevPayload = prevReport?.payload as
+    | { tasksDone?: { count: number }; objectives?: { id: string; progressPct: number }[] }
+    | undefined;
   const prevCount =
     prevPayload?.tasksDone?.count ?? doneTasksBetween(ctx, addDays(monday, -7), monday).length;
 
@@ -118,20 +155,34 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   });
 
   // R-07 avoidance: tasks still todo with postpone_count ≥ 3.
-  const avoided = ctx.db.select().from(task).where(and(eq(task.status, 'todo'), gte(task.postponeCount, 3))).all();
+  const avoided = ctx.db
+    .select()
+    .from(task)
+    .where(and(eq(task.status, 'todo'), gte(task.postponeCount, 3)))
+    .all();
 
   // R-06: month projects at the end of the week.
   const asOf = weekSunday(isoWeek);
   const monthProjects = serializeProjects(
     ctx,
-    ctx.db.select().from(project).where(and(eq(project.monthFlag, monthOf(monday)), inArray(project.status, ['active', 'paused', 'done']))).all(),
+    ctx.db
+      .select()
+      .from(project)
+      .where(
+        and(eq(project.monthFlag, monthOf(monday)), inArray(project.status, ['active', 'paused', 'done'])),
+      )
+      .all(),
   ).map((p) => {
     const ptasks = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all() as EngineTask[];
     return {
       projectId: p.id,
       title: p.title,
       ...domainView(domains.find((d) => d.id === p.domainIds[0])),
-      deltaMin: projectDelayMin({ ...p, objectiveTitle: null, objectiveCriticality: null, blocked: false } as EngineProject, ptasks, asOf),
+      deltaMin: projectDelayMin(
+        { ...p, objectiveTitle: null, objectiveCriticality: null, blocked: false } as EngineProject,
+        ptasks,
+        asOf,
+      ),
     };
   });
 
@@ -141,7 +192,14 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     ctx.db
       .select()
       .from(project)
-      .where(and(eq(project.status, 'done'), eq(project.success, true), gte(project.completedAt, `${monday}T00:00:00`), lt(project.completedAt, `${nextMonday}T00:00:00`)))
+      .where(
+        and(
+          eq(project.status, 'done'),
+          eq(project.success, true),
+          gte(project.completedAt, `${monday}T00:00:00`),
+          lt(project.completedAt, `${nextMonday}T00:00:00`),
+        ),
+      )
       .all(),
   );
   const objectives = ctx.db.select().from(objective).all();
@@ -156,7 +214,10 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
       .map((o) => ({ o, prev: prevPayload?.objectives?.find((x) => x.id === o.id)?.progressPct }))
       .filter(({ o, prev }) => prev !== undefined && o.progressPct > prev)
       .map(({ o, prev }) => {
-        const firstProject = serializeProjects(ctx, ctx.db.select().from(project).where(eq(project.objectiveId, o.id)).limit(1).all())[0];
+        const firstProject = serializeProjects(
+          ctx,
+          ctx.db.select().from(project).where(eq(project.objectiveId, o.id)).limit(1).all(),
+        )[0];
         return {
           sentence: `« ${o.title} » avance : ${prev} % → ${o.progressPct} %`,
           ...domainView(domains.find((d) => d.id === firstProject?.domainIds[0])),
@@ -167,19 +228,37 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   ];
 
   return {
-    period: { isoWeek, label: `Semaine ${Number(isoWeek.slice(6))} · ${frWeekRange(isoWeek)}`, from: monday, to: weekSunday(isoWeek) },
+    period: {
+      isoWeek,
+      label: `Semaine ${Number(isoWeek.slice(6))} · ${frWeekRange(isoWeek)}`,
+      from: monday,
+      to: weekSunday(isoWeek),
+    },
     navigation: { previous: shiftWeek(isoWeek, -1), next: shiftWeek(isoWeek, 1), month: monthOf(monday) },
     global,
     successes,
     tasksDone: { count: done.length, bonus: done.filter((t) => t.isBonus).length, previousWeek: prevCount },
-    experiences: { done: expWindow, target: s['experience.target'], windowWeeks: window, titles: done.filter((t) => t.isExperience).map((t) => t.title) },
+    experiences: {
+      done: expWindow,
+      target: s['experience.target'],
+      windowWeeks: window,
+      titles: done.filter((t) => t.isExperience).map((t) => t.title),
+    },
     focus,
     rhythm: { tier: rhythm, doneMin, budgetMin, bonus: done.filter((t) => t.isBonus).length },
-    avoidance: { count: avoided.length, tasks: avoided.map((t) => ({ title: t.title, postponeCount: t.postponeCount })) },
+    avoidance: {
+      count: avoided.length,
+      tasks: avoided.map((t) => ({ title: t.title, postponeCount: t.postponeCount })),
+    },
     delays: monthProjects,
     hoursByDomain: hoursByDomain(ctx, done),
     plan: plan ? { status: plan.status, itemCount: items.length } : null,
-    objectives: objectives.map((o) => ({ id: o.id, title: o.title, progressPct: o.progressPct, status: o.status })),
+    objectives: objectives.map((o) => ({
+      id: o.id,
+      title: o.title,
+      progressPct: o.progressPct,
+      status: o.status,
+    })),
   };
 }
 
@@ -190,33 +269,84 @@ function buildMonthPayload(ctx: Ctx, month: string) {
   const to = addDays(monthEnd(month), 1);
   const done = doneTasksBetween(ctx, from, to);
   const domains = domainTable(ctx);
-  const weekly = ctx.db.select().from(report).where(eq(report.kind, 'week')).orderBy(asc(report.periodKey)).all()
+  const weekly = ctx.db
+    .select()
+    .from(report)
+    .where(eq(report.kind, 'week'))
+    .orderBy(asc(report.periodKey))
+    .all()
     .filter((r) => isValidIsoWeek(r.periodKey) && monthOf(weekMonday(r.periodKey)) === month);
   const weeks = weekly.map((r) => {
     const p = r.payload as ReturnType<typeof buildWeekPayload>;
-    return { isoWeek: r.periodKey, light: p.global.light, tasksDone: p.tasksDone.count, doneMin: p.rhythm.doneMin, budgetMin: p.rhythm.budgetMin, focus: p.focus, rhythm: p.rhythm.tier };
+    return {
+      isoWeek: r.periodKey,
+      light: p.global.light,
+      tasksDone: p.tasksDone.count,
+      doneMin: p.rhythm.doneMin,
+      budgetMin: p.rhythm.budgetMin,
+      focus: p.focus,
+      rhythm: p.rhythm.tier,
+    };
   });
   const finished = serializeProjects(
     ctx,
-    ctx.db.select().from(project).where(and(eq(project.status, 'done'), gte(project.completedAt, `${from}T00:00:00`), lt(project.completedAt, `${to}T00:00:00`))).all(),
-  ).map((p) => ({ projectId: p.id, title: p.title, success: !!p.success, ...domainView(domains.find((d) => d.id === p.domainIds[0])) }));
+    ctx.db
+      .select()
+      .from(project)
+      .where(
+        and(
+          eq(project.status, 'done'),
+          gte(project.completedAt, `${from}T00:00:00`),
+          lt(project.completedAt, `${to}T00:00:00`),
+        ),
+      )
+      .all(),
+  ).map((p) => ({
+    projectId: p.id,
+    title: p.title,
+    success: !!p.success,
+    ...domainView(domains.find((d) => d.id === p.domainIds[0])),
+  }));
   const auditIn = (entityType: string, action: string) =>
-    ctx.db.select().from(auditLog).where(and(eq(auditLog.entityType, entityType), eq(auditLog.action, action), gte(auditLog.at, `${from}T00:00:00`), lt(auditLog.at, `${to}T00:00:00`))).all();
+    ctx.db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityType, entityType),
+          eq(auditLog.action, action),
+          gte(auditLog.at, `${from}T00:00:00`),
+          lt(auditLog.at, `${to}T00:00:00`),
+        ),
+      )
+      .all();
   const ideasCreated = auditIn('project', 'create').length;
   const ideasPromoted = auditIn('project', 'promote').length;
   const ideasDropped = auditIn('project', 'status_abandoned').length;
   // DM-90: 3 ideas surfaced — most prioritary domain first, then oldest.
-  const ideas = serializeProjects(ctx, ctx.db.select().from(project).where(eq(project.status, 'idea')).orderBy(asc(project.createdAt)).all());
+  const ideas = serializeProjects(
+    ctx,
+    ctx.db.select().from(project).where(eq(project.status, 'idea')).orderBy(asc(project.createdAt)).all(),
+  );
   const rank = (id?: string) => domains.find((d) => d.id === id)?.priorityRank ?? 99;
   const surfaced = [...ideas]
     .sort((a, b) => rank(a.domainIds[0]) - rank(b.domainIds[0]) || a.createdAt.localeCompare(b.createdAt))
     .slice(0, 3)
-    .map((p) => ({ projectId: p.id, title: p.title, createdAt: p.createdAt, ...domainView(domains.find((d) => d.id === p.domainIds[0])) }));
+    .map((p) => ({
+      projectId: p.id,
+      title: p.title,
+      createdAt: p.createdAt,
+      ...domainView(domains.find((d) => d.id === p.domainIds[0])),
+    }));
   const work = done.filter((t) => !t.isExperience);
   return {
     period: { month, label: monthLabel(month), from, to: monthEnd(month) },
     navigation: { previous: shiftMonth(month, -1), next: shiftMonth(month, 1) },
-    totals: { tasksDone: done.length, doneMin: work.reduce((a, t) => a + t.durationMin, 0), experiences: done.filter((t) => t.isExperience).length },
+    totals: {
+      tasksDone: done.length,
+      doneMin: work.reduce((a, t) => a + t.durationMin, 0),
+      experiences: done.filter((t) => t.isExperience).length,
+    },
     weeks,
     weeksOverBudget: weeks.filter((w) => w.doneMin > w.budgetMin * 1.1).length,
     projectsFinished: finished,
@@ -232,13 +362,15 @@ function buildQuarterPayload(ctx: Ctx, quarter: string) {
   const from = quarterStart(quarter);
   const to = addDays(quarterEnd(quarter), 1);
   const done = doneTasksBetween(ctx, from, to);
-  const domains = domainTable(ctx);
   const objectives = ctx.db.select().from(objective).where(eq(objective.quarter, quarter)).all();
   const metas = ctx.db.select().from(metaObjective).all();
   const count = (st: string[]) => objectives.filter((o) => st.includes(o.status)).length;
   const hours = hoursByDomain(ctx, done);
   const total = hours.reduce((a, h) => a + h.minutes, 0);
-  const real = [...hours].filter((h) => h.name !== 'Inbox').sort((a, b) => b.minutes - a.minutes).map((h) => h.name);
+  const real = [...hours]
+    .filter((h) => h.name !== 'Inbox')
+    .sort((a, b) => b.minutes - a.minutes)
+    .map((h) => h.name);
   return {
     period: { quarter, label: `${quarter.slice(5)} ${quarter.slice(0, 4)}`, from, to: quarterEnd(quarter) },
     navigation: { previous: shiftQuarter(quarter, -1), next: shiftQuarter(quarter, 1) },
@@ -247,15 +379,33 @@ function buildQuarterPayload(ctx: Ctx, quarter: string) {
       partial: count(['partial']),
       failed: count(['failed', 'abandoned']),
       open: count(['active', 'paused']),
-      list: objectives.map((o) => ({ id: o.id, title: o.title, status: o.status, progressPct: o.progressPct })),
+      list: objectives.map((o) => ({
+        id: o.id,
+        title: o.title,
+        status: o.status,
+        progressPct: o.progressPct,
+      })),
     },
     metaObjectives: metas.map((m) => {
       const mine = ctx.db.select().from(objective).where(eq(objective.metaObjectiveId, m.id)).all();
-      return { id: m.id, title: m.title, objectives: mine.length, progressPct: mine.length ? Math.round(mine.reduce((a, o) => a + o.progressPct, 0) / mine.length) : 0 };
+      return {
+        id: m.id,
+        title: m.title,
+        objectives: mine.length,
+        progressPct: mine.length ? Math.round(mine.reduce((a, o) => a + o.progressPct, 0) / mine.length) : 0,
+      };
     }),
-    priorityGap: hours.map((h, i) => ({ ...h, declaredRank: i + 1, realRank: real.indexOf(h.name) + 1, sharePct: total ? Math.round((h.minutes / total) * 100) : 0 })),
+    priorityGap: hours.map((h, i) => ({
+      ...h,
+      declaredRank: i + 1,
+      realRank: real.indexOf(h.name) + 1,
+      sharePct: total ? Math.round((h.minutes / total) * 100) : 0,
+    })),
     experiencesJournal: done.filter((t) => t.isExperience).map((t) => t.title),
-    totals: { tasksDone: done.length, doneMin: done.filter((t) => !t.isExperience).reduce((a, t) => a + t.durationMin, 0) },
+    totals: {
+      tasksDone: done.length,
+      doneMin: done.filter((t) => !t.isExperience).reduce((a, t) => a + t.durationMin, 0),
+    },
   };
 }
 
@@ -281,7 +431,12 @@ export function generateReport(ctx: Ctx, kind: Kind, periodKey: string) {
 
 export function listReports(ctx: Ctx, f: { kind?: Kind; from?: string; to?: string } = {}) {
   return ctx.db
-    .select({ id: report.id, kind: report.kind, periodKey: report.periodKey, generatedAt: report.generatedAt })
+    .select({
+      id: report.id,
+      kind: report.kind,
+      periodKey: report.periodKey,
+      generatedAt: report.generatedAt,
+    })
     .from(report)
     .where(
       and(
@@ -294,6 +449,6 @@ export function listReports(ctx: Ctx, f: { kind?: Kind; from?: string; to?: stri
     .all();
 }
 
-export const getReport = (ctx: Ctx, id: string) => assertFound(ctx.db.select().from(report).where(eq(report.id, id)).get(), 'report', id);
+export const getReport = (ctx: Ctx, id: string) =>
+  assertFound(ctx.db.select().from(report).where(eq(report.id, id)).get(), 'report', id);
 export const findReport = (ctx: Ctx, kind: Kind, periodKey: string) => existing(ctx, kind, periodKey) ?? null;
-

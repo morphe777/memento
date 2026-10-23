@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "48af57f1-3742-4811-9b26-a7d293b58ae8",
+  "id": "546122ce-5318-4ba5-a608-cdaea9751a77",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "api_token": {
@@ -1197,6 +1197,13 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "previous_seen_at": {
+          "name": "previous_seen_at",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },

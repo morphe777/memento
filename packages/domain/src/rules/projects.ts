@@ -27,7 +27,10 @@ export function resolveProjectDomains(
   if (requestedPrimaryId && !byId.has(requestedPrimaryId)) {
     throw new DomainError('PRIMARY_DOMAIN_INVALID', 'Le domaine principal doit venir des groupes du projet.');
   }
-  return { domainIds: [primary, ...domains.map((d) => d.id).filter((id) => id !== primary)], primaryDomainId: primary };
+  return {
+    domainIds: [primary, ...domains.map((d) => d.id).filter((id) => id !== primary)],
+    primaryDomainId: primary,
+  };
 }
 
 export interface PromotionInput {
@@ -90,7 +93,10 @@ export function canFlagMonth(tasks: { durationMin: number | null; status: string
 
 export function assertCanFlagMonth(tasks: { durationMin: number | null; status: string }[]): void {
   if (!canFlagMonth(tasks)) {
-    throw new DomainError('MONTH_FLAG_REQUIRES_TASKS', 'Projet du mois : il faut des tâches, toutes avec une durée.');
+    throw new DomainError(
+      'MONTH_FLAG_REQUIRES_TASKS',
+      'Projet du mois : il faut des tâches, toutes avec une durée.',
+    );
   }
 }
 

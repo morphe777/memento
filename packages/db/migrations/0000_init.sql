@@ -174,6 +174,7 @@ CREATE TABLE `session` (
 	`user_id` text NOT NULL,
 	`created_at` text DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')) NOT NULL,
 	`expires_at` text NOT NULL,
+	`previous_seen_at` text,
 	FOREIGN KEY (`user_id`) REFERENCES `app_user`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint

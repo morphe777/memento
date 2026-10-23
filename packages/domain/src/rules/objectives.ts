@@ -9,7 +9,10 @@ export function checkObjectiveDeadline(deadline: string | null | undefined, quar
   const q = quarter ?? quarterOf(deadline);
   if (!isValidQuarter(q)) throw new DomainError('INVALID_QUARTER', 'Trimestre attendu au format 2026-Q4.');
   if (deadline > quarterEnd(q)) {
-    throw new DomainError('DEADLINE_AFTER_QUARTER', `La deadline doit tomber au plus tard le ${quarterEnd(q)}.`);
+    throw new DomainError(
+      'DEADLINE_AFTER_QUARTER',
+      `La deadline doit tomber au plus tard le ${quarterEnd(q)}.`,
+    );
   }
   return q;
 }
