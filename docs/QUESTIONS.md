@@ -1,0 +1,34 @@
+# Questions ouvertes pour Mehdi
+
+Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires sont dans `DECISIONS.md` (colonne « À valider » = oui).
+
+## À trancher avant la mise en service (L7)
+
+1. **Déploiement Docker et base** : D-01 remplace PostgreSQL par SQLite. On garde SQLite en production (sauvegarde = copie du fichier vers le NAS) ou on repasse sur la VM PostgreSQL 17 existante ?
+2. **Nom d'hôte interne** (ex. `memento.internal.lcl`) et accès iPhone via WireGuard : à confirmer pour la conf NGINX Proxy Manager. Passer alors `MEMENTO_COOKIE_SECURE=true`.
+3. **Exposition en dev** : l'API écoute sur `0.0.0.0:4500` (LAN `192.168.10.18`) pour que tu puisses tester. OK, ou on la restreint à `127.0.0.1` ?
+4. **Import Vikunja** : script en L7 ou départ à zéro ?
+
+## À valider sur l'usage (v0.1)
+
+5. **Poids des domaines** (D-07) : la proposition linéaire te va-t-elle ? Elle est modifiable dans Configuration › Domaines.
+6. **Couleurs du thème sombre** (§11) : à valider à l'écran (bouton Auto / Clair / Sombre en bas de la barre latérale).
+7. **Moteur** (D-16, D-17, D-18) : les « pourquoi » et le nombre de tâches visibles par projet sonnent-ils juste ? Les 3 Bonus pré-placés te conviennent-ils, ou préfères-tu ne rien pré-cocher ?
+8. **Indicateur global R-01** (D-24) : les seuils vert / orange / rouge te parlent-ils ?
+9. **Garde-fous Santé / Famille** (D-15, Q-28) : reconnus par le nom du domaine. Seuils après usage ?
+10. **Kanban** (D-19, Q-11) : colonnes par statut de projet, ou buckets globaux « Cette semaine / En cours / En attente / Fait » ?
+11. **Domaine principal par défaut** (D-32) : « le plus prioritaire » met PV en Sécurité plutôt qu'en Maison. On garde cette règle ?
+
+## Décisions déjà listées dans le dossier de dev §14, toujours ouvertes
+
+12. Délai de purge des idées : 12 mois ? (réglable dans Configuration › Alertes)
+13. Canal des rapports et alertes (Q-16) : dans l'outil seulement pour l'instant.
+14. Lecture du calendrier (Q-07) : v2 ou jamais.
+15. « Interactions entre objectifs » de la vue d'ensemble (Q-09) : non implémenté en v0.1 (la page Objectifs regroupe par méta-objectif, avec domaines et avancement).
+16. Rattachement des groupes « Outils perso » (Santé) et « Travaux » (Maison) : repris tels quels.
+
+## Hors v0.1, à planifier
+
+- Tests de bout en bout Playwright : différés, comme demandé (« pas pour le moment »). Les écrans ont été vérifiés par captures automatiques.
+- Purge des idées (DM-87) : le réglage existe, mais la proposition de purge en revue trimestrielle n'est pas encore codée.
+- Notifications, raccourci iOS de saisie rapide, bouton « Proposer avec l'IA » (v2).
