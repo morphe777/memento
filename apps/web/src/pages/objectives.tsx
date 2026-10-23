@@ -3,11 +3,13 @@ import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
+import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { LockIcon, Resources, useSortSensors } from '../components/tasks.tsx';
 import {
+  ConfirmDialog,
   Empty,
   ErrorBox,
   Field,
@@ -17,7 +19,7 @@ import {
   Section,
   StatusPill,
 } from '../components/ui.tsx';
-import { get, patch, post } from '../lib/api.ts';
+import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
 import type { MetaObjective, Objective, PathProject, Project, Resource } from '../lib/types.ts';
@@ -49,6 +51,12 @@ export function ObjectivesPage() {
     queryFn: () => get<Project[]>('/projects?status=active,paused,done'),
   });
   const [creating, setCreating] = useState<'objective' | 'meta' | null>(null);
+  const [editingMeta, setEditingMeta] = useState<MetaObjective | null>(null);
+  const saveMetaDescription = useAction(
+    ({ id, description }: { id: string; description: string }) =>
+      patch(`/meta-objectives/${id}`, { description }),
+    { toast: 'Description enregistrée.' },
+  );
   const [showClosed, setShowClosed] = useState(false);
   const dl = useDomainLookup();
   const list = (objectives.data ?? []).filter(
@@ -96,7 +104,28 @@ export function ObjectivesPage() {
                 </span>
               )}
               {meta && <StatusPill>{STATUS_LABEL[meta.status]}</StatusPill>}
+              {meta && (
+                <button
+                  type="button"
+                  className="icon-btn ml-auto"
+                  aria-label={`Modifier le méta-objectif ${meta.title}`}
+                  title="Modifier le méta-objectif"
+                  onClick={() => setEditingMeta(meta)}
+                >
+                  <PencilIcon />
+                </button>
+              )}
             </div>
+            {meta && (
+              <DescriptionBlock
+                text={meta.description}
+                lines={3}
+                emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
+                onSave={(description, done) =>
+                  saveMetaDescription.mutate({ id: meta.id, description }, { onSuccess: done })
+                }
+              />
+            )}
             {items.length === 0 && (
               <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
                 Aucun objectif trimestriel rattaché.
@@ -158,6 +187,12 @@ export function ObjectivesPage() {
         metas={metas.data ?? []}
       />
       <MetaPanel open={creating === 'meta'} onClose={() => setCreating(null)} />
+      <MetaPanel
+        key={editingMeta?.id}
+        open={!!editingMeta}
+        meta={editingMeta ?? undefined}
+        onClose={() => setEditingMeta(null)}
+      />
     </div>
   );
 }
@@ -207,11 +242,20 @@ function ObjectivePanel({
   }, [open]);
   const save = useAction(
     () => {
-      const body = { ...f, metaObjectiveId: f.metaObjectiveId || null };
+      const { description, ...rest } = f;
+      const body = objective
+        ? { ...rest, metaObjectiveId: f.metaObjectiveId || null }
+        : { ...f, metaObjectiveId: f.metaObjectiveId || null };
       return objective ? patch(`/objectives/${objective.id}`, body) : post('/objectives', body);
     },
     { onSuccess: onClose, toast: 'Objectif enregistré.' },
   );
+  const navigate = useNavigate();
+  const [deleting, setDeleting] = useState(false);
+  const remove = useAction(() => del(`/objectives/${objective!.id}`), {
+    onSuccess: () => navigate({ to: '/objectifs' }),
+    toast: 'Objectif supprimé.',
+  });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   return (
     <Panel
@@ -279,64 +323,145 @@ function ObjectivePanel({
           ))}
         </select>
       </Field>
-      <Field label="Description">
-        <textarea
-          value={f.description}
-          onChange={(e) => set('description', e.target.value)}
-          style={{ minHeight: 160 }}
-        />
-      </Field>
-      <div className="flex justify-end">
+      {!objective && (
+        <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
+          <textarea
+            value={f.description}
+            onChange={(e) => set('description', e.target.value)}
+            className="mono"
+            style={{ minHeight: 260, fontSize: 14 }}
+          />
+        </Field>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!f.title.trim() || !f.deadline}
+          disabled={!f.title.trim() || !f.deadline || save.isPending}
           onClick={() => save.mutate(undefined)}
         >
           Enregistrer
         </button>
+        {objective && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-danger ml-auto"
+            style={{ borderColor: 'transparent' }}
+            onClick={() => setDeleting(true)}
+          >
+            Supprimer l'objectif
+          </button>
+        )}
       </div>
+      {objective && (
+        <ConfirmDialog
+          open={deleting}
+          title="Supprimer l'objectif ?"
+          busy={remove.isPending}
+          onClose={() => setDeleting(false)}
+          onConfirm={() => remove.mutate(undefined)}
+        >
+          <p className="m-0">
+            « {objective.title} » sera supprimé définitivement. Ses projets sont conservés et passent « hors
+            objectif ». Les rapports déjà générés ne changent pas.
+          </p>
+        </ConfirmDialog>
+      )}
     </Panel>
   );
 }
 
-function MetaPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void; meta?: MetaObjective }) {
   const settings = useSettings();
-  const [title, setTitle] = useState('');
-  const [horizonDate, setHorizon] = useState('');
+  const [title, setTitle] = useState(meta?.title ?? '');
+  const [horizonDate, setHorizon] = useState(meta?.horizonDate ?? '');
+  const [status, setStatus] = useState<string>(meta?.status ?? 'active');
   const [description, setDescription] = useState('');
+  const [deleting, setDeleting] = useState(false);
   useEffect(() => {
-    if (open) setDescription(settings.data?.['templates.meta_objective'] ?? '');
+    if (open && !meta) setDescription(settings.data?.['templates.meta_objective'] ?? '');
   }, [open]);
   const save = useAction(
-    () => post('/meta-objectives', { title, horizonDate: horizonDate || null, description }),
-    { onSuccess: onClose, toast: 'Méta-objectif créé.' },
+    () =>
+      meta
+        ? patch(`/meta-objectives/${meta.id}`, { title, horizonDate: horizonDate || null, status })
+        : post('/meta-objectives', { title, horizonDate: horizonDate || null, description }),
+    { onSuccess: onClose, toast: meta ? 'Méta-objectif enregistré.' : 'Méta-objectif créé.' },
   );
+  const remove = useAction(() => del(`/meta-objectives/${meta!.id}`), {
+    onSuccess: onClose,
+    toast: 'Méta-objectif supprimé.',
+  });
   return (
-    <Panel open={open} onClose={onClose} title="Nouveau méta-objectif (~1 an et +)" side={false} width={560}>
+    <Panel
+      open={open}
+      onClose={onClose}
+      title={meta ? 'Modifier le méta-objectif' : 'Nouveau méta-objectif (~1 an et +)'}
+      side={false}
+      width={600}
+    >
       <Field label="Titre">
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
-      <Field label="Horizon">
-        <input type="date" value={horizonDate} onChange={(e) => setHorizon(e.target.value)} />
-      </Field>
-      <Field label="Description">
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          style={{ minHeight: 140 }}
-        />
-      </Field>
-      <div className="flex justify-end">
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+        <Field label="Horizon" info="Date visée, en général un an ou plus. Facultatif.">
+          <input type="date" value={horizonDate} onChange={(e) => setHorizon(e.target.value)} />
+        </Field>
+        {meta && (
+          <Field label="Statut">
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              {['active', 'paused', 'achieved', 'abandoned'].map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </div>
+      {!meta && (
+        <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            className="mono"
+            style={{ minHeight: 220, fontSize: 14 }}
+          />
+        </Field>
+      )}
+      <div className="flex flex-wrap gap-2 items-center">
         <button
           type="button"
           className="btn btn-primary"
-          disabled={!title.trim()}
+          disabled={!title.trim() || save.isPending}
           onClick={() => save.mutate(undefined)}
         >
-          Créer
+          {meta ? 'Enregistrer' : 'Créer'}
         </button>
+        {meta && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-danger ml-auto"
+            style={{ borderColor: 'transparent' }}
+            onClick={() => setDeleting(true)}
+          >
+            Supprimer
+          </button>
+        )}
       </div>
+      {meta && (
+        <ConfirmDialog
+          open={deleting}
+          title="Supprimer le méta-objectif ?"
+          busy={remove.isPending}
+          onClose={() => setDeleting(false)}
+          onConfirm={() => remove.mutate(undefined)}
+        >
+          <p className="m-0">
+            « {meta.title} » sera supprimé définitivement. Ses objectifs sont conservés, sans méta-objectif.
+          </p>
+        </ConfirmDialog>
+      )}
     </Panel>
   );
 }
@@ -434,6 +559,9 @@ export function ObjectivePage({ id }: { id: string }) {
   useEffect(() => setOrder((path.data ?? []).map((p) => p.id)), [path.data]);
   const sensors = useSortSensors();
   const reorder = useAction((ids: string[]) => post('/projects/reorder', { objectiveId: id, ids }));
+  const saveDescription = useAction((description: string) => patch(`/objectives/${id}`, { description }), {
+    toast: 'Description enregistrée.',
+  });
   if (o.isError) return <ErrorBox error={o.error} />;
   if (!o.data) return <Loading />;
   const meta = metas.data?.find((m) => m.id === o.data.metaObjectiveId);
@@ -460,11 +588,18 @@ export function ObjectivePage({ id }: { id: string }) {
           title={o.data.title}
           actions={
             <button type="button" className="btn" onClick={() => setEditing(true)}>
-              Modifier
+              <PencilIcon /> Modifier
             </button>
           }
         />
       </div>
+      <DescriptionBlock
+        text={o.data.description}
+        lines={16}
+        saving={saveDescription.isPending}
+        emptyLabel="Pas encore de description : pourquoi cet objectif, ce que « réussi » veut dire, le contexte."
+        onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
+      />
       <div className="flex flex-wrap gap-6 items-start">
         <section className="card overflow-hidden min-w-0" style={{ flex: '999 1 560px' }}>
           <div
@@ -497,18 +632,6 @@ export function ObjectivePage({ id }: { id: string }) {
             <div className="label-caps">Avancement du chemin</div>
             <Progress pct={o.data.progressPct} />
           </Section>
-          {o.data.description && (
-            <Section title="Description">
-              <details>
-                <summary className="cursor-pointer text-[14px]" style={{ color: 'var(--text-muted)' }}>
-                  Afficher
-                </summary>
-                <pre className="whitespace-pre-wrap text-[14px] m-0 mt-2" style={{ fontFamily: 'inherit' }}>
-                  {o.data.description}
-                </pre>
-              </details>
-            </Section>
-          )}
           <Section>
             <Resources ownerType="objective" ownerId={id} resources={o.data.resources} />
           </Section>

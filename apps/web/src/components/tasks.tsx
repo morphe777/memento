@@ -23,7 +23,8 @@ import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDateShort, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail } from '../lib/types.ts';
-import { Duration, ExperienceBadge, Field, Panel, TaskCheck } from './ui.tsx';
+import { DescriptionBlock } from './markdown.tsx';
+import { ConfirmDialog, Duration, ExperienceBadge, Field, Panel, TaskCheck } from './ui.tsx';
 
 export function LockIcon() {
   return (
@@ -287,7 +288,7 @@ export function TaskDrawer({ taskId, onClose }: { taskId: string | null; onClose
   });
   const t = q.data;
   return (
-    <Panel open={!!taskId} onClose={onClose} title={t ? t.title : 'Tâche'}>
+    <Panel open={!!taskId} onClose={onClose} title={t ? t.title : 'Tâche'} width={560}>
       {t && <TaskForm key={`${t.id}-${t.updatedAt}`} t={t} onClose={onClose} />}
     </Panel>
   );
@@ -297,7 +298,6 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
   const dl = useDomainLookup();
   const [f, setF] = useState({
     title: t.title,
-    description: t.description,
     durationMin: t.durationMin,
     isExperience: t.isExperience,
     isFree: t.isFree,
@@ -310,7 +310,6 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     () =>
       patch(`/tasks/${t.id}`, {
         title: f.title,
-        description: f.description,
         durationMin: f.durationMin,
         isExperience: f.isExperience,
         isFree: f.isFree,
@@ -324,6 +323,11 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     () => patch(`/tasks/${t.id}`, { status: t.status === 'cancelled' ? 'todo' : 'cancelled' }),
     { onSuccess: onClose },
   );
+  const saveDescription = useAction((description: string) => patch(`/tasks/${t.id}`, { description }), {
+    toast: 'Description enregistrée.',
+  });
+  const [deleting, setDeleting] = useState(false);
+  const remove = useAction(() => del(`/tasks/${t.id}`), { onSuccess: onClose, toast: 'Tâche supprimée.' });
   const projects = useQuery({
     queryKey: ['projects', 'movable'],
     queryFn: () => get<Project[]>('/projects?status=idea,active,paused'),
@@ -347,9 +351,12 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
       </Field>
-      <Field label="Description" hint="Quoi faire, concrètement · Où / avec quoi (lien)">
-        <textarea value={f.description} onChange={(e) => set('description', e.target.value)} />
-      </Field>
+      <DescriptionBlock
+        text={t.description}
+        lines={8}
+        saving={saveDescription.isPending}
+        onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
+      />
       <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <Field label="Durée">
           <DurationSelect value={f.durationMin} onChange={(v) => set('durationMin', v)} />
@@ -413,7 +420,30 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         <button type="button" className="btn" onClick={() => cancel.mutate(undefined)}>
           {t.status === 'cancelled' ? 'Réactiver' : 'Annuler la tâche'}
         </button>
+        <button
+          type="button"
+          className="btn btn-ghost btn-danger"
+          style={{ borderColor: 'transparent' }}
+          onClick={() => setDeleting(true)}
+        >
+          Supprimer
+        </button>
       </div>
+      <ConfirmDialog
+        open={deleting}
+        title="Supprimer la tâche ?"
+        busy={remove.isPending}
+        onClose={() => setDeleting(false)}
+        onConfirm={() => remove.mutate(undefined)}
+      >
+        <p className="m-0">
+          « {t.title} » sera supprimée définitivement, avec ses prérequis et ses ressources. Les rapports déjà
+          générés ne changent pas.
+        </p>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Pour garder une trace sans la faire, préfère « Annuler la tâche ».
+        </p>
+      </ConfirmDialog>
 
       <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="label-caps">Prérequis explicites</div>
