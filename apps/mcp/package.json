@@ -7,7 +7,12 @@
     "start": "tsx --env-file-if-exists=../../.env src/index.ts"
   },
   "dependencies": {
+    "@memento/domain": "workspace:*",
     "@modelcontextprotocol/sdk": "1.32.1",
     "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@memento/api": "workspace:*",
+    "@memento/db": "workspace:*"
   }
 }
