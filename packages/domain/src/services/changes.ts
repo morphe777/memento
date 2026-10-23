@@ -94,5 +94,10 @@ export function markReviewed(ctx: Ctx, f: { ids?: string[]; all?: boolean }) {
     .run().changes;
 }
 
+/** Sidebar badge: unreviewed changes made by AI / robots (F-25). */
 export const unreviewedCount = (ctx: Ctx) =>
-  ctx.db.select({ n: sql<number>`count(*)` }).from(auditLog).where(isNull(auditLog.reviewedAt)).get()!.n;
+  ctx.db
+    .select({ n: sql<number>`count(*)` })
+    .from(auditLog)
+    .where(and(isNull(auditLog.reviewedAt), like(auditLog.actor, 'ai:%')))
+    .get()!.n;
