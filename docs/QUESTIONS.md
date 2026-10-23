@@ -9,6 +9,11 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 3. **Exposition en dev** : l'API écoute sur `0.0.0.0:4500` (LAN `192.168.10.18`) pour que tu puisses tester. OK, ou on la restreint à `127.0.0.1` ?
 4. **Import Vikunja** : script en L7 ou départ à zéro ?
 
+## En attente de ta réponse (structurant)
+
+- **Q-A · États d'un projet** (proposition du 23/10) : Idée (bac à sable) → **Prêt** (backlog considéré, sans dates) → **Actif = projet du mois** → Terminé / Abandonné, plus En pause. Les dates ne sont plus exigées pour promouvoir. À trancher : un projet du mois non fini en fin de mois reste-t-il Actif (reconduit) ou repasse-t-il en Prêt ?
+- **Q-B · Corrélation santé / productivité** : quelles applications de suivi (sommeil, nutrition, activité…) et par quel canal (export, API, n8n) ? Le contexte des semaines est déjà stocké et figé dans les rapports (D-39).
+
 ## À valider sur l'usage (v0.1)
 
 5. **Poids des domaines** (D-07) : la proposition linéaire te va-t-elle ? Elle est modifiable dans Configuration › Domaines.

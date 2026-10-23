@@ -351,7 +351,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
         <Tile
           label="Rythme"
           dot={p.rhythm.tier === 'OK' ? LIGHT.green : LIGHT.orange}
-          foot={`${fmtMin(p.rhythm.doneMin)} faites pour un budget de ${fmtMin(p.rhythm.budgetMin)}${p.rhythm.bonus ? ` · ${p.rhythm.bonus} bonus` : ''}`}
+          foot={`${fmtMin(p.rhythm.doneMin)} faites pour un budget de ${fmtMin(p.rhythm.budgetMin)}${p.rhythm.bonus ? ` · ${p.rhythm.bonus} bonus` : ''}${p.budgetAdjustment ? ` · budget ajusté (au lieu de ${fmtMin(p.budgetAdjustment.defaultMin)})${p.budgetAdjustment.reason ? ` : « ${p.budgetAdjustment.reason} »` : ''}` : ''}`}
         >
           {p.rhythm.tier}
         </Tile>

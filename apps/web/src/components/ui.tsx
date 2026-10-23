@@ -295,28 +295,51 @@ export function StatusPill({
   );
 }
 
-/** Side panel (TaskDrawer) / dialog. Closes with Escape. */
+// Only the top-most open panel reacts to Escape (a confirmation over an edit drawer).
+const panelStack: number[] = [];
+let panelSeq = 0;
+
+/**
+ * Side drawer (edits, D-40) or centred dialog (confirmations). Clicking outside or on ✕ calls `onClose`
+ * (edit drawers save there); Escape calls `onCancel` (discard), which defaults to `onClose`.
+ */
 export function Panel({
   open,
   onClose,
+  onCancel,
   title,
   children,
   side = true,
-  width = 480,
+  width = 720,
+  hint,
 }: {
   open: boolean;
   onClose: () => void;
+  onCancel?: () => void;
   title: ReactNode;
   children: ReactNode;
   side?: boolean;
   width?: number;
+  hint?: ReactNode;
 }) {
+  const cancel = useRef(onCancel ?? onClose);
+  cancel.current = onCancel ?? onClose;
   useEffect(() => {
     if (!open) return;
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const id = ++panelSeq;
+    panelStack.push(id);
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && panelStack.at(-1) === id) {
+        e.stopPropagation();
+        cancel.current();
+      }
+    };
     window.addEventListener('keydown', h);
-    return () => window.removeEventListener('keydown', h);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener('keydown', h);
+      panelStack.splice(panelStack.indexOf(id), 1);
+    };
+  }, [open]);
   if (!open) return null;
   return (
     <div
@@ -349,15 +372,25 @@ export function Panel({
           style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}
         >
           <div className="h2 min-w-0 truncate">{title}</div>
-          <button type="button" className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Fermer">
-            ✕
-          </button>
+          <span className="flex items-center gap-3 flex-none">
+            {hint && (
+              <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+                {hint}
+              </span>
+            )}
+            <button type="button" className="btn btn-sm btn-ghost" onClick={onClose} aria-label="Fermer">
+              ✕
+            </button>
+          </span>
         </div>
         <div className="overflow-y-auto p-5 flex flex-col gap-4">{children}</div>
       </div>
     </div>
   );
 }
+
+/** Hint shown in the header of drawers that save on close. */
+export const SAVE_HINT = 'Enregistré en fermant · Échap pour annuler';
 
 /**
  * Small circled « i » that explains a setting (hover, focus or tap). A span, not a button, so that it is never

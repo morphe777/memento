@@ -382,6 +382,8 @@ export function Breadcrumb({
 }: {
   items: { label: string; to?: string; params?: Record<string, string>; search?: Record<string, string> }[];
 }) {
+  const settings = useSettings();
+  if (!settings.data?.['ui.breadcrumb']) return null;
   return (
     <nav
       aria-label="Fil d'Ariane"

@@ -144,7 +144,7 @@ export function ReviewPage() {
 // ---------- Configuration ----------
 
 const CONFIG_TABS = [
-  { value: 'budget', label: 'Budget' },
+  { value: 'budget', label: 'Général' },
   { value: 'domaines', label: 'Domaines' },
   { value: 'groupes', label: 'Groupes' },
   { value: 'moteur', label: 'Moteur' },
@@ -197,7 +197,7 @@ export function ConfigPage({ onglet }: { onglet: string }) {
 
 const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> = {
   budget: {
-    title: 'Budget et affichage',
+    title: 'Général',
     info: "Le budget hebdomadaire est le cœur du système : le plan de la semaine ne le dépasse jamais sans te l'afficher.",
   },
   moteur: {
@@ -240,7 +240,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
     />
   );
   const keys: Record<string, (keyof Settings)[]> = {
-    budget: ['budget.weekly_min', 'theme'],
+    budget: ['budget.weekly_min', 'theme', 'ui.breadcrumb'],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
     alertes: [
       'guards.window_weeks',
@@ -272,6 +272,18 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               onChange={(e) => setS({ ...s, 'budget.weekly_min': Math.round(Number(e.target.value) * 60) })}
             />
           </Field>
+          <label className="flex items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              checked={s['ui.breadcrumb']}
+              onChange={(e) => setS({ ...s, 'ui.breadcrumb': e.target.checked })}
+            />
+            Afficher le fil d'Ariane en haut des pages
+            <InfoTip>
+              Le chemin « Projets › Maison › Travaux › … » au-dessus du titre. Désactivé par défaut : les
+              liens des pages suffisent pour naviguer.
+            </InfoTip>
+          </label>
           <div className="field">
             <span className="flex items-center gap-1.5">
               Thème

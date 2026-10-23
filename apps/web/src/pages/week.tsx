@@ -19,7 +19,7 @@ import {
   useDomainRows,
 } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
-import { fmtDateTime, fmtMin, weekNumber } from '../lib/format.ts';
+import { fmtMin, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import type { Execution } from '../lib/types.ts';
 
@@ -49,11 +49,10 @@ function eyebrow(ex: Execution) {
   return `Semaine ${weekNumber(ex.isoWeek)} · ${ex.label}`;
 }
 
+/** Only says something when the plan is not validated yet (D-20); a validated plan needs no caption. */
 function planNote(ex: Execution) {
-  if (!ex.plan) return null;
-  if (ex.plan.validatedAt) return `Plan validé le ${fmtDateTime(ex.plan.validatedAt)}`;
-  if (ex.plan.proposedAt) return `Proposé par le moteur, ${fmtDateTime(ex.plan.proposedAt)}`;
-  return 'Brouillon de plan';
+  if (!ex.plan || ex.plan.validatedAt) return null;
+  return 'Brouillon : pas encore validé';
 }
 
 function WeekDesktop({ ex }: { ex: Execution }) {

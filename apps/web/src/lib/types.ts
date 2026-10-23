@@ -34,3 +34,4 @@ export interface Me {
   unreviewed: number;
 }
 export type BoardTask = ReturnType<typeof D.listBoardTasks>[number];
+export type ObjectivesMap = ReturnType<typeof D.getObjectivesMap>;

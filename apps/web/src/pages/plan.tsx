@@ -9,13 +9,15 @@ import {
   Duration,
   ErrorBox,
   ExperienceBadge,
+  Field,
   Loading,
   PageHeader,
   Panel,
+  SAVE_HINT,
   useDomainRows,
 } from '../components/ui.tsx';
 import { get, patch, post, put } from '../lib/api.ts';
-import { fmtDateTime, fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
+import { fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { PageTask, PlanningPage } from '../lib/types.ts';
 import { Chevron } from './week.tsx';
@@ -122,9 +124,9 @@ function Plan({ page }: { page: PlanningPage }) {
                   style={{ minHeight: 44 }}
                   onClick={() => proposeAction.mutate(undefined)}
                   disabled={proposeAction.isPending}
-                  title="Relance le moteur : mes choix sont conservés"
+                  title="Recalcule la proposition avec les données du moment (tâches ajoutées ou faites, budget, priorités). Tes choix sont conservés."
                 >
-                  {page.plan?.proposedAt ? 'Relancer le moteur' : 'Proposer (moteur)'}
+                  {page.plan?.proposedAt ? 'Recalculer' : 'Proposer'}
                 </button>
               )}
               <button
@@ -139,12 +141,6 @@ function Plan({ page }: { page: PlanningPage }) {
             </>
           }
         />
-        {page.plan?.proposedAt && (
-          <div className="text-[13px] mt-2" style={{ color: 'var(--text-faint)' }}>
-            Proposé par le moteur le {fmtDateTime(page.plan.proposedAt)}
-            {validated && page.plan.validatedAt ? ` · validé le ${fmtDateTime(page.plan.validatedAt)}` : ''}
-          </div>
-        )}
       </div>
 
       <div className="flex flex-wrap gap-6 items-start">
@@ -261,7 +257,7 @@ function Plan({ page }: { page: PlanningPage }) {
           </section>
         </aside>
       </div>
-      <BudgetPanel open={budgetOpen} onClose={() => setBudgetOpen(false)} page={page} />
+      {budgetOpen && <BudgetPanel open onClose={() => setBudgetOpen(false)} page={page} />}
     </div>
   );
 }
@@ -289,34 +285,36 @@ function ProjectCard({
       className="overflow-hidden"
       style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14 }}
     >
-      <div
-        className="flex flex-wrap items-center gap-2.5"
-        style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)' }}
-      >
-        <span className="dot" style={{ width: 10, height: 10, background: color }} />
-        {card.projectId ? (
-          <Link to="/projets/$id" params={{ id: card.projectId }} className="text-[16px] font-semibold">
-            {card.title}
-          </Link>
-        ) : (
-          <Link to="/inbox" className="text-[16px] font-semibold">
-            Inbox
-          </Link>
-        )}
-        {domainName && (
-          <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            {domainName}
-          </span>
-        )}
-        {card.objectiveId && (
-          <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            · Objectif :{' '}
-            <Link to="/objectifs/$id" params={{ id: card.objectiveId }} style={{ color: 'var(--text-2)' }}>
-              {card.objectiveTitle}
+      {!inbox && (
+        <div
+          className="flex flex-wrap items-center gap-2.5"
+          style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)' }}
+        >
+          <span className="dot" style={{ width: 10, height: 10, background: color }} />
+          {card.projectId ? (
+            <Link to="/projets/$id" params={{ id: card.projectId }} className="text-[16px] font-semibold">
+              {card.title}
             </Link>
-          </span>
-        )}
-      </div>
+          ) : (
+            <Link to="/inbox" className="text-[16px] font-semibold">
+              Inbox
+            </Link>
+          )}
+          {domainName && (
+            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+              {domainName}
+            </span>
+          )}
+          {card.objectiveId && (
+            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+              · Objectif :{' '}
+              <Link to="/objectifs/$id" params={{ id: card.objectiveId }} style={{ color: 'var(--text-2)' }}>
+                {card.objectiveTitle}
+              </Link>
+            </span>
+          )}
+        </div>
+      )}
       {card.tasks.map((t) => (
         <PlanTaskRow key={t.taskId} t={t} projectId={card.projectId} onToggle={onToggle} busy={busy} />
       ))}
@@ -463,42 +461,42 @@ function BudgetPanel({ open, onClose, page }: { open: boolean; onClose: () => vo
       patch(`/week-plans/${page.isoWeek}`, v),
     { onSuccess: onClose, toast: 'Budget de la semaine mis à jour.' },
   );
+  const startHours = String(page.budget.budgetMin / 60);
+  const startReason = page.plan?.budgetReason ?? '';
+  /** D-40: closing saves when something changed; Escape discards. */
+  const close = () => {
+    if (hours !== startHours || reason !== startReason)
+      save.mutate({ budgetMin: Math.round(Number(hours) * 60), budgetReason: reason || null });
+    else onClose();
+  };
   return (
     <Panel
       open={open}
-      onClose={onClose}
+      onClose={close}
+      onCancel={onClose}
+      hint={SAVE_HINT}
       title={`Budget · semaine ${weekNumber(page.isoWeek)}`}
-      side={false}
-      width={440}
     >
-      <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
-        Surcharge ponctuelle (CH-03) : jour posé, semaine chargée… Le budget par défaut se règle dans
-        Configuration.
-      </p>
-      <label className="field">
-        <span>Heures disponibles cette semaine</span>
+      <Field
+        label="Heures disponibles cette semaine"
+        info="Surcharge ponctuelle de cette semaine seulement. Le budget par défaut se règle dans Configuration › Général."
+      >
         <input type="number" min={0} step={0.5} value={hours} onChange={(e) => setHours(e.target.value)} />
-      </label>
-      <label className="field">
-        <span>Raison (facultatif)</span>
-        <input
+      </Field>
+      <Field
+        label="Contexte"
+        info="Pourquoi cette semaine est différente : fatigue, maladie, jour posé, sommeil, événement… Le texte est journalisé, figé dans le rapport de la semaine et lisible par l'IA (API / MCP) pour croiser plus tard avec tes données de santé."
+      >
+        <textarea
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="ex. jour posé vendredi"
+          placeholder="ex. grosse fatigue, mal dormi toute la semaine ; jour posé vendredi"
+          style={{ minHeight: 140 }}
         />
-      </label>
-      <div className="flex gap-2 justify-end">
+      </Field>
+      <div className="flex gap-2">
         <button type="button" className="btn" onClick={() => save.mutate({ budgetMin: null })}>
-          Revenir au défaut
-        </button>
-        <button
-          type="button"
-          className="btn btn-primary"
-          onClick={() =>
-            save.mutate({ budgetMin: Math.round(Number(hours) * 60), budgetReason: reason || null })
-          }
-        >
-          Enregistrer
+          Revenir au budget par défaut
         </button>
       </div>
     </Panel>
