@@ -17,6 +17,8 @@ export const domain = sqliteTable(
   {
     ...base,
     name: text('name').notNull(),
+    // What belongs here (and what does not): read by the AI to file projects in the right domain.
+    description: text('description').notNull().default(''),
     colorLight: text('color_light').notNull(),
     colorDark: text('color_dark').notNull(),
     priorityRank: integer('priority_rank').notNull(),

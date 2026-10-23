@@ -1,0 +1,1 @@
+ALTER TABLE `domain` ADD `description` text DEFAULT '' NOT NULL;
