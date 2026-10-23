@@ -34,6 +34,7 @@ const NAV: { section: string; items: { to: string; label: string }[] }[] = [
       { to: '/taches', label: 'Tâches' },
       { to: '/domaines', label: 'Domaines' },
       { to: '/idees', label: 'Idées' },
+      { to: '/experiences', label: 'Expériences' },
     ],
   },
   {

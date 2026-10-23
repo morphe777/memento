@@ -40,6 +40,8 @@ Développement avec rechargement : `pnpm dev` (API en watch + Vite sur 4501, qui
 
 ## Accès IA (API et MCP)
 
+Guides : [`docs/api/guide.md`](docs/api/guide.md) (pour toi : brancher une IA ou un robot) et [`docs/api/guide-ia.md`](docs/api/guide-ia.md) (pour l'IA : règles, formats, recettes ; aussi servi par `GET /api/v1/guide` et l'outil MCP `get_guide`).
+
 1. Créer un jeton : Configuration › Accès, ou `pnpm token:create claude read_write`. Le secret n'est affiché qu'une fois et seul son hash est stocké.
 2. API : `Authorization: Bearer mem_…`
 3. MCP : URL `http://<hôte>:4502/mcp`, même en-tête `Authorization: Bearer mem_…`. Chaque agent utilise **son** jeton, ce qui lui donne son nom dans le journal (`ai:<nom>`) et dans « À revoir ».
