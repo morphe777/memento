@@ -3,9 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { AiProposeButton } from '../components/ai.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
-  AiProposeButton,
   DomainBars,
   Duration,
   ErrorBox,
@@ -144,7 +144,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
                   {page.plan?.proposedAt ? 'Recalculer' : 'Proposer'}
                 </button>
               )}
-              <AiProposeButton />
+              <AiProposeButton scope="week" period={w} weekItems={page.items} />
             </>
           }
         />

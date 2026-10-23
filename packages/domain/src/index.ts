@@ -1,3 +1,6 @@
+export * from './ai/prompts.ts';
+export * from './ai/propose.ts';
+export * from './ai/providers.ts';
 export * from './context.ts';
 export * from './errors.ts';
 export * from './rules/index.ts';
@@ -20,3 +23,4 @@ export * from './services/search.ts';
 export * from './services/tasks.ts';
 export * from './settings.ts';
 export * from './time.ts';
+export * from './version.ts';

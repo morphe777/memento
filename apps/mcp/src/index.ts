@@ -3,6 +3,7 @@
 // as ai:<token name> and visible in "À revoir". No business logic and no secret stored here.
 import { createServer, type IncomingMessage } from 'node:http';
 import * as S from '@memento/domain/schemas';
+import { APP_VERSION } from '@memento/domain/version';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
@@ -64,7 +65,7 @@ const qs = (o: Record<string, unknown>) => {
 
 export function buildServer(call: Call) {
   const server = new McpServer(
-    { name: 'memento', version: '0.9.1' },
+    { name: 'memento', version: APP_VERSION },
     {
       instructions:
         "Mémento : objectifs, projets et tâches de Mehdi. Avant d'agir, lis le guide (outil get_guide) puis la vue d'ensemble (get_context). Toutes les règles sont appliquées par l'API ; un refus renvoie un code et un message en français à transmettre tel quel.",

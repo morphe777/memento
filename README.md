@@ -71,6 +71,7 @@ Une image `morphe777/memento` (Docker Hub), trois conteneurs : `memento` (API + 
 
 ```bash
 mkdir -p /home/morphe/Dockers/Memento
+sudo chown -R 1000:1000 /home/morphe/Dockers/Memento   # le conteneur tourne en uid 1000 (utilisateur node)
 # Reprendre la base de dev : arrêter d'abord l'API, le worker et le MCP de dev, puis copier la base
 cp data/memento.db* /home/morphe/Dockers/Memento/
 ```
@@ -92,6 +93,20 @@ docker compose -f install/docker-compose.yml up -d
 Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la même machine). Derrière NGINX Proxy
 Manager en HTTPS, passer `MEMENTO_COOKIE_SECURE: "true"`. Mise à jour : nouvelle image puis « Pull and redeploy »
 (les migrations s'appliquent au démarrage ; une copie de la base est conseillée avant).
+
+Si le déploiement échoue avec `container memento is unhealthy` : `docker logs memento`. Le plus souvent, le dossier
+de données n'est pas accessible en écriture par l'uid 1000 (dossier créé par Docker en root) → `chown` ci-dessus.
+
+Version : visible en bas du menu de l'application, dans `GET /api/v1/health`, dans le label OCI
+`org.opencontainers.image.version` de l'image et dans la variable `MEMENTO_VERSION` du conteneur.
+
+### 4. IA (« Proposer avec l'IA »)
+
+Choisir le fournisseur et le modèle dans Configuration › IA (Anthropic, OpenAI, OpenRouter, Google Gemini, Ollama ou
+tout serveur compatible OpenAI). La clé se met dans les variables d'environnement de la stack, jamais dans
+l'application : `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` ou
+`MEMENTO_AI_API_KEY` (valable pour tous). Ollama n'en demande pas ; en Docker, renseigner son URL
+(ex. `http://192.168.1.10:11434/v1`). Les prompts semaine / mois / trimestre se modifient dans la même page.
 
 ## Sauvegarde
 

@@ -87,6 +87,11 @@ export const projectGroupsBody = z.object({
   primaryDomainId: uuid.nullable().optional(),
 });
 export const projectCompleteBody = z.object({ success: z.boolean() });
+/** D-58: « Proposer avec l'IA » on one tab of Planifier. */
+export const aiProposeBody = z.object({
+  scope: z.enum(['week', 'month', 'quarter']),
+  period: z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/),
+});
 /** D-57: the confirmation word guards against an accidental call. */
 export const purgeBody = z.object({ confirm: z.literal('SUPPRIMER'), history: z.boolean().default(false) });
 export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });

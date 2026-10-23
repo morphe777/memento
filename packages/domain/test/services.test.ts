@@ -5,6 +5,7 @@ import {
   addExperienceIdea,
   addProjectDependency,
   addTaskDependency,
+  aiStatus,
   buildEngineInput,
   closeWeek,
   completeProject,
@@ -36,10 +37,12 @@ import {
   listProjectDependencies,
   listTasks,
   markReviewed,
+  parseJsonObject,
   patchSettings,
   promoteProject,
   propose,
   proposeWeek,
+  proposeWithAi,
   purgeData,
   reorderTasks,
   replanProject,
@@ -766,5 +769,88 @@ describe('D-57 vider les données', () => {
     expect(ctx.db.select().from(schema.weekPlan).all()).toHaveLength(0);
     const log = ctx.db.select().from(schema.auditLog).all();
     expect(log.map((l) => l.action)).toEqual(['purge']);
+  });
+});
+
+describe('D-58 Proposer avec l’IA', () => {
+  const fake =
+    (answer: (user: string) => unknown) =>
+    async ({ user }: { user: string }) => ({
+      text: `Voici :\n${JSON.stringify(answer(user))}`,
+      model: 'fake',
+    });
+
+  it('week: turns the AI selection into keep / add / remove, drops unknown ids, keeps due tasks', async () => {
+    const ctx = makeCtx('2026-10-26T08:00:00.000Z'); // Monday W44
+    const { tasks } = activeProject(ctx, 'Panneaux', 'Travaux', 3);
+    const { tasks: other } = activeProject(ctx, 'Garage', 'Travaux', 1);
+    const due = createTask(ctx, { title: 'Passeport', durationMin: 30, dueDate: '2026-10-28' });
+    setTaskInCurrentWeek(ctx, other[0].id, true);
+    let sent = '';
+    const p = await proposeWithAi(
+      ctx,
+      'week',
+      '2026-W44',
+      fake((user) => {
+        sent = user;
+        return {
+          summary: 'Une semaine centrée sur les panneaux.',
+          items: [
+            { id: tasks[0].id, kind: 'week', reason: 'Première étape.' },
+            { id: 'inventé', kind: 'week', reason: '?' },
+          ],
+        };
+      }),
+    );
+    expect(sent).toContain('Panneaux 1');
+    const by = Object.fromEntries(p.changes.map((c) => [c.title, c.action]));
+    expect(by).toEqual({ 'Panneaux 1': 'add', 'Garage 1': 'remove', Passeport: expect.any(String) });
+    expect(p.changes.find((c) => c.id === due.id)?.kind).toBe('week');
+    expect(p.summary).toMatch(/panneaux/);
+  });
+
+  it('month: complete projects to add, chosen ones not kept are removed, incomplete ones get a warning', async () => {
+    const ctx = makeCtx();
+    const { project: kept } = activeProject(ctx, 'Gardé', 'Travaux', 1);
+    const { project: dropped } = activeProject(ctx, 'Lâché', 'Travaux', 1);
+    const idea = createProject(ctx, { title: 'Incomplet', groupIds: [lookups(ctx).group('Travaux').id] });
+    promoteProject(ctx, idea.id);
+    const p = await proposeWithAi(
+      ctx,
+      'month',
+      '2026-11',
+      fake(() => ({
+        summary: 'ok',
+        projects: [
+          { id: kept.id, reason: 'À finir.' },
+          { id: idea.id, reason: 'Tentant.' },
+        ],
+      })),
+    );
+    const c = Object.fromEntries(p.changes.map((x) => [x.title, x]));
+    expect(c.Incomplet.action).toBe('add');
+    expect(c.Incomplet.warning).toMatch(/incomplet/i);
+    expect(c.Lâché?.action ?? 'absent').not.toBe('keep');
+    expect(dropped.id).toBeTruthy();
+  });
+
+  it('refuses an unreadable answer and reports the configuration status', async () => {
+    const ctx = makeCtx();
+    await expect(
+      proposeWithAi(ctx, 'quarter', '2026-Q4', async () => ({ text: 'désolé', model: 'x' })),
+    ).rejects.toMatchObject({ code: 'AI_BAD_ANSWER' });
+    expect(() => parseJsonObject('```json\n{"a":1}\n```')).not.toThrow();
+    const s = getSettings(ctx);
+    expect(aiStatus(s, {}).configured).toBe(false);
+    const anth = { ...s, 'ai.provider': 'anthropic' as const };
+    expect(aiStatus(anth, {}).reason).toMatch(/ANTHROPIC_API_KEY/);
+    expect(aiStatus(anth, { ANTHROPIC_API_KEY: 'k' })).toMatchObject({
+      configured: true,
+      model: 'claude-opus-5-5',
+    });
+    expect(aiStatus({ ...s, 'ai.provider': 'openrouter' }, { OPENROUTER_API_KEY: 'k' }).reason).toMatch(
+      /Modèle/,
+    );
+    expect(aiStatus({ ...s, 'ai.provider': 'ollama', 'ai.model': 'm' }, {}).configured).toBe(true);
   });
 });

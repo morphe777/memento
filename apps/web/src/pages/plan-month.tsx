@@ -3,16 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import {
-  AiProposeButton,
-  Empty,
-  ErrorBox,
-  InfoTip,
-  Loading,
-  PageHeader,
-  Panel,
-  Section,
-} from '../components/ui.tsx';
+import { AiProposeButton } from '../components/ai.tsx';
+import { Empty, ErrorBox, InfoTip, Loading, PageHeader, Panel, Section } from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
 import { fmtDate, fmtMin } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
@@ -82,7 +74,7 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
             </span>
           }
           title="Planifier le mois"
-          actions={<AiProposeButton />}
+          actions={<AiProposeButton scope="month" period={page.month} disabled={page.isPast} />}
         />
       </div>
       <div className="flex flex-wrap gap-6 items-start">

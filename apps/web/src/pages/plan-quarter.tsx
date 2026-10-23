@@ -3,15 +3,8 @@
 // between quarters (POST /objectives/{id}/quarter).
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import {
-  AiProposeButton,
-  Empty,
-  ErrorBox,
-  InfoTip,
-  Loading,
-  PageHeader,
-  Section,
-} from '../components/ui.tsx';
+import { AiProposeButton } from '../components/ai.tsx';
+import { Empty, ErrorBox, InfoTip, Loading, PageHeader, Section } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
@@ -69,7 +62,14 @@ function QuarterPlan({ page, tabs }: { page: QuarterPlanningPage; tabs: React.Re
             </span>
           }
           title="Planifier le trimestre"
-          actions={<AiProposeButton />}
+          actions={
+            <AiProposeButton
+              scope="quarter"
+              period={page.quarter}
+              postponeTo={page.navigation.next}
+              disabled={page.isPast}
+            />
+          }
         />
       </div>
       <div className="flex flex-wrap gap-6 items-start">

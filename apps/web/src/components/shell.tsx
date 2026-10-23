@@ -231,8 +231,24 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
             <LogoutIcon />
           </button>
         </div>
+        <AppVersion />
       </div>
     </nav>
+  );
+}
+
+/** Version of the running server (root package.json), shown under the account. */
+function AppVersion() {
+  const health = useQuery({
+    queryKey: ['health'],
+    queryFn: () => get<{ version: string }>('/health'),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+  if (!health.data) return null;
+  return (
+    <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+      Mémento v{health.data.version}
+    </span>
   );
 }
 

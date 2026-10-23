@@ -11,7 +11,8 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à Mehd
 - Authentification : `Authorization: Bearer mem_…` (jeton créé par Mehdi dans Configuration › Accès).
 - Tes actions sont signées `ai:<nom du jeton>` et apparaissent dans le **Journal** de Mehdi (`GET /changes`).
 - Jeton « lecture » : seulement des `GET` (sinon 403 `READ_ONLY_TOKEN`).
-- Interdit à tout jeton (403 `USER_ONLY`) : réglages, jetons, compte, export / import, purge des données.
+- Interdit à tout jeton (403 `USER_ONLY`) : réglages, jetons, compte, export / import, purge des données,
+  « Proposer avec l'IA » (`/ai/*`).
 
 ## 2. Conventions
 

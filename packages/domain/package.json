@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./rules": "./src/rules/index.ts",
-    "./schemas": "./src/schemas.ts"
+    "./schemas": "./src/schemas.ts",
+    "./version": "./src/version.ts"
   },
   "scripts": {
     "seed": "tsx src/cli/seed.ts",
@@ -14,6 +15,7 @@
     "demo-map": "tsx src/cli/demo-map.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "1.1.0",
     "@memento/db": "workspace:*",
     "rrule": "2.8.1",
     "zod": "4.6.7"
