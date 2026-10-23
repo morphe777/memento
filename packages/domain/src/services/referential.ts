@@ -15,6 +15,7 @@ import type {
   ObjectivePatch,
   ResourceCreate,
 } from '../schemas.ts';
+import { withTemplate } from '../settings.ts';
 import { recomputeProjectDomains } from './projects.ts';
 
 const { domain, group, metaObjective, objective, project, projectGroup, resourceLink } = schema;
@@ -199,7 +200,12 @@ export function createMetaObjective(ctx: Ctx, input: MetaObjectiveCreate) {
     const id = newId();
     ctx.db
       .insert(metaObjective)
-      .values({ id, createdBy: ctx.actor, ...input })
+      .values({
+        id,
+        createdBy: ctx.actor,
+        ...input,
+        description: withTemplate(ctx, 'meta_objective', input.description),
+      })
       .run();
     const after = getMetaObjective(ctx, id);
     audit(ctx, 'meta_objective', id, 'create', null, after);
@@ -247,7 +253,13 @@ export function createObjective(ctx: Ctx, input: ObjectiveCreate) {
     const id = newId();
     ctx.db
       .insert(objective)
-      .values({ id, createdBy: ctx.actor, ...input, quarter })
+      .values({
+        id,
+        createdBy: ctx.actor,
+        ...input,
+        description: withTemplate(ctx, 'objective', input.description),
+        quarter,
+      })
       .run();
     const after = getObjective(ctx, id);
     audit(ctx, 'objective', id, 'create', null, after);

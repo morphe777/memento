@@ -62,6 +62,18 @@ export const DEFAULT_SETTINGS: Settings = {
 
 export const settingsPatchSchema = settingsSchema.partial();
 
+export type TemplateKind = 'meta_objective' | 'objective' | 'project' | 'task';
+
+/** Description templates (Configuration › Templates) apply to every creation, whatever the channel (UI, API, MCP), when no description is given. */
+export function withTemplate(
+  ctx: Pick<Ctx, 'db'>,
+  kind: TemplateKind,
+  description: string | undefined,
+): string {
+  if (description?.trim()) return description;
+  return getSettings(ctx)[`templates.${kind}`];
+}
+
 /** Reads all settings, falling back to defaults for missing keys. */
 export function getSettings(ctx: Pick<Ctx, 'db'>): Settings {
   const rows = ctx.db.select().from(schema.setting).all();
