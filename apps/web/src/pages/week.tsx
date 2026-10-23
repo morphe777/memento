@@ -49,12 +49,6 @@ function eyebrow(ex: Execution) {
   return `Semaine ${weekNumber(ex.isoWeek)} · ${ex.label}`;
 }
 
-/** Only says something when the plan is not validated yet (D-20); a validated plan needs no caption. */
-function planNote(ex: Execution) {
-  if (!ex.plan || ex.plan.validatedAt) return null;
-  return 'Brouillon : pas encore validé';
-}
-
 function WeekDesktop({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
   const toggle = useToggle();
@@ -77,9 +71,6 @@ function WeekDesktop({ ex }: { ex: Execution }) {
             <h2 className="h2">
               À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
             </h2>
-            <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-              {planNote(ex)}
-            </div>
           </div>
           {!ex.plan || ex.tasks.length === 0 ? (
             <Empty>

@@ -564,3 +564,75 @@ export function Tabs<T extends string>({
     </div>
   );
 }
+
+/** Multi-select domain filter (several domains at once; none selected = all). */
+export function DomainFilter({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
+  const dl = useDomainLookup();
+  return (
+    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par domaine">
+      <button
+        type="button"
+        aria-pressed={!value.length}
+        onClick={() => onChange([])}
+        className="rounded-full text-[13px] cursor-pointer"
+        style={{
+          minHeight: 32,
+          padding: '0 12px',
+          border: `1px solid ${value.length ? 'var(--border)' : 'var(--text)'}`,
+          background: value.length ? 'var(--surface)' : 'var(--bin)',
+          fontWeight: value.length ? 400 : 600,
+        }}
+      >
+        Tous les domaines
+      </button>
+      {dl.domains.map((d) => {
+        const on = value.includes(d.id);
+        return (
+          <button
+            key={d.id}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? value.filter((x) => x !== d.id) : [...value, d.id])}
+            className="flex items-center gap-1.5 rounded-full text-[13px] cursor-pointer"
+            style={{
+              minHeight: 32,
+              padding: '0 12px',
+              border: `1px solid ${on ? dl.colorOf(d) : 'var(--border)'}`,
+              background: on ? 'var(--bin)' : 'var(--surface)',
+              fontWeight: on ? 600 : 400,
+            }}
+          >
+            <span className="dot" style={{ background: dl.colorOf(d) }} />
+            {d.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** « Proposer avec l'IA » (v2 placeholder, same on the week, month and quarter plans): the AI will propose the
+ * plan through the MCP and explain its choices. Disabled until then. */
+export function AiProposeButton() {
+  return (
+    <button
+      type="button"
+      className="btn btn-disabled-v2"
+      disabled
+      aria-disabled="true"
+      title="Bientôt : une IA (via le MCP) proposera le plan en expliquant ses choix."
+      style={{ minHeight: 44, opacity: 1, padding: '0 18px' }}
+    >
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16">
+        <path
+          d="M8 1.5l1.6 4.2 4.4.3-3.4 2.8 1.1 4.3L8 10.7l-3.7 2.4 1.1-4.3L2 6l4.4-.3z"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.2"
+          strokeLinejoin="round"
+        />
+      </svg>
+      Proposer avec l'IA
+    </button>
+  );
+}

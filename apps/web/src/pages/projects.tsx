@@ -2,7 +2,7 @@
 import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
@@ -15,6 +15,7 @@ import {
 } from '../components/tasks.tsx';
 import {
   ConfirmDialog,
+  DomainFilter,
   Empty,
   ErrorBox,
   Field,
@@ -85,12 +86,30 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
   );
 }
 
+/** Month choices of the « projets du mois » filter: 6 months back, 3 ahead. */
+function monthChoices(today: string | undefined) {
+  if (!today) return [];
+  const [y, m] = today.split('-').map(Number);
+  return Array.from({ length: 10 }, (_, i) => {
+    const d = new Date(Date.UTC(y, m - 1 + 3 - i, 15));
+    return {
+      value: d.toISOString().slice(0, 7),
+      label: d.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }),
+    };
+  });
+}
+
 export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: View; filtre?: string }) {
   const navigate = useNavigate();
   const settings = useSettings();
+  const me = useMe();
   const view: View =
     filtre === 'a-completer' ? 'list' : (vue ?? settings.data?.['ui.projects_default_view'] ?? 'tree');
   const [domainFilter, setDomainFilter] = useState<string[]>([]);
+  // Arriving on a group (sidebar link): show all its projects, whatever the domain filter was.
+  useEffect(() => {
+    if (groupe) setDomainFilter([]);
+  }, [groupe]);
   const byDomain = (p: Project) => !domainFilter.length || p.domainIds.some((d) => domainFilter.includes(d));
   const [status, setStatus] = useState('active,ready,paused');
   const incomplete = useQuery({
@@ -181,13 +200,14 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
               <option value="done,abandoned">Terminés / abandonnés</option>
               <option value="">Tous</option>
             </select>
-            <input
-              type="month"
-              value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              aria-label="Projets du mois"
-              title="Projets du mois"
-            />
+            <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Projets du mois">
+              <option value="">Tous les mois</option>
+              {monthChoices(me.data?.today).map((m) => (
+                <option key={m.value} value={m.value}>
+                  Projets du mois : {m.label}
+                </option>
+              ))}
+            </select>
           </>
         )}
       </div>
@@ -201,52 +221,6 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
         />
       )}
       <NewProjectPanel open={creating} onClose={() => setCreating(false)} defaultGroup={groupe} />
-    </div>
-  );
-}
-
-/** Multi-select domain filter (several domains at once; none selected = all). */
-function DomainFilter({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
-  const dl = useDomainLookup();
-  return (
-    <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filtrer par domaine">
-      <button
-        type="button"
-        aria-pressed={!value.length}
-        onClick={() => onChange([])}
-        className="rounded-full text-[13px] cursor-pointer"
-        style={{
-          minHeight: 32,
-          padding: '0 12px',
-          border: `1px solid ${value.length ? 'var(--border)' : 'var(--text)'}`,
-          background: value.length ? 'var(--surface)' : 'var(--bin)',
-          fontWeight: value.length ? 400 : 600,
-        }}
-      >
-        Tous les domaines
-      </button>
-      {dl.domains.map((d) => {
-        const on = value.includes(d.id);
-        return (
-          <button
-            key={d.id}
-            type="button"
-            aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((x) => x !== d.id) : [...value, d.id])}
-            className="flex items-center gap-1.5 rounded-full text-[13px] cursor-pointer"
-            style={{
-              minHeight: 32,
-              padding: '0 12px',
-              border: `1px solid ${on ? dl.colorOf(d) : 'var(--border)'}`,
-              background: on ? 'var(--bin)' : 'var(--surface)',
-              fontWeight: on ? 600 : 400,
-            }}
-          >
-            <span className="dot" style={{ background: dl.colorOf(d) }} />
-            {d.name}
-          </button>
-        );
-      })}
     </div>
   );
 }
@@ -275,9 +249,18 @@ function ProjectTree({ projects }: { projects: Project[] }) {
               <div key={g.id} className="card overflow-hidden">
                 <div
                   className="flex items-center justify-between"
-                  style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider-2)' }}
+                  style={{
+                    padding: '9px 16px',
+                    borderBottom: '1px solid var(--divider-2)',
+                    background: 'var(--surface-2)',
+                  }}
                 >
-                  <Link to="/projets" search={{ groupe: g.id }} className="text-[15px] font-semibold">
+                  <Link
+                    to="/projets"
+                    search={{ groupe: g.id }}
+                    className="text-[12px] font-semibold uppercase"
+                    style={{ letterSpacing: '0.08em', color: 'var(--text-muted)' }}
+                  >
                     {g.name}
                   </Link>
                   <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
@@ -1096,26 +1079,41 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
   );
 }
 
+type IdeaSort = 'title' | 'domain' | 'group' | 'createdAt';
+
 export function IdeasPage() {
-  const [domainId, setDomainId] = useState('');
-  const [groupId, setGroupId] = useState('');
+  const [domains, setDomains] = useState<string[]>([]);
+  const [sort, setSort] = useState<{ key: IdeaSort; desc: boolean }>({ key: 'createdAt', desc: false });
   const [creating, setCreating] = useState(false);
-  const q = useQuery({
-    queryKey: ['ideas', domainId, groupId],
-    queryFn: () =>
-      get<Project[]>(
-        `/ideas?${domainId ? `domainId=${domainId}&` : ''}${groupId ? `groupId=${groupId}` : ''}`,
-      ),
-  });
+  const q = useQuery({ queryKey: ['ideas'], queryFn: () => get<Project[]>('/ideas') });
   const dl = useDomainLookup();
-  const groups = useGroups();
-  const navigate = useNavigate();
   const promote = useAction((id: string) => post(`/projects/${id}/promote`), {
     toast: 'Idée promue : projet prêt.',
   });
   const drop = useAction((id: string) => patch(`/projects/${id}`, { status: 'abandoned' }), {
     toast: 'Idée abandonnée.',
   });
+  const groupName = (p: Project) => p.groups.map((g) => g.name).join(' · ');
+  const cmp: Record<IdeaSort, (a: Project, b: Project) => number> = {
+    title: (a, b) => a.title.localeCompare(b.title),
+    domain: (a, b) =>
+      (dl.get(a.domainIds[0])?.priorityRank ?? 99) - (dl.get(b.domainIds[0])?.priorityRank ?? 99),
+    group: (a, b) => groupName(a).localeCompare(groupName(b)),
+    createdAt: (a, b) => a.createdAt.localeCompare(b.createdAt),
+  };
+  const rows = (q.data ?? [])
+    .filter((p) => !domains.length || p.domainIds.some((d) => domains.includes(d)))
+    .sort((a, b) => (sort.desc ? -1 : 1) * cmp[sort.key](a, b) || a.title.localeCompare(b.title));
+  const th = (key: IdeaSort, label: string) => (
+    <th
+      className="text-left font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer whitespace-nowrap select-none"
+      style={{ color: 'var(--text-muted)' }}
+      aria-sort={sort.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined}
+      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : false }))}
+    >
+      {label} {sort.key === key ? (sort.desc ? '↑' : '↓') : ''}
+    </th>
+  );
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -1130,61 +1128,52 @@ export function IdeasPage() {
           }
         />
       </div>
-      <div className="flex flex-wrap gap-3">
-        <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
-          <option value="">Tous les domaines</option>
-          {dl.domains.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
-        <select value={groupId} onChange={(e) => setGroupId(e.target.value)} aria-label="Groupe">
-          <option value="">Tous les groupes</option>
-          {(groups.data ?? []).map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
+      <DomainFilter value={domains} onChange={setDomains} />
+      <div className="card overflow-x-auto">
+        <table className="w-full border-collapse text-[14px]">
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {th('title', 'Idée')}
+              {th('domain', 'Domaine')}
+              {th('group', 'Groupe')}
+              {th('createdAt', 'Depuis')}
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p) => (
+              <tr key={p.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+                <td className="py-2.5 px-3">
+                  <Link to="/projets/$id" params={{ id: p.id }} className="font-medium">
+                    {p.title}
+                  </Link>
+                </td>
+                <td className="py-2.5 px-3 whitespace-nowrap">
+                  <span className="flex items-center gap-2">
+                    <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
+                    {dl.name(p.domainIds[0])}
+                  </span>
+                </td>
+                <td className="py-2.5 px-3" style={{ color: 'var(--text-muted)' }}>
+                  {groupName(p)}
+                </td>
+                <td className="py-2.5 px-3 mono text-[13px] whitespace-nowrap">
+                  {fmtDate(p.createdAt.slice(0, 10))}
+                </td>
+                <td className="py-2 px-3 text-right whitespace-nowrap">
+                  <button type="button" className="btn btn-sm" onClick={() => promote.mutate(p.id)}>
+                    Promouvoir
+                  </button>{' '}
+                  <button type="button" className="btn btn-sm btn-ghost" onClick={() => drop.mutate(p.id)}>
+                    Abandonner
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {q.data && rows.length === 0 && <Empty>Aucune idée.</Empty>}
       </div>
-      <section className="card overflow-hidden">
-        {q.data?.length === 0 && <Empty>Aucune idée.</Empty>}
-        {q.data?.map((p) => (
-          <div
-            key={p.id}
-            className="flex flex-wrap items-center gap-3"
-            style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider)' }}
-          >
-            <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
-            <div className="flex-1 min-w-0 flex flex-col">
-              <Link to="/projets/$id" params={{ id: p.id }} className="text-[15px] font-medium">
-                {p.title}
-              </Link>
-              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                {p.groups.map((g) => g.name).join(' · ')} · depuis le {fmtDate(p.createdAt.slice(0, 10))}
-              </span>
-            </div>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() =>
-                promote.mutate(p.id, {
-                  onError: (e) => {
-                    if (e instanceof ApiError && e.code === 'PROMOTION_INCOMPLETE')
-                      navigate({ to: '/projets/$id', params: { id: p.id } });
-                  },
-                })
-              }
-            >
-              Promouvoir
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => drop.mutate(p.id)}>
-              Abandonner
-            </button>
-          </div>
-        ))}
-      </section>
       <NewProjectPanel open={creating} onClose={() => setCreating(false)} />
     </div>
   );

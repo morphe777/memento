@@ -438,6 +438,16 @@ input[type="checkbox"] {
   border-top: 1px solid var(--border);
   margin: 14px 0;
 }
+.domain-card-md .md {
+  font-size: 14px;
+  line-height: 1.55;
+}
+.domain-card-md .md h1,
+.domain-card-md .md h2,
+.domain-card-md .md h3 {
+  font-size: 14px;
+  margin: 4px 0 2px;
+}
 .btn-danger {
   border-color: var(--status-red);
   color: var(--status-red);

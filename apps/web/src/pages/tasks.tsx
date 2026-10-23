@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
 import { LockIcon, TaskDrawer, useSortSensors } from '../components/tasks.tsx';
 import {
+  DomainFilter,
   Duration,
   Empty,
   ErrorBox,
@@ -20,6 +21,7 @@ import { get, post, put } from '../lib/api.ts';
 import { fmtDateShort } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup } from '../lib/hooks.ts';
 import type { BoardTask } from '../lib/types.ts';
+import { Chevron } from './week.tsx';
 
 export type TaskView = 'table' | 'kanban';
 type Bucket = BoardTask['bucket'];
@@ -46,6 +48,8 @@ const COLUMNS: { bucket: Bucket; label: string; info: string }[] = [
     info: 'Tâches faites depuis lundi. Glisser une carte ici la marque faite ; la sortir la rouvre.',
   },
 ];
+/** Cards shown per Kanban column before « + N autres ». */
+const BOARD_VISIBLE = 6;
 const BUCKET_LABEL = Object.fromEntries(COLUMNS.map((c) => [c.bucket, c.label])) as Record<Bucket, string>;
 
 export function useBoardTasks(projectId?: string, enabled = true) {
@@ -60,8 +64,7 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
   const navigate = useNavigate();
   const view: TaskView = vue ?? 'kanban';
   const q = useBoardTasks();
-  const dl = useDomainLookup();
-  const [domainId, setDomainId] = useState('');
+  const [domains, setDomains] = useState<string[]>([]);
   const [projectId, setProjectId] = useState('');
   const all = q.data ?? [];
   const projects = [
@@ -69,7 +72,7 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
   ].sort((a, b) => a[1].localeCompare(b[1]));
   const tasks = all.filter(
     (t) =>
-      (!domainId || t.colorDomainId === domainId) &&
+      (!domains.length || (!!t.colorDomainId && domains.includes(t.colorDomainId))) &&
       (!projectId || (projectId === 'inbox' ? !t.projectId : t.projectId === projectId)),
   );
   const open = (id: string) => navigate({ to: '/taches', search: { vue, tache: id } });
@@ -88,14 +91,7 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
             { value: 'table', label: 'Tableau' },
           ]}
         />
-        <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
-          <option value="">Tous les domaines</option>
-          {dl.domains.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.name}
-            </option>
-          ))}
-        </select>
+
         <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Projet">
           <option value="">Tous les projets</option>
           <option value="inbox">Inbox</option>
@@ -106,6 +102,7 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
           ))}
         </select>
       </div>
+      <DomainFilter value={domains} onChange={setDomains} />
       {q.isError && <ErrorBox error={q.error} />}
       {q.isLoading && <Loading />}
       {q.data && view === 'kanban' && <TaskBoard tasks={tasks} onOpen={open} showProject />}
@@ -180,6 +177,7 @@ function BoardColumn({
   showProject?: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: column.bucket });
+  const [showAll, setShowAll] = useState(false);
   const minutes = tasks.reduce((a, t) => a + (t.durationMin ?? 0), 0);
   return (
     <section
@@ -204,9 +202,21 @@ function BoardColumn({
           </span>
         )}
       </div>
-      {tasks.map((t) => (
+      {(showAll ? tasks : tasks.slice(0, BOARD_VISIBLE)).map((t) => (
         <BoardCard key={t.id} t={t} onOpen={onOpen} showProject={showProject} />
       ))}
+      {tasks.length > BOARD_VISIBLE && (
+        <button
+          type="button"
+          className="flex items-center gap-2 border-0 bg-transparent text-left cursor-pointer text-[13px]"
+          style={{ color: 'var(--text-muted)', minHeight: 32, padding: '0 4px' }}
+          aria-expanded={showAll}
+          onClick={() => setShowAll((v) => !v)}
+        >
+          <Chevron open={showAll} size={12} />
+          {showAll ? 'Réduire' : `+ ${tasks.length - BOARD_VISIBLE} autres`}
+        </button>
+      )}
     </section>
   );
 }
