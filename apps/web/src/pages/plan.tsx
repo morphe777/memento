@@ -99,7 +99,6 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
   };
   const over = page.budget.overMin > 0;
   const mixRows = useDomainRows(page.mix);
-  const validated = page.plan?.status === 'validated';
 
   return (
     <div className="flex flex-col gap-6">
@@ -133,7 +132,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
           title="Planifier la semaine"
           actions={
             <>
-              {!validated && (!page.plan?.proposedAt || settings.data?.['ui.show_recalculate']) && (
+              {(!page.plan?.proposedAt || settings.data?.['ui.show_recalculate']) && (
                 <button
                   type="button"
                   className="btn"
