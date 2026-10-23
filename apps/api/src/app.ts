@@ -67,6 +67,8 @@ export async function buildApp(opts: AppOptions) {
 
   // Authentication for every /api/v1 route except login, health and the OpenAPI document.
   const PUBLIC = new Set(['/api/v1/auth/login', '/api/v1/health', '/api/v1/openapi.json']);
+  // /auth/me answers 200 { authenticated: false } instead of 401 (no console noise before login).
+  const SOFT = new Set(['/api/v1/auth/me']);
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0];
     if (!path.startsWith('/api/') || PUBLIC.has(path)) return;
@@ -74,6 +76,7 @@ export async function buildApp(opts: AppOptions) {
     req.principal = bearer
       ? A.tokenPrincipal(db, bearer)
       : A.sessionPrincipal(db, req.cookies[A.SESSION_COOKIE]);
+    if (!req.principal && SOFT.has(path)) return;
     if (!req.principal)
       return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'Connexion requise.' });
     if (!req.principal.canWrite && req.method !== 'GET') {
@@ -153,15 +156,19 @@ export async function buildApp(opts: AppOptions) {
         reply.clearCookie(A.SESSION_COOKIE, { path: '/' });
         return { ok: true };
       });
-      r.get('/auth/me', { schema: tag('Auth') }, async (req) => ({
-        kind: req.principal!.kind,
-        actor: req.principal!.actor,
-        login: req.principal!.login ?? null,
-        canWrite: req.principal!.canWrite,
-        today: today(),
-        currentWeek: D.isoWeekOf(today()),
-        unreviewed: D.unreviewedCount(ctx(req)),
-      }));
+      r.get('/auth/me', { schema: tag('Auth') }, async (req) => {
+        if (!req.principal) return { authenticated: false };
+        return {
+          authenticated: true,
+          kind: req.principal!.kind,
+          actor: req.principal!.actor,
+          login: req.principal!.login ?? null,
+          canWrite: req.principal!.canWrite,
+          today: today(),
+          currentWeek: D.isoWeekOf(today()),
+          unreviewed: D.unreviewedCount(ctx(req)),
+        };
+      });
 
       // ---------- Settings & tokens (interface only, not for AI: dossier §9) ----------
       r.get('/settings', { schema: tag('Réglages') }, async (req) => D.getSettings(ctx(req)));
