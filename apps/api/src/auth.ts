@@ -1,7 +1,7 @@
 // Authentication: web users by session cookie (actor 'me'), AI / robots by bearer secret token (actor 'ai:<name>').
 // Passwords hashed with argon2id; session ids and tokens stored as SHA-256 hashes only (dossier de dev §12).
 import { createHash, randomBytes } from 'node:crypto';
-import { type Db, eq, schema } from '@memento/db';
+import { and, type Db, eq, ne, schema } from '@memento/db';
 import { type Actor, DomainError, newId } from '@memento/domain';
 import { hash, verify } from '@node-rs/argon2';
 
@@ -37,6 +37,41 @@ export async function setUserPassword(db: Db, login: string, password: string) {
   }
   db.insert(schema.appUser).values({ id: newId(), login, passwordHash }).run();
   return { created: true };
+}
+
+/** Configuration › Compte: change one's own password; the current one is required, other sessions are closed. */
+export async function changeOwnPassword(
+  db: Db,
+  userId: string,
+  currentSessionRaw: string,
+  current: string,
+  next: string,
+) {
+  const user = db.select().from(schema.appUser).where(eq(schema.appUser.id, userId)).get();
+  if (!user || !(await verifyPassword(user.passwordHash, current)))
+    throw new DomainError('BAD_CURRENT_PASSWORD', 'Mot de passe actuel incorrect.');
+  assertPasswordPolicy(next);
+  db.update(schema.appUser)
+    .set({ passwordHash: await hashPassword(next), updatedAt: new Date().toISOString() })
+    .where(eq(schema.appUser.id, userId))
+    .run();
+  db.delete(schema.session)
+    .where(and(eq(schema.session.userId, userId), ne(schema.session.id, sha256(currentSessionRaw))))
+    .run();
+}
+
+/** Configuration › Compte: rename one's own login (unique). */
+export function renameUser(db: Db, userId: string, loginName: string) {
+  const next = loginName.trim();
+  if (!/^[a-z0-9][a-z0-9._-]{1,39}$/i.test(next))
+    throw new DomainError('INVALID_LOGIN', 'Identifiant : lettres, chiffres, . - ou _ (2 à 40 caractères).');
+  const taken = db.select().from(schema.appUser).where(eq(schema.appUser.login, next)).get();
+  if (taken && taken.id !== userId) throw new DomainError('LOGIN_TAKEN', 'Cet identifiant est déjà pris.');
+  db.update(schema.appUser)
+    .set({ login: next, updatedAt: new Date().toISOString() })
+    .where(eq(schema.appUser.id, userId))
+    .run();
+  return { login: next };
 }
 
 // Constant-time-ish failure path: always run a verify even for unknown logins.
