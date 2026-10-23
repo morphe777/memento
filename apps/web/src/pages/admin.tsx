@@ -15,6 +15,10 @@ import type { Change, Domain, Settings } from '../lib/types.ts';
 
 // ---------- À revoir ----------
 
+/** French past participle agreement for feminine entities (tâche, ressource). */
+const agree = (entity: string, label: string) =>
+  ['task', 'resource'].includes(entity) ? label.replace(/é(\b|$)/, 'ée') : label;
+
 export function ReviewPage() {
   const [since, setSince] = useState<'last-visit' | '24h' | '7d' | 'all'>('7d');
   const [actor, setActor] = useState<'all' | 'me' | 'ai'>('ai');
@@ -122,7 +126,8 @@ export function ReviewPage() {
             <div className="flex-1 min-w-0 flex flex-col">
               <span className="text-[15px] font-medium truncate">{link(c)}</span>
               <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                {ENTITY_LABEL[c.entityType] ?? c.entityType} {ACTION_LABEL[c.action] ?? c.action} ·{' '}
+                {ENTITY_LABEL[c.entityType] ?? c.entityType}{' '}
+                {agree(c.entityType, ACTION_LABEL[c.action] ?? c.action)} ·{' '}
                 {c.actor === 'me' ? 'moi' : c.actor} · {fmtDateTime(c.at)}
               </span>
             </div>

@@ -48,13 +48,23 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
       <span className="flex-1 min-w-0 text-[15px] font-medium truncate hover:underline">
         {p.title}
         {p.groupIds.length > 1 && (
-          <span
-            title="Projet dans plusieurs groupes"
-            className="ml-2 text-[12px]"
+          <svg
+            role="img"
+            aria-label="Projet dans plusieurs groupes"
+            width="13"
+            height="13"
+            viewBox="0 0 16 16"
+            className="inline-block ml-2 align-[-1px]"
             style={{ color: 'var(--text-ghost)' }}
           >
-            ⧉
-          </span>
+            <path
+              d="M6.5 9.5l3-3M7 4.5l1-1a2.5 2.5 0 013.5 3.5l-1 1M9 11.5l-1 1A2.5 2.5 0 014.5 9l1-1"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
         )}
       </span>
       {p.monthFlag && <StatusPill>Projet du mois</StatusPill>}

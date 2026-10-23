@@ -56,6 +56,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const phone = useIsPhone();
   const theme = useResolvedTheme();
   const [searchOpen, setSearchOpen] = useState(false);
+  const settings = useSettings();
+  useEffect(() => {
+    const c = settings.data?.['experience.badge_color'];
+    if (c) document.documentElement.style.setProperty('--experience', c);
+  }, [settings.data]);
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
     document
