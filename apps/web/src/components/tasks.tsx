@@ -18,7 +18,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDateShort, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
@@ -540,6 +540,7 @@ export function Resources({
 }
 
 /** Groups multi-select (DM-91): domains are deduced from groups. */
+/** Groups by domain, laid out as a table: domain in the left cell, its groups wrap inside the right cell. */
 export function GroupPicker({ value, onChange }: { value: string[]; onChange: (ids: string[]) => void }) {
   const groups = useGroups();
   const dl = useDomainLookup();
@@ -547,39 +548,52 @@ export function GroupPicker({ value, onChange }: { value: string[]; onChange: (i
     .map((d) => ({ d, groups: (groups.data ?? []).filter((g) => g.domainId === d.id) }))
     .filter((x) => x.groups.length);
   return (
-    <div className="flex flex-col gap-2">
-      {byDomain.map(({ d, groups: gs }) => (
-        <div key={d.id} className="flex flex-wrap items-center gap-1.5">
-          <span
-            className="flex items-center gap-1.5 text-[12px] flex-none"
-            style={{ width: 130, color: 'var(--text-muted)' }}
-          >
-            <span className="dot" style={{ background: dl.colorOf(d) }} />
-            {d.name}
-          </span>
-          {gs.map((g) => {
-            const on = value.includes(g.id);
-            return (
-              <button
-                key={g.id}
-                type="button"
-                aria-pressed={on}
-                onClick={() => onChange(on ? value.filter((x) => x !== g.id) : [...value, g.id])}
-                className="rounded-full text-[12px] cursor-pointer"
-                style={{
-                  minHeight: 30,
-                  padding: '0 10px',
-                  border: `1px solid ${on ? dl.colorOf(d) : 'var(--border)'}`,
-                  background: on ? 'var(--bin)' : 'var(--surface)',
-                  fontWeight: on ? 600 : 400,
-                }}
-              >
-                {g.name}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+    <div className="grid" style={{ gridTemplateColumns: 'minmax(96px, max-content) minmax(0, 1fr)' }}>
+      {byDomain.map(({ d, groups: gs }, i) => {
+        const line = i < byDomain.length - 1 ? '1px solid var(--divider)' : undefined;
+        return (
+          <Fragment key={d.id}>
+            <span
+              className="flex items-center gap-1.5 text-[12px] pr-3"
+              style={{
+                color: 'var(--text-muted)',
+                borderBottom: line,
+                padding: '8px 12px 8px 0',
+                minHeight: 30,
+              }}
+            >
+              <span className="dot" style={{ background: dl.colorOf(d) }} />
+              {d.name}
+            </span>
+            <div
+              className="flex flex-wrap items-center gap-1.5 min-w-0"
+              style={{ borderBottom: line, padding: '8px 0' }}
+            >
+              {gs.map((g) => {
+                const on = value.includes(g.id);
+                return (
+                  <button
+                    key={g.id}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onChange(on ? value.filter((x) => x !== g.id) : [...value, g.id])}
+                    className="rounded-full text-[12px] cursor-pointer"
+                    style={{
+                      minHeight: 30,
+                      padding: '0 10px',
+                      border: `1px solid ${on ? dl.colorOf(d) : 'var(--border)'}`,
+                      background: on ? 'var(--bin)' : 'var(--surface)',
+                      fontWeight: on ? 600 : 400,
+                    }}
+                  >
+                    {g.name}
+                  </button>
+                );
+              })}
+            </div>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

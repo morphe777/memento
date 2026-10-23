@@ -1,6 +1,6 @@
 // Shared components (dossier de dev §11), values copied from the validated mockups.
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { fmtMin } from '../lib/format.ts';
 import { useDomainLookup } from '../lib/hooks.ts';
 
@@ -221,11 +221,13 @@ export function useDomainRows(mix: { domainId: string | null; minutes: number }[
 export function Section({
   title,
   aside,
+  info,
   children,
   className = '',
 }: {
   title?: ReactNode;
   aside?: ReactNode;
+  info?: ReactNode;
   children: ReactNode;
   className?: string;
 }) {
@@ -233,7 +235,12 @@ export function Section({
     <section className={`card flex flex-col gap-4 ${className}`} style={{ padding: '18px 20px' }}>
       {(title || aside) && (
         <div className="flex justify-between items-baseline gap-3 flex-wrap">
-          {title && <h2 className="h2">{title}</h2>}
+          {title && (
+            <h2 className="h2 flex items-center gap-2">
+              {title}
+              {info && <InfoTip>{info}</InfoTip>}
+            </h2>
+          )}
           {aside && (
             <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
               {aside}
@@ -352,10 +359,81 @@ export function Panel({
   );
 }
 
-export function Field({ label, children, hint }: { label: string; children: ReactNode; hint?: ReactNode }) {
+/**
+ * Small circled « i » that explains a setting (hover, focus or tap). A span, not a button, so that it is never
+ * the control targeted by an enclosing <label>.
+ */
+export function InfoTip({ children, align = 'left' }: { children: ReactNode; align?: 'left' | 'right' }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: Event) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node))
+        setOpen(false);
+    };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', close);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', close);
+    };
+  }, [open]);
+  return (
+    <span
+      ref={ref}
+      role="button"
+      tabIndex={0}
+      aria-label="Aide"
+      aria-expanded={open}
+      className="info-tip"
+      onMouseEnter={() => setOpen(true)}
+      onMouseLeave={() => setOpen(false)}
+      onFocus={() => setOpen(true)}
+      onBlur={() => setOpen(false)}
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setOpen((o) => !o);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setOpen((o) => !o);
+        }
+      }}
+    >
+      <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden>
+        <circle cx="8" cy="8" r="6.6" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <circle cx="8" cy="5" r="0.95" fill="currentColor" />
+        <path d="M8 7.3v4.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+      {open && (
+        <span role="tooltip" className={`info-pop ${align === 'right' ? 'align-right' : ''}`}>
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+
+export function Field({
+  label,
+  children,
+  hint,
+  info,
+}: {
+  label: string;
+  children: ReactNode;
+  hint?: ReactNode;
+  info?: ReactNode;
+}) {
   return (
     <label className="field">
-      <span>{label}</span>
+      <span className="flex items-center gap-1.5">
+        {label}
+        {info && <InfoTip>{info}</InfoTip>}
+      </span>
       {children}
       {hint && (
         <span className="text-[12px] font-normal" style={{ color: 'var(--text-ghost)' }}>

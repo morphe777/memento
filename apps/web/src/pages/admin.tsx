@@ -7,10 +7,10 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
 import { useSortSensors } from '../components/tasks.tsx';
-import { Empty, Field, Loading, PageHeader, Section, Tabs } from '../components/ui.tsx';
+import { Empty, Field, InfoTip, Loading, PageHeader, Section, Tabs } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post } from '../lib/api.ts';
 import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
-import { useAction, useDomainLookup, useGroups, useSettings } from '../lib/hooks.ts';
+import { useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
 import type { Change, Domain, Settings } from '../lib/types.ts';
 
 // ---------- À revoir ----------
@@ -152,6 +152,7 @@ const CONFIG_TABS = [
   { value: 'planning', label: 'Planning' },
   { value: 'templates', label: 'Templates' },
   { value: 'acces', label: 'Accès' },
+  { value: 'compte', label: 'Compte' },
 ] as const;
 type ConfigTab = (typeof CONFIG_TABS)[number]['value'];
 
@@ -185,12 +186,46 @@ export function ConfigPage({ onglet }: { onglet: string }) {
         <GroupsConfig />
       ) : tab === 'acces' ? (
         <AccessConfig />
+      ) : tab === 'compte' ? (
+        <AccountConfig />
       ) : (
         <SettingsForm key={tab} tab={tab} settings={settings.data} />
       )}
     </div>
   );
 }
+
+const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> = {
+  budget: {
+    title: 'Budget et affichage',
+    info: "Le budget hebdomadaire est le cœur du système : le plan de la semaine ne le dépasse jamais sans te l'afficher.",
+  },
+  moteur: {
+    title: 'Moteur du lundi',
+    info: 'Règle la façon dont le moteur classe les tâches et construit la proposition de semaine. Déterministe : mêmes données, même proposition.',
+  },
+  alertes: {
+    title: 'Alertes et indicateurs',
+    info: 'Seuils des alertes de Planifier et des indicateurs des rapports (vert / orange / rouge).',
+  },
+  planning: {
+    title: 'Planning automatique',
+    info: 'Quand le worker prépare la semaine et génère les rapports, en heure de Paris.',
+  },
+  templates: {
+    title: 'Modèles de description',
+    info: 'Texte de départ des descriptions, pour garder la même structure partout.',
+  },
+};
+
+const WEIGHT_INFO: Record<string, string> = {
+  value:
+    "V : poids du domaine principal + 50 % des autres domaines, × criticité de l'objectif. Mesure « est-ce important pour moi ».",
+  urgency: 'U : se rapproche de 1 quand la deadline de la tâche (sinon la fin du projet) approche.',
+  delay: 'R : retard du projet sur son rythme prévu (projets du mois). Fait remonter ce qui glisse.',
+  continuity: "C : 1 si une tâche du projet a été faite ces 2 dernières semaines. Favorise l'élan.",
+  age: 'A : nombre de reports de la tâche (plafonné à 3). Évite qu’une tâche traîne indéfiniment.',
+};
 
 function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings }) {
   const [s, setS] = useState(settings);
@@ -222,12 +257,13 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
   const submit = () => save.mutate(Object.fromEntries(keys[tab].map((k) => [k, s[k]])) as Partial<Settings>);
   const w = s['engine.weights'];
   return (
-    <Section>
+    <Section title={SECTION_INFO[tab]?.title} info={SECTION_INFO[tab]?.info}>
       {tab === 'budget' && (
         <>
           <Field
             label="Budget hebdo par défaut (heures)"
             hint="CH-11 · surcharge ponctuelle dans Planifier › Budget"
+            info="Le plafond d'heures que le moteur remplit chaque lundi avec les tâches « Semaine ». Le Bonus n'en fait pas partie. Pour une semaine particulière (vacances, semaine chargée), change le budget dans Planifier sans toucher à cette valeur."
           >
             <input
               type="number"
@@ -237,7 +273,13 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             />
           </Field>
           <div className="field">
-            <span>Thème</span>
+            <span className="flex items-center gap-1.5">
+              Thème
+              <InfoTip>
+                Auto suit le réglage clair / sombre de l'appareil. Également disponible en bas de la barre
+                latérale.
+              </InfoTip>
+            </span>
             <div style={{ maxWidth: 280 }}>
               <ThemeSwitch />
             </div>
@@ -246,7 +288,14 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       )}
       {tab === 'moteur' && (
         <>
-          <div className="label-caps">Poids du score (V, U, R, C, A)</div>
+          <div className="label-caps flex items-center gap-1.5">
+            Poids du score (V, U, R, C, A)
+            <InfoTip>
+              Score d'une tâche = (V×Valeur + U×Urgence + R×Retard + C×Continuité + A×Âge) ÷ Durée. Chaque
+              critère vaut entre 0 et 1 ; ces poids règlent leur importance relative. Mettre un poids à 0
+              ignore le critère. Le même jeu de données donne toujours la même proposition.
+            </InfoTip>
+          </div>
           <div
             className="grid gap-3"
             style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}
@@ -260,7 +309,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
                 ['age', 'Âge (reports)'],
               ] as const
             ).map(([k, l]) => (
-              <Field key={k} label={l}>
+              <Field key={k} label={l} info={WEIGHT_INFO[k]}>
                 <input
                   type="number"
                   step={0.1}
@@ -271,16 +320,44 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               </Field>
             ))}
           </div>
-          <Field label="Taille de la liste Bonus">{num('engine.bonus_count')}</Field>
-          <Field label="Projets dans « À considérer aussi »">{num('engine.consider_also_count')}</Field>
+          <Field
+            label="Taille de la liste Bonus"
+            info="Nombre de tâches que le moteur pré-place en Bonus : les suivantes au score, hors budget. Tu peux les décocher. 0 = pas de suggestion Bonus."
+          >
+            {num('engine.bonus_count')}
+          </Field>
+          <Field
+            label="Projets dans « À considérer aussi »"
+            info="Nombre d'autres projets actifs (hors projets du mois) montrés dans Planifier, les mieux notés d'abord. Les projets Santé / Famille en manque d'heures s'y ajoutent toujours (garde-fous)."
+          >
+            {num('engine.consider_also_count')}
+          </Field>
         </>
       )}
       {tab === 'alertes' && (
         <>
-          <Field label="Garde-fous Santé / Famille : fenêtre (semaines)">{num('guards.window_weeks')}</Field>
-          <Field label="Expériences : cible">{num('experience.target')}</Field>
-          <Field label="Expériences : fenêtre (semaines)">{num('experience.window_weeks')}</Field>
-          <Field label="Couleur du badge Expérience">
+          <Field
+            label="Garde-fous Santé / Famille : fenêtre (semaines)"
+            info="Si aucune heure n'a été faite en Santé ou en Famille sur ces N dernières semaines, Planifier affiche une alerte et remonte un projet de ce domaine. Les domaines sont reconnus par leur nom."
+          >
+            {num('guards.window_weeks')}
+          </Field>
+          <Field
+            label="Expériences : cible"
+            info="Nombre de tâches « Expérience » (badge doré) à faire sur la fenêtre ci-dessous. En dessous, alerte dans Planifier et indicateur orange ou rouge dans les rapports."
+          >
+            {num('experience.target')}
+          </Field>
+          <Field
+            label="Expériences : fenêtre (semaines)"
+            info="Période glissante sur laquelle la cible est comptée."
+          >
+            {num('experience.window_weeks')}
+          </Field>
+          <Field
+            label="Couleur du badge Expérience"
+            info="Couleur du badge doré qui signale une tâche Expérience."
+          >
             <input
               type="color"
               value={s['experience.badge_color']}
@@ -288,14 +365,33 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               style={{ width: 80, padding: 2 }}
             />
           </Field>
-          <Field label="Rythme : sous-productif sous (%)">{num('report.rhythm_low_pct')}</Field>
-          <Field label="Rythme : surproductif au-delà de (%)">{num('report.rhythm_high_pct')}</Field>
-          <Field label="Idées : proposer à la purge après (mois)">{num('ideas.purge_after_months')}</Field>
+          <Field
+            label="Rythme : sous-productif sous (%)"
+            info="Rapports : heures faites ÷ budget de la semaine. Sous ce pourcentage, le rythme est « Sous-productif »."
+          >
+            {num('report.rhythm_low_pct')}
+          </Field>
+          <Field
+            label="Rythme : surproductif au-delà de (%)"
+            info="Au-delà de ce pourcentage, le rythme est « Surproductif » : signal de surcharge plutôt que de réussite."
+          >
+            {num('report.rhythm_high_pct')}
+          </Field>
+          <Field
+            label="Idées : proposer à la purge après (mois)"
+            info="Âge à partir duquel une idée jamais promue sera proposée à l'abandon lors de la revue trimestrielle (pas encore actif en v0.1)."
+          >
+            {num('ideas.purge_after_months')}
+          </Field>
         </>
       )}
       {tab === 'planning' && (
         <>
-          <Field label="Plan de la semaine : jour (1 = lundi)" hint="Heure de Paris">
+          <Field
+            label="Plan de la semaine : jour (1 = lundi)"
+            hint="Heure de Paris"
+            info="Moment où le worker clôture la semaine passée (reports des tâches non faites) et prépare la proposition de la nouvelle."
+          >
             <input
               type="number"
               min={1}
@@ -318,7 +414,10 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               }
             />
           </Field>
-          <Field label="Rapports : heure (lundi, 1er du mois, 1er jour du trimestre)">
+          <Field
+            label="Rapports : heure (lundi, 1er du mois, 1er jour du trimestre)"
+            info="Heure de génération des rapports figés. Si le serveur était arrêté, ils sont rattrapés au redémarrage."
+          >
             <input
               type="time"
               value={s['schedule.reports'].time}
@@ -340,7 +439,11 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               ['templates.task', 'Tâche'],
             ] as const
           ).map(([k, l]) => (
-            <Field key={k} label={l}>
+            <Field
+              key={k}
+              label={l}
+              info={`Texte pré-rempli dans la description d'un nouvel élément « ${l} ».`}
+            >
               <textarea
                 value={s[k]}
                 onChange={(e) => setS({ ...s, [k]: e.target.value })}
@@ -419,7 +522,11 @@ function DomainsConfig() {
     reorder.mutate(next);
   };
   return (
-    <Section title="Domaines de vie" aside="glisser pour changer l'ordre de priorité">
+    <Section
+      title="Domaines de vie"
+      aside="glisser pour changer l'ordre de priorité"
+      info="L'ordre = la priorité : il départage les égalités et fixe le domaine principal par défaut d'un projet à plusieurs groupes. Le poids (0 à 1) est la Valeur V du score. Les deux couleurs servent aux thèmes clair et sombre. Archiver masque un domaine sans rien supprimer."
+    >
       <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
         Le poids (0 à 1) entre dans la valeur du score du moteur. Proposition par défaut : linéaire selon le
         rang (1 pour le n°1, puis −1/8 par rang).
@@ -550,7 +657,11 @@ function GroupsConfig() {
   });
   const remove = useAction((id: string) => del(`/groups/${id}`), { toast: 'Groupe supprimé.' });
   return (
-    <Section title="Groupes" aside="rangement libre · un groupe = un domaine">
+    <Section
+      title="Groupes"
+      aside="rangement libre · un groupe = un domaine"
+      info="Les groupes rangent les projets. Chaque groupe appartient à un domaine, et un projet tire ses domaines de ses groupes. Un groupe qui contient encore des projets ne peut pas être supprimé."
+    >
       <div className="card overflow-hidden">
         {(groups.data ?? []).map((g) => (
           <div
@@ -644,7 +755,11 @@ function AccessConfig() {
   });
   const revoke = useAction((id: string) => del(`/tokens/${id}`), { toast: 'Jeton révoqué.' });
   return (
-    <Section title="Jetons API / MCP" aside="IA et robots · secret affiché une seule fois, stocké haché">
+    <Section
+      title="Jetons API / MCP"
+      aside="IA et robots · secret affiché une seule fois, stocké haché"
+      info="Un jeton par agent (claude, n8n…) : ses changements apparaissent sous ai:<nom> dans « À revoir ». Lecture seule = consultation uniquement. Aucun jeton ne peut gérer les jetons, les réglages ni le compte. Révoquer coupe l'accès immédiatement."
+    >
       {created && (
         <div className="card p-3 flex flex-col gap-2" style={{ background: 'var(--row-week)' }}>
           <span className="text-[13px] font-semibold">
@@ -712,6 +827,102 @@ function AccessConfig() {
         </button>
       </form>
     </Section>
+  );
+}
+
+/** Own account: rename the login and change the password (web session only, never by API token). */
+function AccountConfig() {
+  const me = useMe();
+  const [login, setLogin] = useState(me.data?.login ?? '');
+  const [pw, setPw] = useState({ current: '', next: '', confirm: '' });
+  const rename = useAction(() => patch('/auth/account', { login }), { toast: 'Identifiant modifié.' });
+  const change = useAction(() => post('/auth/password', { current: pw.current, next: pw.next }), {
+    onSuccess: () => setPw({ current: '', next: '', confirm: '' }),
+    toast: 'Mot de passe modifié. Les autres sessions ont été déconnectées.',
+  });
+  const mismatch = pw.confirm.length > 0 && pw.next !== pw.confirm;
+  return (
+    <div className="flex flex-col gap-6">
+      <Section
+        title="Identifiant"
+        info="Le nom utilisé pour te connecter à l'interface web. Il ne change rien aux données ni au journal : tes actions restent signées « moi »."
+      >
+        <form
+          className="flex flex-wrap gap-2 items-end"
+          style={{ maxWidth: 560 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (login.trim() && login !== me.data?.login) rename.mutate(undefined);
+          }}
+        >
+          <div style={{ flex: '1 1 240px' }}>
+            <Field label="Identifiant" hint="Lettres, chiffres, . - ou _ (2 à 40 caractères)">
+              <input autoComplete="username" value={login} onChange={(e) => setLogin(e.target.value)} />
+            </Field>
+          </div>
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={!login.trim() || login === me.data?.login || rename.isPending}
+            style={{ marginBottom: 22 }}
+          >
+            Renommer
+          </button>
+        </form>
+      </Section>
+      <Section
+        title="Mot de passe"
+        info="12 caractères minimum ; une phrase de passe est idéale. Le mot de passe actuel est demandé. Après le changement, toutes tes autres sessions (autres navigateurs, iPhone) sont déconnectées ; celle-ci reste ouverte."
+      >
+        <form
+          className="flex flex-col gap-4"
+          style={{ maxWidth: 420 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!mismatch) change.mutate(undefined);
+          }}
+        >
+          <Field label="Mot de passe actuel">
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={pw.current}
+              onChange={(e) => setPw({ ...pw, current: e.target.value })}
+            />
+          </Field>
+          <Field label="Nouveau mot de passe" hint="12 caractères minimum">
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pw.next}
+              onChange={(e) => setPw({ ...pw, next: e.target.value })}
+            />
+          </Field>
+          <Field
+            label="Confirmer le nouveau mot de passe"
+            hint={
+              mismatch ? (
+                <span style={{ color: 'var(--late-text)' }}>Les deux saisies diffèrent.</span>
+              ) : undefined
+            }
+          >
+            <input
+              type="password"
+              autoComplete="new-password"
+              value={pw.confirm}
+              onChange={(e) => setPw({ ...pw, confirm: e.target.value })}
+            />
+          </Field>
+          <button
+            type="submit"
+            className="btn btn-primary self-start"
+            disabled={!pw.current || pw.next.length < 12 || pw.next !== pw.confirm || change.isPending}
+          >
+            Changer le mot de passe
+          </button>
+        </form>
+      </Section>
+    </div>
   );
 }
 
