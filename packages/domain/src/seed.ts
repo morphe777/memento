@@ -1,7 +1,7 @@
 import { eq, schema } from '@memento/db';
 // Idempotent seed: 8 domains in priority order, default groups, default settings (L0).
-// D-64: domains and groups are created on a fresh database only; afterwards they are the user's (renamed,
-// reordered, deleted) and the seed never recreates them.
+// D-64: domains and groups are a starter set written on a fresh database only; afterwards they are the
+// user's configuration (renamed, reordered, deleted) and the seed never reads or touches them again.
 import { type Ctx, newId, tx } from './context.ts';
 import { defaultWeight, SEED_DOMAINS, SEED_GROUPS } from './seed-data.ts';
 import { DEFAULT_SETTINGS } from './settings.ts';
@@ -11,23 +11,14 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
     let domains = 0;
     let groups = 0;
     const fresh = !ctx.db.select({ id: schema.domain.id }).from(schema.domain).limit(1).get();
-    SEED_DOMAINS.forEach((d, i) => {
-      const exists = ctx.db.select().from(schema.domain).where(eq(schema.domain.name, d.name)).get();
-      if (!exists && fresh) {
+    if (fresh)
+      SEED_DOMAINS.forEach((d, i) => {
         ctx.db
           .insert(schema.domain)
           .values({ id: newId(), ...d, priorityRank: i + 1, weight: defaultWeight(i + 1) })
           .run();
         domains++;
-      } else if (exists && !exists.description) {
-        // D-49: propose a description for domains that have none yet (never overwrites).
-        ctx.db
-          .update(schema.domain)
-          .set({ description: d.description })
-          .where(eq(schema.domain.id, exists.id))
-          .run();
-      }
-    });
+      });
     for (const [domainName, names] of fresh ? Object.entries(SEED_GROUPS) : []) {
       const dom = ctx.db.select().from(schema.domain).where(eq(schema.domain.name, domainName)).get();
       if (!dom) continue;
