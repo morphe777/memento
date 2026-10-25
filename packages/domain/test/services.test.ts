@@ -152,12 +152,15 @@ describe('D-64 seed au démarrage', () => {
     const ctx = makeCtx();
     const d = lookups(ctx).domain('Amis & Social');
     ctx.db.update(schema.domain).set({ name: 'Amis' }).where(eq(schema.domain.id, d.id)).run();
+    const sante = lookups(ctx).domain('Santé');
+    ctx.db.update(schema.domain).set({ description: '' }).where(eq(schema.domain.id, sante.id)).run();
     const before = ctx.db.select().from(schema.group).all().length;
     const g = ctx.db.select().from(schema.group).all()[0];
     ctx.db.delete(schema.group).where(eq(schema.group.id, g.id)).run();
     expect(() => seed(ctx)).not.toThrow();
     expect(ctx.db.select().from(schema.domain).all()).toHaveLength(8);
     expect(ctx.db.select().from(schema.group).all()).toHaveLength(before - 1);
+    expect(lookups(ctx).domain('Santé').description).toBe(''); // configuration is never rewritten
   });
 });
 
