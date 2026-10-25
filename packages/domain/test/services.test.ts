@@ -1,4 +1,4 @@
-import { openDb, runMigrations, schema } from '@memento/db';
+import { eq, openDb, runMigrations, schema } from '@memento/db';
 import { describe, expect, it } from 'vitest';
 import type { DomainError } from '../src/errors.ts';
 import {
@@ -144,6 +144,20 @@ describe('L0 socle', () => {
         .all()
         .some((g) => g.name === 'Temp'),
     ).toBe(false);
+  });
+});
+
+describe('D-64 seed au démarrage', () => {
+  it('never recreates a renamed domain or a deleted group (UNIQUE priority_rank crash in prod)', () => {
+    const ctx = makeCtx();
+    const d = lookups(ctx).domain('Amis & Social');
+    ctx.db.update(schema.domain).set({ name: 'Amis' }).where(eq(schema.domain.id, d.id)).run();
+    const before = ctx.db.select().from(schema.group).all().length;
+    const g = ctx.db.select().from(schema.group).all()[0];
+    ctx.db.delete(schema.group).where(eq(schema.group.id, g.id)).run();
+    expect(() => seed(ctx)).not.toThrow();
+    expect(ctx.db.select().from(schema.domain).all()).toHaveLength(8);
+    expect(ctx.db.select().from(schema.group).all()).toHaveLength(before - 1);
   });
 });
 
