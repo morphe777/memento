@@ -617,3 +617,144 @@ export function DomainFilter({ value, onChange }: { value: string[]; onChange: (
     </div>
   );
 }
+
+const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Dropdown with search (user request 25/10/2026): type to filter the list, accents and case ignored, updated
+ * at each letter. ↑ ↓ to move, Entrée to choose, Échap to close (without closing the surrounding panel).
+ */
+export function SearchSelect({
+  value,
+  onChange,
+  options,
+  placeholder = 'Choisir…',
+  ariaLabel,
+  emptyLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  options: { value: string; label: string; hint?: string }[];
+  placeholder?: string;
+  ariaLabel?: string;
+  /** Adds a first choice with value "" (e.g. « Aucun objectif »). */
+  emptyLabel?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const wrap = useRef<HTMLDivElement>(null);
+  const all = emptyLabel !== undefined ? [{ value: '', label: emptyLabel }, ...options] : options;
+  const shown = query ? all.filter((o) => fold(`${o.label} ${o.hint ?? ''}`).includes(fold(query))) : all;
+  const selected = all.find((o) => o.value === value);
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, [open]);
+  const choose = (v: string) => {
+    onChange(v);
+    setOpen(false);
+    setQuery('');
+  };
+  return (
+    <div ref={wrap} className="relative">
+      <input
+        role="combobox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
+        aria-autocomplete="list"
+        value={open ? query : (selected?.label ?? '')}
+        placeholder={open ? (selected?.label ?? placeholder) : placeholder}
+        onFocus={() => {
+          setOpen(true);
+          setActive(0);
+        }}
+        onClick={() => setOpen(true)}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setOpen(true);
+            setActive((i) => Math.min(i + 1, shown.length - 1));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((i) => Math.max(i - 1, 0));
+          } else if (e.key === 'Enter' && open) {
+            e.preventDefault();
+            if (shown[active]) choose(shown[active].value);
+          } else if (e.key === 'Escape' && open) {
+            e.stopPropagation(); // close the list, not the panel around it
+            setOpen(false);
+            setQuery('');
+          } else if (e.key === 'Tab') setOpen(false);
+        }}
+        style={{ paddingRight: 32, width: '100%' }}
+      />
+      <span
+        aria-hidden="true"
+        className="absolute pointer-events-none"
+        style={{
+          right: 12,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: 'var(--text-faint)',
+          fontSize: 11,
+        }}
+      >
+        ▼
+      </span>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 right-0 z-50 p-1 overflow-y-auto rounded-lg"
+          style={{
+            top: 'calc(100% + 4px)',
+            maxHeight: 280,
+            background: 'var(--surface)',
+            border: '1px solid var(--border)',
+            boxShadow: '0 8px 24px rgba(0,0,0,.14)',
+          }}
+        >
+          {shown.length === 0 && (
+            <div className="px-3 py-2 text-[14px]" style={{ color: 'var(--text-faint)' }}>
+              Aucun résultat
+            </div>
+          )}
+          {shown.map((o, i) => (
+            <div
+              key={o.value || '__empty'}
+              role="option"
+              tabIndex={-1}
+              aria-selected={o.value === value}
+              className="px-3 py-2 rounded-md cursor-pointer text-[14px] flex justify-between gap-3"
+              style={{
+                background: i === active ? 'var(--bin)' : undefined,
+                fontWeight: o.value === value ? 600 : 400,
+              }}
+              onMouseEnter={() => setActive(i)}
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(o.value);
+              }}
+            >
+              <span className="min-w-0 truncate">{o.label}</span>
+              {o.hint && (
+                <span className="flex-none text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                  {o.hint}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

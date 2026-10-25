@@ -43,10 +43,10 @@ export function capacityBetween(ctx: Ctx, first: string, last: string) {
   return { weeks, capacityMin: weeks.reduce((a, w) => a + w.shareMin, 0) };
 }
 
-/** Work minutes done in [first, last] (experiences excluded, RB-09). */
+/** Work minutes done in [first, last] (experiences excluded, RB-09; actual time when entered, D-61). */
 export function workDoneBetween(ctx: Ctx, first: string, last: string) {
   return ctx.db
-    .select({ m: task.durationMin, exp: task.isExperience })
+    .select({ m: task.durationMin, actual: task.actualMin, exp: task.isExperience })
     .from(task)
     .where(
       and(
@@ -57,7 +57,7 @@ export function workDoneBetween(ctx: Ctx, first: string, last: string) {
     )
     .all()
     .filter((t) => !t.exp)
-    .reduce((a, t) => a + (t.m ?? 0), 0);
+    .reduce((a, t) => a + (t.actual ?? t.m ?? 0), 0); // D-61: time spent when entered
 }
 
 export function getMonthPlanningPage(ctx: Ctx, month: string) {

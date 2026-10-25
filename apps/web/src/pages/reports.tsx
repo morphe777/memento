@@ -413,7 +413,54 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
           </div>
         </section>
       </div>
+      {p.estimation && (
+        <section className="card flex flex-col gap-3" style={{ padding: '20px 24px' }}>
+          <h2 className="h2">Estimé / réel</h2>
+          <Estimation e={p.estimation} />
+        </section>
+      )}
     </>
+  );
+}
+
+type Estimation = NonNullable<WeekPayload['estimation']>;
+
+/** D-61: estimate vs time actually spent (only tasks whose real time was entered differ from the estimate). */
+function Estimation({ e }: { e: Estimation }) {
+  if (!e.measuredCount)
+    return (
+      <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
+        Aucun temps réel noté : tout est compté comme estimé. Note-le sur une tâche faite (« temps réel ? »
+        dans Ma semaine) quand elle a pris plus ou moins que prévu.
+      </div>
+    );
+  const off = e.ratioPct !== null && (e.ratioPct > 120 || e.ratioPct < 80);
+  return (
+    <div className="flex flex-col gap-2 text-[14px]">
+      <div>
+        <span className="font-semibold" style={{ color: off ? LIGHT.orange : undefined }}>
+          {e.ratioPct} %
+        </span>{' '}
+        du temps estimé : {fmtMin(e.spentMin)} passées pour {fmtMin(e.estimatedMin)} prévues ·{' '}
+        {e.measuredCount} temps réel{e.measuredCount > 1 ? 's' : ''} noté{e.measuredCount > 1 ? 's' : ''}
+        {e.underruns ? ` · ${e.underruns} plus rapide${e.underruns > 1 ? 's' : ''} que prévu` : ''}
+      </div>
+      {e.overruns.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+            Gros dépassements (× 1,5 et plus) : à surveiller pour mieux estimer ou découper
+          </span>
+          {e.overruns.map((o) => (
+            <div key={o.title} className="flex gap-2">
+              <span className="flex-1 min-w-0 truncate">{o.title}</span>
+              <span className="mono text-[13px]" style={{ color: LIGHT.orange }}>
+                {fmtMin(o.estimateMin)} → {fmtMin(o.actualMin)}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -528,6 +575,11 @@ function MonthReport({ r }: { r: Report }) {
             labelWidth={140}
           />
         </Section>
+        {p.estimation && (
+          <Section title="Estimé / réel">
+            <Estimation e={p.estimation as Estimation} />
+          </Section>
+        )}
       </div>
     </>
   );

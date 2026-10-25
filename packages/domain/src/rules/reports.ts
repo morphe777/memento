@@ -8,7 +8,12 @@ export type Light = 'green' | 'orange' | 'red';
 export interface DoneTask {
   id: string;
   title: string;
+  /** Time spent: the actual time when entered (D-61), otherwise the estimate. */
   durationMin: number;
+  /** The estimate (RB-03 duration), to compare with the time spent. */
+  estimateMin: number;
+  /** True when the actual time was entered. */
+  measured: boolean;
   isExperience: boolean;
   isBonus: boolean;
   /** 'objective' = project linked to an active objective; 'inbox'; 'none' = project without active objective. */
@@ -103,4 +108,29 @@ export interface DelayBar {
 export function delayLabel(deltaMin: number): string {
   if (Math.abs(deltaMin) < 15) return "à l'heure";
   return `${deltaMin > 0 ? '+' : '−'}${fmtMin(Math.abs(deltaMin))}`;
+}
+
+/**
+ * D-61: estimate vs time actually spent, over the done work (experiences excluded). Tasks without an entered
+ * actual time count as estimated. Overruns: at least 1.5× the estimate (and +30 min), biggest first.
+ */
+export function estimationOf(tasks: DoneTask[]) {
+  const work = tasks.filter((t) => !t.isExperience && t.estimateMin > 0);
+  const estimatedMin = work.reduce((s, t) => s + t.estimateMin, 0);
+  const spentMin = work.reduce((s, t) => s + t.durationMin, 0);
+  const measured = work.filter((t) => t.measured);
+  const overruns = measured
+    .filter((t) => t.durationMin >= t.estimateMin * 1.5 && t.durationMin - t.estimateMin >= 30)
+    .sort((a, b) => b.durationMin - b.estimateMin - (a.durationMin - a.estimateMin))
+    .slice(0, 5)
+    .map((t) => ({ title: t.title, estimateMin: t.estimateMin, actualMin: t.durationMin }));
+  return {
+    measuredCount: measured.length,
+    estimatedMin,
+    spentMin,
+    /** spent / estimated in %, 100 = as planned; null when nothing measured. */
+    ratioPct: measured.length && estimatedMin ? Math.round((spentMin / estimatedMin) * 100) : null,
+    overruns,
+    underruns: measured.filter((t) => t.durationMin < t.estimateMin).length,
+  };
 }

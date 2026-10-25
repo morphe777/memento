@@ -62,6 +62,12 @@ export function monthEnd(m: string): string {
   const [y, mo] = m.split('-').map(Number);
   return fromUtc(Date.UTC(y, mo, 0));
 }
+/** Same day n months later, clamped to the end of the month (31 Jan + 1 → 28/29 Feb). */
+export function addMonths(d: string, n: number): string {
+  const m = shiftMonth(d.slice(0, 7), n);
+  const last = monthEnd(m);
+  return `${m}-${d.slice(8, 10)}` > last ? last : `${m}-${d.slice(8, 10)}`;
+}
 export function shiftMonth(m: string, n: number): string {
   const [y, mo] = m.split('-').map(Number);
   const d = new Date(Date.UTC(y, mo - 1 + n, 1));

@@ -34,7 +34,9 @@ import {
   listChanges,
   listDomains,
   listInbox,
+  listObjectives,
   listProjectDependencies,
+  listProjects,
   listTasks,
   markReviewed,
   parseJsonObject,
@@ -57,6 +59,7 @@ import {
   setWeekItems,
   tx,
   updateGroup,
+  updateObjective,
   updateProject,
   updateTask,
   validateWeek,
@@ -386,7 +389,7 @@ describe('L3 planification', () => {
     createProject(ctx, { title: 'B', groupIds: g, objectiveId: q4.id });
     updateProject(ctx, a.id, { status: 'abandoned' });
     const map = getObjectivesMap(ctx);
-    expect(map.quarters).toEqual(['2026-Q4', '2027-Q1']);
+    expect(map.quarters).toEqual(['2026-Q4', '2027-Q1', '2027-Q2', '2027-Q3']); // rolling year
     expect(map.lanes.map((l) => l.meta?.title ?? null)).toEqual(['Autonomie', null]);
     expect(map.lanes[0].objectives.map((o) => o.id)).toEqual([q4.id, q1.id]);
     expect(map.lanes[0].objectives[0].path.map((p) => p.title)).toEqual(['B']);
@@ -852,5 +855,63 @@ describe('D-58 Proposer avec l’IA', () => {
       /Modèle/,
     );
     expect(aiStatus({ ...s, 'ai.provider': 'ollama', 'ai.model': 'm' }, {}).configured).toBe(true);
+  });
+});
+
+describe('D-61 temps réellement passé', () => {
+  it('the actual time replaces the estimate in Ma semaine and the weekly report, with an estimation summary', () => {
+    const ctx = makeCtx('2026-10-26T08:00:00.000Z'); // Monday W44
+    const { tasks } = activeProject(ctx, 'Garage', 'Travaux', 2);
+    setTaskInCurrentWeek(ctx, tasks[0].id, true);
+    setTaskInCurrentWeek(ctx, tasks[1].id, true);
+    completeTask(ctx, tasks[0].id, { actualMin: 240 });
+    completeTask(ctx, tasks[1].id);
+    expect(getExecution(ctx, '2026-W44').doneMin).toBe(300);
+    ctx.setNow('2026-11-02T06:00:00.000Z');
+    const { report } = generateReport(ctx, 'week', '2026-W44');
+    const p = report.payload as {
+      rhythm: { doneMin: number };
+      estimation: { ratioPct: number; overruns: unknown[] };
+    };
+    expect(p.rhythm.doneMin).toBe(300);
+    expect(p.estimation).toMatchObject({
+      ratioPct: 250,
+      overruns: [{ title: 'Garage 1', estimateMin: 60, actualMin: 240 }],
+    });
+  });
+});
+
+describe('D-62 récurrence', () => {
+  it('a completed recurring project is renewed with its tasks, planned for the next month', () => {
+    const ctx = makeCtx();
+    const { project: p } = activeProject(ctx, 'Compta du mois', 'Travaux', 2, { recurrence: 'monthly' });
+    const done = completeProject(ctx, p.id, true);
+    const next = listProjects(ctx, {}).find((x) => x.id === done.nextOccurrenceId)!;
+    expect(next).toMatchObject({
+      title: 'Compta du mois',
+      status: 'ready',
+      monthFlag: '2026-11',
+      recurrence: 'monthly',
+    });
+    expect(next.previousId).toBe(p.id);
+    expect(listTasks(ctx, { projectId: next.id }).map((t) => [t.title, t.status])).toEqual([
+      ['Compta du mois 1', 'todo'],
+      ['Compta du mois 2', 'todo'],
+    ]);
+  });
+
+  it('a closed recurring objective is renewed next quarter; an abandoned one is not', () => {
+    const ctx = makeCtx();
+    const o = createObjective(ctx, { title: 'Bilan santé', deadline: '2026-12-15', recurrence: 'quarterly' });
+    updateObjective(ctx, o.id, { status: 'achieved' });
+    const next = listObjectives(ctx).find((x) => x.previousId === o.id)!;
+    expect(next).toMatchObject({
+      title: 'Bilan santé',
+      deadline: '2027-03-15',
+      quarter: '2027-Q1',
+      status: 'active',
+    });
+    updateObjective(ctx, next.id, { status: 'abandoned' });
+    expect(listObjectives(ctx).filter((x) => x.title === 'Bilan santé')).toHaveLength(2);
   });
 });

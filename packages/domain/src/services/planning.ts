@@ -506,6 +506,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
         kind: i.kind,
         why: i.why ?? '',
         durationMin: t.durationMin,
+        actualMin: t.actualMin, // D-61
         isExperience: t.isExperience,
         done: t.status === 'done',
         doneAt: t.doneAt,
@@ -527,7 +528,9 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
   );
   const budgetMin = plan?.budgetMin ?? s['budget.weekly_min'];
   const doneMin = budgetMinutes(
-    rows.filter((r) => r.done).map((r) => ({ durationMin: r.durationMin, isExperience: r.isExperience })),
+    rows
+      .filter((r) => r.done)
+      .map((r) => ({ durationMin: r.actualMin ?? r.durationMin, isExperience: r.isExperience })),
   );
   const today = parisDate(ctxNow(ctx));
   const monday = weekMonday(isoWeek);

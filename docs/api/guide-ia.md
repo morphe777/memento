@@ -65,6 +65,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 - Un mois futur : le projet reste `ready` avec `monthFlag`, et devient `active` le 1er du mois.
 - En fin de mois, un projet actif non terminé repasse `ready` (`previousMonthFlag` garde le mois).
 - `importance` : `low` / `normal` / `high` (×0,5 / ×1 / ×1,5 sur la valeur du score). Normale par défaut.
+- `recurrence` (projet) : `monthly` / `quarterly` / `yearly`. Une fois terminé, le projet est recréé avec ses
+  tâches pour la période suivante (`nextOccurrenceId` dans la réponse de `/complete`). Objectif : `quarterly` /
+  `yearly`, recréé quand il est clos (atteint, partiel, manqué). `previousId` = occurrence précédente.
 
 ### Tâches
 
@@ -72,6 +75,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   plan de la semaine en cours.
 - Cocher : `POST /tasks/{id}/complete` (une tâche Inbox récurrente crée sa prochaine occurrence) ; décocher :
   `/uncomplete`. Annuler sans supprimer : `PATCH { status: "cancelled" }`.
+- Temps réellement passé : `actualMin` (minutes) sur une tâche faite, via `PATCH /tasks/{id}` ou
+  `POST /tasks/{id}/complete { actualMin }`. Il remplace l'estimation dans le « fait » et les rapports
+  (bloc `estimation` : ratio estimé / réel, dépassements).
 - `isExperience: true` = une **expérience** (hors budget, objectif de vivre plus d'expériences).
 - Une tâche sans projet sans durée est permise (Inbox) ; dans un projet du mois, chaque tâche doit avoir une durée.
 
@@ -111,8 +117,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 
 ## 6. Ce que tu ne fais pas
 
-- Pas de suppression (aucun outil MCP ; via l'API, seulement si Mehdi le demande explicitement). Préfère
-  `abandoned` pour un projet, `cancelled` pour une tâche.
+- Suppression (`DELETE /tasks|projects|objectives|meta-objectives/{id}`, outils MCP `delete_*`) : définitive,
+  **seulement si Mehdi le demande explicitement**. Sinon préfère `abandoned` pour un projet, `cancelled` pour une
+  tâche.
 - Pas de tâche de plus de 2 h : découpe.
 - Ne déplace pas des objectifs entre trimestres ni ne choisis les projets du mois sans le dire.
 - N'invente pas de domaine ni de groupe : utilise ceux qui existent ; propose d'en créer si besoin.
@@ -147,4 +154,4 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 `create_project`, `update_project`, `promote_idea`, `set_project_month`, `complete_project`, `create_tasks`,
 `update_task`, `complete_task`, `reorder_tasks`, `add_inbox_task`, `get_week_plan`, `propose_week_plan`,
 `set_week_plan_items`, `get_experiences`, `add_experience_idea`, `list_reports`, `get_report`, `list_changes`,
-`add_resource`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.
+`add_resource`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.

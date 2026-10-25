@@ -24,6 +24,7 @@ import {
   PageHeader,
   Panel,
   SAVE_HINT,
+  SearchSelect,
   Section,
   StatusPill,
   Tabs,
@@ -112,6 +113,9 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
   }, [groupe]);
   const byDomain = (p: Project) => !domainFilter.length || p.domainIds.some((d) => domainFilter.includes(d));
   const [status, setStatus] = useState('active,ready,paused');
+  // Finished projects (done / abandoned) stay out of every view unless this box is checked.
+  const [showClosed, setShowClosed] = useState(false);
+  const statusQuery = (status || 'idea,ready,active,paused') + (showClosed ? ',done,abandoned' : '');
   const incomplete = useQuery({
     queryKey: ['projects', 'ready'],
     queryFn: () => get<Project[]>('/projects?status=ready'),
@@ -119,9 +123,9 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
   });
   const [month, setMonth] = useState('');
   const q = useQuery({
-    queryKey: ['projects', status, month],
-    queryFn: () =>
-      get<Project[]>(`/projects?status=${view === 'kanban' ? '' : status}${month ? `&month=${month}` : ''}`),
+    queryKey: ['projects', statusQuery, month],
+    queryFn: () => get<Project[]>(`/projects?status=${statusQuery}${month ? `&month=${month}` : ''}`),
+    enabled: view !== 'kanban',
   });
   const all = useQuery({
     queryKey: ['projects', 'kanban'],
@@ -197,8 +201,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
               <option value="ready">Prêts</option>
               <option value="paused">En pause</option>
               <option value="idea">Idées</option>
-              <option value="done,abandoned">Terminés / abandonnés</option>
-              <option value="">Tous</option>
+              <option value="">Tous (en cours)</option>
             </select>
             <select value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Projets du mois">
               <option value="">Tous les mois</option>
@@ -210,6 +213,12 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
             </select>
           </>
         )}
+        {filtre !== 'a-completer' && (
+          <label className="flex items-center gap-2 text-[14px] cursor-pointer">
+            <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />
+            Afficher les terminés / abandonnés
+          </label>
+        )}
       </div>
       {filtre !== 'a-completer' && <DomainFilter value={domainFilter} onChange={setDomainFilter} />}
       {q.isError && <ErrorBox error={q.error} />}
@@ -217,6 +226,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
       {view === 'list' && <ProjectTable projects={list} />}
       {view === 'kanban' && (
         <Kanban
+          showClosed={showClosed}
           projects={(all.data ?? []).filter((p) => (!groupe || p.groupIds.includes(groupe)) && byDomain(p))}
         />
       )}
@@ -343,6 +353,12 @@ function ProjectTable({ projects }: { projects: Project[] }) {
   );
 }
 
+export const RECURRENCE_LABEL: Record<string, string> = {
+  monthly: 'chaque mois',
+  quarterly: 'chaque trimestre',
+  yearly: 'chaque année',
+};
+
 const KANBAN = [
   { status: 'idea', label: 'Idées' },
   { status: 'ready', label: 'Prêts' },
@@ -352,7 +368,7 @@ const KANBAN = [
 ] as const;
 
 /** Kanban by project status (D-19, D-42). Moving a card calls the matching API action. */
-function Kanban({ projects }: { projects: Project[] }) {
+function Kanban({ projects, showClosed }: { projects: Project[]; showClosed: boolean }) {
   const sensors = useSortSensors();
   const me = useMe();
   const [completing, setCompleting] = useState<Project | null>(null);
@@ -381,6 +397,7 @@ function Kanban({ projects }: { projects: Project[] }) {
             id={c.status}
             label={c.label}
             projects={projects.filter((p) => p.status === c.status)}
+            hidden={c.status === 'done' && !showClosed}
           />
         ))}
       </div>
@@ -392,7 +409,19 @@ function Kanban({ projects }: { projects: Project[] }) {
 /** Cards shown per Kanban column before « + N autres ». */
 const KANBAN_VISIBLE = 6;
 
-function KanbanColumn({ id, label, projects }: { id: string; label: string; projects: Project[] }) {
+/** `hidden`: the column stays a drop target (to complete a project) but does not list its cards. */
+function KanbanColumn({
+  id,
+  label,
+  projects: all,
+  hidden,
+}: {
+  id: string;
+  label: string;
+  projects: Project[];
+  hidden?: boolean;
+}) {
+  const projects = hidden ? [] : all;
   const { setNodeRef, isOver } = useDroppable({ id });
   const [showAll, setShowAll] = useState(false);
   return (
@@ -407,9 +436,14 @@ function KanbanColumn({ id, label, projects }: { id: string; label: string; proj
           className="text-[12px] font-semibold rounded-full"
           style={{ background: 'var(--surface)', padding: '2px 9px' }}
         >
-          {projects.length}
+          {hidden ? '—' : projects.length}
         </span>
       </div>
+      {hidden && (
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-faint)' }}>
+          Masqués. Coche « Afficher les terminés / abandonnés ». Dépose ici pour terminer un projet.
+        </p>
+      )}
       {(showAll ? projects : projects.slice(0, KANBAN_VISIBLE)).map((p) => (
         <KanbanCard key={p.id} p={p} />
       ))}
@@ -812,6 +846,8 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
           ))}
         </span>,
       )}
+      {p.recurrence &&
+        row('Récurrence', <span>↻ {RECURRENCE_LABEL[p.recurrence]} · recréé à la fin du projet</span>)}
       {row(
         'Importance',
         <span style={{ color: p.importance === 'high' ? 'var(--late-text)' : undefined }}>
@@ -932,6 +968,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
     sequenceMode: p.sequenceMode,
     isFree: p.isFree,
     importance: p.importance,
+    recurrence: p.recurrence ?? '',
   });
   const [groupIds, setGroupIds] = useState(p.groupIds);
   const [primary, setPrimary] = useState(p.primaryDomainId ?? '');
@@ -961,6 +998,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         sequenceMode: f.sequenceMode,
         isFree: f.isFree,
         importance: f.importance,
+        recurrence: (f.recurrence || null) as Project['recurrence'],
       });
     },
     { toast: 'Projet enregistré.' },
@@ -1008,14 +1046,13 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
       </div>
       <div className="grid gap-3" style={two}>
         <Field label="Objectif">
-          <select value={f.objectiveId} onChange={(e) => set('objectiveId', e.target.value)}>
-            <option value="">Hors objectif</option>
-            {(objectives.data ?? []).map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.title} ({o.quarter})
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            value={f.objectiveId}
+            onChange={(v) => set('objectiveId', v)}
+            emptyLabel="Hors objectif"
+            ariaLabel="Objectif"
+            options={(objectives.data ?? []).map((o) => ({ value: o.id, label: o.title, hint: o.quarter }))}
+          />
         </Field>
         <Field
           label="Enchaînement des tâches"
@@ -1041,6 +1078,20 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
           <option value="low">Basse</option>
           <option value="normal">Normale</option>
           <option value="high">Haute</option>
+        </select>
+      </Field>
+      <Field
+        label="Récurrence"
+        info="Projet qui revient (compta du mois, entretien annuel…) : une fois terminé, Mémento le recrée avec ses tâches (toutes à faire) et le prévoit pour la période suivante. Pour arrêter, retire la récurrence sur la nouvelle occurrence."
+      >
+        <select
+          value={f.recurrence}
+          onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+        >
+          <option value="">Aucune</option>
+          <option value="monthly">Chaque mois</option>
+          <option value="quarterly">Chaque trimestre</option>
+          <option value="yearly">Chaque année</option>
         </select>
       </Field>
       <div className="flex flex-col gap-2">

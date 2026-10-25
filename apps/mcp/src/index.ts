@@ -258,9 +258,9 @@ export function buildServer(call: Call) {
   );
   tool(
     'complete_task',
-    'Coche une tâche (une tâche Inbox récurrente crée sa prochaine occurrence).',
-    { id: S.uuid },
-    (a) => call('POST', `/tasks/${a.id}/complete`),
+    'Coche une tâche (une tâche Inbox récurrente crée sa prochaine occurrence). actualMin : temps réellement passé en minutes, si différent de l’estimation.',
+    { id: S.uuid, actualMin: z.number().int().min(1).max(6000).optional() },
+    (a) => call('POST', `/tasks/${a.id}/complete`, a.actualMin ? { actualMin: a.actualMin } : undefined),
   );
   tool(
     'reorder_tasks',
@@ -327,6 +327,28 @@ export function buildServer(call: Call) {
     'Ajoute un lien de documentation (objectif, projet, tâche, groupe).',
     S.resourceCreate.shape,
     (a) => call('POST', '/resources', a),
+  );
+
+  // Hard deletion (D-35, D-60): definitive and journaled. Only on Mehdi's explicit request.
+  const DELETE_WARNING =
+    "Suppression DÉFINITIVE (journalisée). Uniquement si Mehdi l'a demandé explicitement ; sinon préfère abandonner / annuler.";
+  tool('delete_task', `Supprime une tâche. ${DELETE_WARNING}`, { id: S.uuid }, (a) =>
+    call('DELETE', `/tasks/${a.id}`),
+  );
+  tool('delete_project', `Supprime un projet avec ses tâches. ${DELETE_WARNING}`, { id: S.uuid }, (a) =>
+    call('DELETE', `/projects/${a.id}`),
+  );
+  tool(
+    'delete_objective',
+    `Supprime un objectif ; ses projets restent, hors objectif. ${DELETE_WARNING}`,
+    { id: S.uuid },
+    (a) => call('DELETE', `/objectives/${a.id}`),
+  );
+  tool(
+    'delete_meta_objective',
+    `Supprime un méta-objectif ; ses objectifs restent, sans méta-objectif. ${DELETE_WARNING}`,
+    { id: S.uuid },
+    (a) => call('DELETE', `/meta-objectives/${a.id}`),
   );
   return server;
 }

@@ -1,8 +1,9 @@
 // "Ma semaine" (V-06, V-13, V-18) — mockups ma-semaine.dc.html and ma-semaine-iphone.dc.html.
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
+import { ActualTime } from '../components/tasks.tsx';
 import {
   BonusBadge,
   DelayBar,
@@ -19,15 +20,15 @@ import {
   useDomainRows,
 } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
-import { fmtMin, weekNumber } from '../lib/format.ts';
+import { fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import type { Execution } from '../lib/types.ts';
 
 type Row = Execution['tasks'][number];
 
-export function WeekPage() {
+export function WeekPage({ semaine }: { semaine?: string }) {
   const me = useMe();
-  const week = me.data?.currentWeek;
+  const week = semaine ?? me.data?.currentWeek;
   const q = useQuery({
     queryKey: ['execution', week],
     queryFn: () => get<Execution>(`/weeks/${week}/execution`),
@@ -45,8 +46,42 @@ function useToggle() {
   );
 }
 
+/** Week label with ‹ › to look at the previous / next week (the next one shows what is already planned). */
+function WeekNav({ ex }: { ex: Execution }) {
+  const navigate = useNavigate();
+  const me = useMe();
+  const current = me.data?.currentWeek;
+  const go = (w: string) => navigate({ to: '/semaine', search: w === current ? {} : { semaine: w } });
+  return (
+    <span className="flex items-center gap-2 flex-wrap">
+      <button
+        type="button"
+        className="btn btn-sm btn-ghost px-1"
+        aria-label="Semaine précédente"
+        onClick={() => go(shiftIsoWeek(ex.isoWeek, -1))}
+      >
+        ‹
+      </button>
+      Semaine {weekNumber(ex.isoWeek)} · {ex.label}
+      <button
+        type="button"
+        className="btn btn-sm btn-ghost px-1"
+        aria-label="Semaine suivante"
+        onClick={() => go(shiftIsoWeek(ex.isoWeek, 1))}
+      >
+        ›
+      </button>
+      {current && ex.isoWeek !== current && (
+        <button type="button" className="btn btn-sm" onClick={() => go(current)}>
+          {ex.isoWeek > current ? '← Cette semaine' : 'Cette semaine →'}
+        </button>
+      )}
+    </span>
+  );
+}
+
 function eyebrow(ex: Execution) {
-  return `Semaine ${weekNumber(ex.isoWeek)} · ${ex.label}`;
+  return <WeekNav ex={ex} />;
 }
 
 function WeekDesktop({ ex }: { ex: Execution }) {
@@ -75,7 +110,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           {!ex.plan || ex.tasks.length === 0 ? (
             <Empty>
               Pas encore de plan pour cette semaine.{' '}
-              <Link to="/planifier" className="underline">
+              <Link to="/planifier" search={{ semaine: ex.isoWeek }} className="underline">
                 Planifier la semaine
               </Link>
             </Empty>
@@ -238,7 +273,7 @@ function WeekRow({
   return (
     <div
       className="flex gap-3.5 items-start"
-      style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider)', opacity: t.done ? 0.5 : 1 }}
+      style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider)', opacity: t.done ? 0.65 : 1 }}
     >
       <TaskCheck done={t.done} color={color} onToggle={onToggle} label={t.title} />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -260,11 +295,12 @@ function WeekRow({
           <span>·</span>
           <ProjectLink r={t} />
         </div>
-        {t.why && (
+        {t.why && !t.done && (
           <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
             {t.why}
           </div>
         )}
+        {t.done && <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />}
       </div>
       <Duration min={t.durationMin} />
     </div>
@@ -382,7 +418,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
               style={{
                 padding: '12px 16px',
                 borderBottom: '1px solid var(--divider)',
-                opacity: t.done ? 0.5 : 1,
+                opacity: t.done ? 0.65 : 1,
               }}
             >
               <TaskCheck
@@ -405,6 +441,9 @@ function WeekPhone({ ex }: { ex: Execution }) {
                   {dl.name(t.domainId)} · {t.isExperience ? 'Expérience' : t.why}
                   {t.kind === 'bonus' && <BonusBadge />}
                 </span>
+                {t.done && (
+                  <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />
+                )}
               </div>
               <Duration min={t.durationMin} small />
             </div>

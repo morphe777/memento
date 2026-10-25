@@ -17,6 +17,7 @@ export * from './services/month.ts';
 export * from './services/planning.ts';
 export * from './services/projects.ts';
 export * from './services/quarter.ts';
+export * from './services/recurrence.ts';
 export * from './services/referential.ts';
 export * from './services/reports.ts';
 export * from './services/search.ts';

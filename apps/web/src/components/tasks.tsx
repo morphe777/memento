@@ -20,11 +20,98 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { del, get, patch, post } from '../lib/api.ts';
-import { fmtDateShort, STATUS_LABEL } from '../lib/format.ts';
+import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
-import { ConfirmDialog, Duration, ExperienceBadge, Field, Panel, SAVE_HINT, TaskCheck } from './ui.tsx';
+import {
+  ConfirmDialog,
+  Duration,
+  ExperienceBadge,
+  Field,
+  Panel,
+  SAVE_HINT,
+  SearchSelect,
+  TaskCheck,
+} from './ui.tsx';
+
+/**
+ * D-61: time actually spent on a done task. Shows the estimate and, if entered, the real time (orange when
+ * it is 1.5× the estimate or more); a click edits it (« 1h30 », « 4h »…), empty = as estimated.
+ */
+export function ActualTime({
+  taskId,
+  durationMin,
+  actualMin,
+}: {
+  taskId: string;
+  durationMin: number | null;
+  actualMin: number | null;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState('');
+  const save = useAction((v: number | null) => patch(`/tasks/${taskId}`, { actualMin: v }), {
+    toast: 'Temps réel enregistré.',
+  });
+  const over = actualMin !== null && durationMin !== null && actualMin >= durationMin * 1.5;
+  const submit = () => {
+    const v = text.trim() ? parseDuration(text) : null;
+    if (text.trim() && (v === null || v < 1)) {
+      toast('Durée illisible : écris par exemple 1h30, 4h ou 45min.', 'error');
+      return;
+    }
+    if (v !== actualMin) save.mutate(v);
+    setEditing(false);
+  };
+  if (editing)
+    return (
+      <span className="flex items-center gap-1.5">
+        <input
+          autoFocus
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') {
+              e.stopPropagation();
+              setEditing(false);
+            }
+          }}
+          onBlur={submit}
+          placeholder="ex. 1h30"
+          aria-label="Temps réellement passé"
+          style={{ width: 96, minHeight: 32, padding: '0 8px', fontSize: 13 }}
+        />
+      </span>
+    );
+  return (
+    <button
+      type="button"
+      className="border-0 bg-transparent cursor-pointer text-[12px] p-0 text-left inline-flex items-center gap-1 self-start"
+      style={{ color: over ? 'var(--status-orange, #B7791F)' : 'var(--text-faint)' }}
+      title="Temps réellement passé (si différent de l'estimation)"
+      onClick={(e) => {
+        e.stopPropagation();
+        setText(actualMin ? fmtMin(actualMin).replace(/\s/g, '') : '');
+        setEditing(true);
+      }}
+    >
+      <ClockIcon />
+      {actualMin !== null
+        ? `réel ${fmtMin(actualMin)}${durationMin ? ` (prévu ${fmtMin(durationMin)})` : ''}`
+        : 'temps réel ?'}
+    </button>
+  );
+}
+
+function ClockIcon() {
+  return (
+    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16">
+      <circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M8 4.5V8l2.4 1.6" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function LockIcon() {
   return (
@@ -348,8 +435,10 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     dueDate: t.dueDate ?? '',
     recurrenceRule: t.recurrenceRule ?? '',
     domainId: t.domainId ?? '',
+    actual: t.actualMin ? fmtMin(t.actualMin).replace(/\s/g, '') : '',
   });
   const inbox = !t.projectId;
+  const actualMin = f.actual.trim() ? parseDuration(f.actual) : null;
   const body = () => ({
     title: f.title,
     durationMin: f.durationMin,
@@ -357,6 +446,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     isFree: f.isFree,
     dueDate: f.dueDate || null,
     ...(inbox ? { recurrenceRule: f.recurrenceRule || null, domainId: f.domainId || null } : {}),
+    ...(t.status === 'done' ? { actualMin } : {}), // D-61
   });
   const initial = useRef(JSON.stringify(body()));
   const save = useAction((b: ReturnType<typeof body>) => patch(`/tasks/${t.id}`, b), {
@@ -367,6 +457,8 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     const b = body();
     if (JSON.stringify(b) !== initial.current) {
       if (!b.title.trim()) return toast('Le titre est obligatoire.', 'error');
+      if (f.actual.trim() && actualMin === null)
+        return toast('Temps réel illisible : écris par exemple 1h30, 4h ou 45min.', 'error');
       save.mutate(b);
     }
     onClose();
@@ -418,6 +510,18 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
           <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
         </Field>
       </div>
+      {t.status === 'done' && (
+        <Field
+          label="Temps réellement passé"
+          info="Si la tâche a pris plus (ou moins) que prévu : 1h30, 4h, 45min… Vide = comme prévu. Les rapports comptent ce temps-là et comparent estimation et réel."
+        >
+          <input
+            value={f.actual}
+            onChange={(e) => set('actual', e.target.value)}
+            placeholder={`comme prévu (${fmtMin(t.durationMin)})`}
+          />
+        </Field>
+      )}
       <label className="flex items-center gap-2 text-[14px]">
         <input
           type="checkbox"
@@ -503,36 +607,30 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
             </div>
           );
         })}
-        <select
+        <SearchSelect
           value=""
-          onChange={(e) => e.target.value && addDep.mutate(e.target.value)}
-          aria-label="Ajouter un prérequis"
-        >
-          <option value="">+ Doit être fait après…</option>
-          {(siblings.data ?? [])
+          onChange={(v) => v && addDep.mutate(v)}
+          ariaLabel="Ajouter un prérequis"
+          placeholder="+ Doit être fait après…"
+          options={(siblings.data ?? [])
             .filter((s) => s.id !== t.id && !t.dependsOn.includes(s.id) && s.status !== 'cancelled')
-            .map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.title}
-              </option>
-            ))}
-        </select>
+            .map((s) => ({ value: s.id, label: s.title }))}
+        />
       </div>
 
       <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
         <div className="label-caps">Déplacer</div>
-        <select
+        <SearchSelect
           value={t.projectId ?? ''}
-          onChange={(e) => move.mutate(e.target.value || null)}
-          aria-label="Déplacer vers"
-        >
-          <option value="">Inbox</option>
-          {(projects.data ?? []).map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.title} ({STATUS_LABEL[p.status]})
-            </option>
-          ))}
-        </select>
+          onChange={(v) => v !== (t.projectId ?? '') && move.mutate(v || null)}
+          ariaLabel="Déplacer vers"
+          emptyLabel="Inbox"
+          options={(projects.data ?? []).map((p) => ({
+            value: p.id,
+            label: p.title,
+            hint: STATUS_LABEL[p.status],
+          }))}
+        />
       </div>
       <Resources ownerType="task" ownerId={t.id} resources={t.resources} />
     </Panel>
