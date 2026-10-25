@@ -272,8 +272,8 @@ function WeekRow({
 }) {
   return (
     <div
-      className="flex gap-3.5 items-start"
-      style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider)', opacity: t.done ? 0.65 : 1 }}
+      className="row-line flex gap-3.5 items-start"
+      style={{ padding: '14px 20px', opacity: t.done ? 0.65 : 1 }}
     >
       <TaskCheck done={t.done} color={color} onToggle={onToggle} label={t.title} />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -414,10 +414,9 @@ function WeekPhone({ ex }: { ex: Execution }) {
           return (
             <div
               key={t.taskId}
-              className="flex gap-3 items-start"
+              className="row-line flex gap-3 items-start"
               style={{
                 padding: '12px 16px',
-                borderBottom: '1px solid var(--divider)',
                 opacity: t.done ? 0.65 : 1,
               }}
             >

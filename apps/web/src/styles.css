@@ -150,6 +150,18 @@ textarea {
   min-height: 40px;
   box-sizing: border-box;
 }
+/* One height for every single-line field (text, date, dropdown, search), 44 px on touch screens like buttons. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]),
+select {
+  height: 40px;
+  line-height: 1.25;
+}
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]),
+  select {
+    height: 44px;
+  }
+}
 /* Own chevron, kept clear of the right edge. */
 select {
   appearance: none;
@@ -170,6 +182,20 @@ input[type="date"],
 input[type="time"],
 input[type="month"] {
   min-width: 0;
+}
+/* iPad / iPhone Safari: the native date field ignores its width (overflows its cell) and its height. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"],
+  input[type="time"],
+  input[type="month"] {
+    -webkit-appearance: none;
+    appearance: none;
+    display: block;
+  }
+  input::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
 }
 textarea {
   min-height: 90px;
@@ -532,4 +558,13 @@ input[type="checkbox"] {
   .btn-sm {
     min-height: 44px;
   }
+}
+
+/* Rows of a box: a line between rows, none under the last one (user request 25/10/2026). */
+.row-line {
+  border-bottom: 1px solid var(--divider);
+}
+.row-line:last-child,
+.row-wrap:last-child > .row-line {
+  border-bottom: 0;
 }

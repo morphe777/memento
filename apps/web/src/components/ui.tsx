@@ -758,3 +758,37 @@ export function SearchSelect({
     </div>
   );
 }
+
+/**
+ * Sortable table (user request 25/10/2026): every column header sorts on click, a second click reverses.
+ * `cmp` gives one comparator per column; ties fall back to `tie`.
+ */
+export function useTableSort<T, K extends string>(
+  rows: T[],
+  cmp: Record<K, (a: T, b: T) => number>,
+  initial: NoInfer<K>,
+  tie?: (a: T, b: T) => number,
+) {
+  const [sort, setSort] = useState<{ key: K; desc: boolean }>({ key: initial, desc: false });
+  const sorted = [...rows].sort(
+    (a, b) => (sort.desc ? -1 : 1) * cmp[sort.key](a, b) || (tie ? tie(a, b) : 0),
+  );
+  const th = (key: K, label: ReactNode, align: 'left' | 'right' = 'left') => (
+    <th
+      className="font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer whitespace-nowrap select-none"
+      style={{ color: sort.key === key ? 'var(--text)' : 'var(--text-muted)', textAlign: align }}
+      aria-sort={sort.key === key ? (sort.desc ? 'descending' : 'ascending') : 'none'}
+      tabIndex={0}
+      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : false }))}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          setSort((s) => ({ key, desc: s.key === key ? !s.desc : false }));
+        }
+      }}
+    >
+      {label} <span aria-hidden>{sort.key === key ? (sort.desc ? '↑' : '↓') : ''}</span>
+    </th>
+  );
+  return { sorted, th };
+}

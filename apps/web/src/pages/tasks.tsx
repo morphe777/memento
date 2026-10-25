@@ -17,6 +17,7 @@ import {
   PageHeader,
   SearchSelect,
   Tabs,
+  useTableSort,
 } from '../components/ui.tsx';
 import { get, post, put } from '../lib/api.ts';
 import { fmtDateShort } from '../lib/format.ts';
@@ -303,7 +304,6 @@ export function TaskTable({
   showProject?: boolean;
 }) {
   const dl = useDomainLookup();
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'bucket', desc: false });
   const rank = (id: string | null) => dl.get(id ?? undefined)?.priorityRank ?? 99;
   const cmp: Record<SortKey, (a: BoardTask, b: BoardTask) => number> = {
     title: (a, b) => a.title.localeCompare(b.title),
@@ -314,19 +314,7 @@ export function TaskTable({
     bucket: (a, b) => BUCKET_ORDER[a.bucket] - BUCKET_ORDER[b.bucket],
     postpone: (a, b) => a.postponeCount - b.postponeCount,
   };
-  const sorted = [...tasks].sort(
-    (a, b) => (sort.desc ? -1 : 1) * cmp[sort.key](a, b) || a.title.localeCompare(b.title),
-  );
-  const th = (key: SortKey, label: string, right = false) => (
-    <th
-      className="font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer whitespace-nowrap select-none"
-      style={{ color: 'var(--text-muted)', textAlign: right ? 'right' : 'left' }}
-      aria-sort={sort.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined}
-      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : false }))}
-    >
-      {label} {sort.key === key ? (sort.desc ? '↑' : '↓') : ''}
-    </th>
-  );
+  const { sorted, th } = useTableSort(tasks, cmp, 'bucket', (a, b) => a.title.localeCompare(b.title));
   if (!tasks.length) return <Empty>Aucune tâche.</Empty>;
   return (
     <div className="card overflow-x-auto">
@@ -338,16 +326,13 @@ export function TaskTable({
             {th('domain', 'Domaine')}
             {th('bucket', 'État')}
             {th('dueDate', 'Deadline')}
-            {th('postpone', 'Reports', true)}
-            {th('duration', 'Durée', true)}
+            {th('postpone', 'Reports', 'right')}
+            {th('duration', 'Durée', 'right')}
           </tr>
         </thead>
         <tbody>
           {sorted.map((t) => (
-            <tr
-              key={t.id}
-              style={{ borderBottom: '1px solid var(--divider)', opacity: t.bucket === 'done' ? 0.55 : 1 }}
-            >
+            <tr className="row-line" key={t.id} style={{ opacity: t.bucket === 'done' ? 0.55 : 1 }}>
               <td className="py-2.5 px-3">
                 <span className="flex items-center gap-2">
                   <button

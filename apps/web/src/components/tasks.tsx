@@ -80,7 +80,7 @@ export function ActualTime({
           onBlur={submit}
           placeholder="ex. 1h30"
           aria-label="Temps réellement passé"
-          style={{ width: 96, minHeight: 32, padding: '0 8px', fontSize: 13 }}
+          style={{ width: 96, height: 32, minHeight: 32, padding: '0 8px', fontSize: 13 }}
         />
       </span>
     );
@@ -166,6 +166,7 @@ function SortableRow({
   return (
     <div
       ref={setNodeRef}
+      className="row-wrap"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
@@ -231,10 +232,9 @@ export function TaskList({
           <SortableRow key={t.id} id={t.id} disabled={t.status === 'done'}>
             {(handle) => (
               <div
-                className="flex gap-3 items-start"
+                className="row-line flex gap-3 items-start"
                 style={{
                   padding: '12px 16px 12px 6px',
-                  borderBottom: '1px solid var(--divider)',
                   opacity: t.status === 'done' ? 0.5 : t.locked ? 0.55 : 1,
                   background: 'var(--surface)',
                 }}
@@ -338,13 +338,13 @@ export function QuickAdd({
         onChange={(e) => setTitle(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        className="flex-1 min-w-0"
+        style={{ flex: '1 1 240px', minWidth: 0 }}
       />
       <select
         value={duration}
         onChange={(e) => setDuration(e.target.value)}
         aria-label="Durée"
-        style={{ width: 112 }}
+        style={{ flex: '0 1 112px', minWidth: 0 }}
       >
         <option value="">Durée ?</option>
         <option value="30">30 min</option>
@@ -359,13 +359,13 @@ export function QuickAdd({
             onChange={(e) => setDueDate(e.target.value)}
             aria-label="Deadline"
             title="Deadline (facultative)"
-            style={{ width: 160 }}
+            style={{ flex: '1 1 150px', minWidth: 0 }}
           />
           <select
             value={rule}
             onChange={(e) => setRule(e.target.value)}
             aria-label="Récurrence"
-            style={{ width: 210 }}
+            style={{ flex: '1 1 170px', minWidth: 0 }}
           >
             {RECURRENCES.map((r) => (
               <option key={r.value} value={r.value}>
@@ -502,7 +502,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         saving={saveDescription.isPending}
         onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
       />
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <Field label="Durée">
           <DurationSelect value={f.durationMin} onChange={(v) => set('durationMin', v)} />
         </Field>
@@ -537,7 +537,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         </label>
       )}
       {inbox && (
-        <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr' }}>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <Field label="Récurrence">
             <select value={f.recurrenceRule} onChange={(e) => set('recurrenceRule', e.target.value)}>
               {RECURRENCES.map((r) => (
@@ -637,7 +637,35 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
   );
 }
 
-/** DM-70: links to documentation. */
+function ResourceLink({ r }: { r: Resource }) {
+  return /^https?:\/\//.test(r.url) ? (
+    <a href={r.url} target="_blank" rel="noreferrer noopener" className="underline truncate">
+      {r.label}
+    </a>
+  ) : (
+    <span className="truncate" title={r.url}>
+      {r.label}{' '}
+      <span className="mono text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        {r.url}
+      </span>
+    </span>
+  );
+}
+
+/** DM-70: links to documentation, read only (project and objective pages: edited in « Modifier »). */
+export function ResourceList({ resources }: { resources: Resource[] }) {
+  return (
+    <div className="flex flex-col">
+      {resources.map((r) => (
+        <div key={r.id} className="row-line flex min-w-0 text-[14px]" style={{ padding: '9px 0' }}>
+          <ResourceLink r={r} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** DM-70: links to documentation, with add / remove (saved at once). */
 export function Resources({
   ownerType,
   ownerId,
@@ -659,30 +687,23 @@ export function Resources({
   return (
     <div className="flex flex-col gap-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
       <div className="label-caps">Ressources</div>
-      {resources.map((r) => (
-        <div key={r.id} className="flex items-center justify-between gap-2 text-[14px]">
-          {/^https?:\/\//.test(r.url) ? (
-            <a href={r.url} target="_blank" rel="noreferrer noopener" className="underline truncate">
-              {r.label}
-            </a>
-          ) : (
-            <span className="truncate" title={r.url}>
-              {r.label}{' '}
-              <span className="mono text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                {r.url}
-              </span>
-            </span>
-          )}
-          <button
-            type="button"
-            className="btn btn-sm btn-ghost"
-            onClick={() => remove.mutate(r.id)}
-            aria-label={`Retirer ${r.label}`}
-          >
-            ✕
-          </button>
+      {resources.length > 0 && (
+        <div className="flex flex-col">
+          {resources.map((r) => (
+            <div key={r.id} className="row-line flex items-center justify-between gap-2 text-[14px]">
+              <ResourceLink r={r} />
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost"
+                onClick={() => remove.mutate(r.id)}
+                aria-label={`Retirer ${r.label}`}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
       <form
         className="flex flex-wrap gap-2"
         onSubmit={(e) => {

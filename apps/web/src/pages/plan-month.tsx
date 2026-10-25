@@ -246,10 +246,9 @@ function ProjectRow({
   const done = r.status === 'done';
   return (
     <div
-      className="flex flex-wrap items-center gap-3"
+      className="row-line flex flex-wrap items-center gap-3"
       style={{
         padding: '12px 16px',
-        borderBottom: '1px solid var(--divider)',
         background: chosen ? 'var(--row-week)' : 'var(--surface)',
         opacity: done ? 0.6 : 1,
       }}

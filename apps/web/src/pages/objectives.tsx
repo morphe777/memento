@@ -7,7 +7,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
-import { LockIcon, Resources, useSortSensors } from '../components/tasks.tsx';
+import { LockIcon, ResourceList, Resources, useSortSensors } from '../components/tasks.tsx';
 import {
   ConfirmDialog,
   Empty,
@@ -235,7 +235,7 @@ function ObjectivePanel({
   open: boolean;
   onClose: () => void;
   metas: MetaObjective[];
-  objective?: Objective;
+  objective?: Objective & { resources?: Resource[] };
 }) {
   const settings = useSettings();
   const me = useMe();
@@ -308,7 +308,7 @@ function ObjectivePanel({
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
       </Field>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '2fr 1fr 1fr' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}>
         <Field label="Indicateur (SMART)">
           <input
             value={f.smartIndicator}
@@ -327,7 +327,7 @@ function ObjectivePanel({
           />
         </Field>
       </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <Field label="Deadline (dans le trimestre)">
           <input
             type="date"
@@ -336,13 +336,21 @@ function ObjectivePanel({
             onChange={(e) => set('deadline', e.target.value)}
           />
         </Field>
-        <Field label="Criticité">
-          <select value={f.criticality} onChange={(e) => set('criticality', Number(e.target.value))}>
-            <option value={1}>1 · faible</option>
-            <option value={2}>2 · moyenne</option>
-            <option value={3}>3 · critique</option>
+        <Field
+          label="Récurrence"
+          info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
+        >
+          <select
+            value={f.recurrence}
+            onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+          >
+            <option value="">Aucune</option>
+            <option value="quarterly">Chaque trimestre</option>
+            <option value="yearly">Chaque année</option>
           </select>
         </Field>
+      </div>
+      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
         <Field label="Statut">
           <select value={f.status} onChange={(e) => set('status', e.target.value)}>
             {['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'].map((s) => (
@@ -352,20 +360,14 @@ function ObjectivePanel({
             ))}
           </select>
         </Field>
+        <Field label="Criticité">
+          <select value={f.criticality} onChange={(e) => set('criticality', Number(e.target.value))}>
+            <option value={3}>3 · critique</option>
+            <option value={2}>2 · moyenne</option>
+            <option value={1}>1 · faible</option>
+          </select>
+        </Field>
       </div>
-      <Field
-        label="Récurrence"
-        info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
-      >
-        <select
-          value={f.recurrence}
-          onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
-        >
-          <option value="">Aucune</option>
-          <option value="quarterly">Chaque trimestre</option>
-          <option value="yearly">Chaque année</option>
-        </select>
-      </Field>
       <Field label="Méta-objectif">
         <SearchSelect
           value={f.metaObjectiveId}
@@ -384,6 +386,9 @@ function ObjectivePanel({
             style={{ minHeight: 260, fontSize: 14 }}
           />
         </Field>
+      )}
+      {objective && (
+        <Resources ownerType="objective" ownerId={objective.id} resources={objective.resources ?? []} />
       )}
       <div className="flex flex-wrap gap-2 items-center">
         {!objective && (
@@ -538,10 +543,9 @@ function PathRow({ p, index, handle }: { p: PathProject; index: number; handle: 
   const dl = useDomainLookup();
   return (
     <div
-      className="flex items-center gap-3"
+      className="row-line flex items-center gap-3"
       style={{
         padding: '12px 16px 12px 6px',
-        borderBottom: '1px solid var(--divider)',
         background: 'var(--surface)',
         opacity: p.status === 'done' || p.status === 'abandoned' ? 0.55 : 1,
       }}
@@ -587,6 +591,7 @@ function SortablePath({ p, index }: { p: PathProject; index: number }) {
   return (
     <div
       ref={setNodeRef}
+      className="row-wrap"
       style={{ transform: CSS.Transform.toString(transform), transition, position: 'relative' }}
     >
       <PathRow
@@ -700,9 +705,11 @@ export function ObjectivePage({ id }: { id: string }) {
             <div className="label-caps">Avancement du chemin</div>
             <Progress pct={o.data.progressPct} />
           </Section>
-          <Section>
-            <Resources ownerType="objective" ownerId={id} resources={o.data.resources} />
-          </Section>
+          {o.data.resources.length > 0 && (
+            <Section title="Ressources">
+              <ResourceList resources={o.data.resources} />
+            </Section>
+          )}
         </aside>
       </div>
       <ObjectivePanel
@@ -798,10 +805,9 @@ export function DomainPage({ id }: { id: string }) {
       key={p.id}
       to="/projets/$id"
       params={{ id: p.id }}
-      className="flex items-center gap-3 hover:no-underline"
+      className="row-line flex items-center gap-3 hover:no-underline"
       style={{
         padding: '10px 16px',
-        borderBottom: '1px solid var(--divider)',
         opacity: rel || p.status === 'idea' ? 0.65 : 1,
         borderLeft: rel ? `3px solid ${dl.color(p.domainIds[0])}` : '3px solid transparent',
       }}
