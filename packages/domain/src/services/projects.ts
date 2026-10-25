@@ -15,7 +15,8 @@ import {
 } from '../rules/projects.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
 import { withTemplate } from '../settings.ts';
-import { monthOf, parisDate } from '../time.ts';
+import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
+import { renewProject } from './recurrence.ts';
 import { refreshObjectiveProgress } from './referential.ts';
 
 const { project, projectGroup, group, domain, task, projectDependency, objective } = schema;
@@ -353,7 +354,8 @@ export function completeProject(ctx: Ctx, id: string, success: unknown) {
     const after = getProject(ctx, id);
     audit(ctx, 'project', id, 'complete', before, after);
     refreshObjectiveProgress(ctx, after.objectiveId);
-    return after;
+    const next = renewProject(ctx, id); // D-62: a recurring project starts again for the next period
+    return { ...after, nextOccurrenceId: next?.id ?? null };
   });
 }
 
@@ -629,6 +631,10 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
       ),
     },
   ].filter((l) => l.meta || l.objectives.length);
-  const quarters = [...new Set(withPath.map((o) => o.quarter))].sort();
-  return { quarters, lanes };
+  // Rolling year (user request 25/10/2026): the current quarter and the next three are always shown, to plan
+  // ahead; any other quarter holding an objective (late, or further away) is shown too.
+  const current = quarterOf(parisDate(ctxNow(ctx)));
+  const rolling = [0, 1, 2, 3].map((n) => shiftQuarter(current, n));
+  const quarters = [...new Set([...rolling, ...withPath.map((o) => o.quarter)])].sort();
+  return { quarters, currentQuarter: current, lanes };
 }

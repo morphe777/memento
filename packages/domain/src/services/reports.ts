@@ -3,7 +3,14 @@ import { and, asc, desc, eq, gte, inArray, lt, schema } from '@memento/db';
 import { type Ctx, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { type EngineProject, type EngineTask, projectDelayMin } from '../rules/engine.ts';
-import { type DoneTask, focusOf, globalIndicator, minutesByDomain, rhythmOf } from '../rules/reports.ts';
+import {
+  type DoneTask,
+  estimationOf,
+  focusOf,
+  globalIndicator,
+  minutesByDomain,
+  rhythmOf,
+} from '../rules/reports.ts';
 import { INBOX_COLORS } from '../seed-data.ts';
 import { getSettings } from '../settings.ts';
 import {
@@ -72,7 +79,9 @@ function doneTasksBetween(ctx: Ctx, from: string, to: string, bonusIds: Set<stri
     return {
       id: t.id,
       title: t.title,
-      durationMin: t.durationMin ?? 0,
+      durationMin: t.actualMin ?? t.durationMin ?? 0, // D-61: time spent
+      estimateMin: t.durationMin ?? 0,
+      measured: t.actualMin !== null,
       isExperience: t.isExperience,
       isBonus: bonusIds.has(t.id),
       bucket: !t.projectId ? 'inbox' : o && o.status === 'active' ? 'objective' : 'none',
@@ -257,6 +266,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     },
     delays: monthProjects,
     hoursByDomain: hoursByDomain(ctx, done),
+    estimation: estimationOf(done), // D-61
     plan: plan ? { status: plan.status, itemCount: items.length } : null,
     objectives: objectives.map((o) => ({
       id: o.id,
@@ -354,6 +364,7 @@ function buildMonthPayload(ctx: Ctx, month: string) {
     },
     weeks,
     weeksOverBudget: weeks.filter((w) => w.doneMin > w.budgetMin * 1.1).length,
+    estimation: estimationOf(done), // D-61
     projectsFinished: finished,
     experiencesJournal: done.filter((t) => t.isExperience).map((t) => t.title),
     ideas: { created: ideasCreated, promoted: ideasPromoted, dropped: ideasDropped, surfaced },

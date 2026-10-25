@@ -94,3 +94,19 @@ export const ACTION_LABEL: Record<string, string> = {
   dependency_add: 'prérequis ajouté',
   dependency_remove: 'prérequis retiré',
 };
+
+/**
+ * D-61: reads a time typed by hand: « 1h30 », « 4h », « 45 min », « 1,5 » (hours), « 90 » (minutes).
+ * A bare number up to 12 is read as hours, above as minutes. Returns minutes, or null if unreadable.
+ */
+export function parseDuration(text: string): number | null {
+  const s = text.trim().toLowerCase().replace(',', '.').replace(/\s+/g, '');
+  if (!s) return null;
+  const hm = s.match(/^(\d+(?:\.\d+)?)h(\d{1,2})?(?:min|m)?$/);
+  if (hm) return Math.round(Number(hm[1]) * 60 + Number(hm[2] ?? 0));
+  const m = s.match(/^(\d+)(?:min|mn|m)$/);
+  if (m) return Number(m[1]);
+  const n = s.match(/^\d+(?:\.\d+)?$/);
+  if (n) return Number(s) <= 12 ? Math.round(Number(s) * 60) : Math.round(Number(s));
+  return null;
+}

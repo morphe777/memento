@@ -158,7 +158,7 @@ export function updateTask(ctx: Ctx, id: string, patch: TaskPatch) {
 }
 
 /** Check a task (G-03: 1 click). RB-11: a recurring Inbox task spawns its next occurrence. */
-export function completeTask(ctx: Ctx, id: string) {
+export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | null } = {}) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
     if (before.status === 'done') return { task: getTask(ctx, id), next: null };
@@ -166,7 +166,12 @@ export function completeTask(ctx: Ctx, id: string) {
       throw new DomainError('TASK_CANCELLED', 'Tâche annulée : réactive-la d’abord.');
     ctx.db
       .update(task)
-      .set({ status: 'done', doneAt: ctxNowIso(ctx), updatedAt: ctxNowIso(ctx) })
+      .set({
+        status: 'done',
+        doneAt: ctxNowIso(ctx),
+        updatedAt: ctxNowIso(ctx),
+        ...(opts.actualMin !== undefined ? { actualMin: opts.actualMin } : {}), // D-61
+      })
       .where(eq(task.id, id))
       .run();
     touchProject(ctx, before.projectId);

@@ -55,6 +55,8 @@ export const objectiveCreate = z.object({
     .optional(),
   criticality: z.number().int().min(1).max(3).optional(),
   status: objectiveStatus.optional(),
+  /** D-62: renewed for the next quarter / year when closed. */
+  recurrence: z.enum(['quarterly', 'yearly']).nullable().optional(),
 });
 export const objectivePatch = objectiveCreate.partial();
 
@@ -70,6 +72,8 @@ const projectFields = {
   startDate: date.nullable().optional(),
   dueDate: date.nullable().optional(),
   importance: z.enum(['low', 'normal', 'high']).optional(),
+  /** D-62: renewed (copy with its tasks) for the next period when completed. */
+  recurrence: z.enum(['monthly', 'quarterly', 'yearly']).nullable().optional(),
 };
 export const quarterKey = z.string().regex(/^\d{4}-Q[1-4]$/);
 export const objectiveQuarterBody = z.object({ quarter: quarterKey });
@@ -117,6 +121,8 @@ const taskFields = {
   dueDate: date.nullable().optional(),
   recurrenceRule: z.string().max(500).nullable().optional(),
   domainId: uuid.nullable().optional(),
+  /** D-61: time actually spent, in minutes (null = as estimated). */
+  actualMin: z.number().int().min(1).max(6000).nullable().optional(),
 };
 /** D-54: an experience idea for the reserve (an Inbox task flagged as experience). */
 export const experienceIdea = z.object({
@@ -135,6 +141,8 @@ export const taskBatchCreate = z.object({
   tasks: z.array(z.object(taskFields)).min(1).max(100),
 });
 export const taskPatch = z.object({ ...taskFields, status: z.enum(['todo', 'cancelled']) }).partial();
+/** D-61: checking a task can carry the time actually spent. */
+export const taskCompleteBody = z.object({ actualMin: taskFields.actualMin }).optional();
 export const taskMoveBody = z.object({ projectId: uuid.nullable(), position: z.number().int().optional() });
 export const taskReorderBody = z.object({ projectId: uuid.nullable(), ids: z.array(uuid).min(1) });
 export const taskListQuery = z.object({

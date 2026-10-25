@@ -13,6 +13,7 @@ import {
   checkTaskDuration,
   delayLabel,
   delayMin,
+  estimationOf,
   focusOf,
   globalIndicator,
   minutesByDomain,
@@ -280,11 +281,45 @@ describe('R-06 / RB-16 delay', () => {
   });
 });
 
+describe('D-61 estimation vs time spent', () => {
+  const t = (title: string, estimateMin: number, actualMin: number | null, isExperience = false) => ({
+    id: title,
+    title,
+    durationMin: actualMin ?? estimateMin,
+    estimateMin,
+    measured: actualMin !== null,
+    isExperience,
+    isBonus: false,
+    bucket: 'inbox' as const,
+    domainIds: [],
+  });
+  it('ratio over the done work, biggest overruns, experiences ignored', () => {
+    const e = estimationOf([
+      t('Câblage', 60, 240),
+      t('Mail', 30, 30),
+      t('Rangement', 120, 60),
+      t('Devis', 60, null),
+      t('Concert', 120, 300, true),
+    ]);
+    expect(e).toMatchObject({
+      measuredCount: 3,
+      estimatedMin: 270,
+      spentMin: 390,
+      ratioPct: 144,
+      underruns: 1,
+    });
+    expect(e.overruns).toEqual([{ title: 'Câblage', estimateMin: 60, actualMin: 240 }]);
+    expect(estimationOf([t('Devis', 60, null)]).ratioPct).toBeNull();
+  });
+});
+
 describe('weekly indicators R-01 / R-04 / R-05', () => {
   const dt = (bucket: 'objective' | 'inbox' | 'none', durationMin: number, isExperience = false) => ({
     id: 'x',
     title: 'x',
     durationMin,
+    estimateMin: durationMin,
+    measured: false,
     isExperience,
     isBonus: false,
     bucket,

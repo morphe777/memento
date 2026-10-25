@@ -56,7 +56,15 @@ const route = <P extends string>(path: P, component: () => React.ReactNode) =>
   createRoute({ getParentRoute: () => rootRoute, path, component });
 
 const indexRoute = route('/', () => <Navigate to="/semaine" />);
-const weekRoute = route('/semaine', WeekPage);
+const weekRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/semaine',
+  validateSearch: (s: Record<string, unknown>): { semaine?: string } => ({ semaine: str(s.semaine) }),
+  component: function Week() {
+    const { semaine } = weekRoute.useSearch();
+    return <WeekPage semaine={semaine} />;
+  },
+});
 const planRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/planifier',

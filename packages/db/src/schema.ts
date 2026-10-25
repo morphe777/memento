@@ -67,6 +67,9 @@ export const objective = sqliteTable('objective', {
   status: text('status', { enum: ['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'] })
     .notNull()
     .default('active'),
+  // D-62: a recurring objective is renewed (next quarter / next year) when it is closed.
+  recurrence: text('recurrence', { enum: ['quarterly', 'yearly'] }),
+  previousId: text('previous_id'), // the occurrence this one renews
 });
 
 export const project = sqliteTable(
@@ -93,6 +96,9 @@ export const project = sqliteTable(
     importance: text('importance', { enum: ['low', 'normal', 'high'] })
       .notNull()
       .default('normal'), // set at month end when an unfinished month project goes back to ready
+    // D-62: a recurring project is renewed (copy with its tasks, planned for the next period) when completed.
+    recurrence: text('recurrence', { enum: ['monthly', 'quarterly', 'yearly'] }),
+    previousId: text('previous_id'), // the occurrence this one renews
     success: integer('success', { mode: 'boolean' }),
     completedAt: text('completed_at'),
     replannedAt: text('replanned_at'), // RB-16 baseline (trace kept in audit_log and frozen reports)
@@ -135,6 +141,8 @@ export const task = sqliteTable(
     domainId: text('domain_id').references(() => domain.id), // Inbox tasks only
     postponeCount: integer('postpone_count').notNull().default(0),
     doneAt: text('done_at'),
+    // D-61: time actually spent (minutes), entered when it differs from the estimate. Null = as estimated.
+    actualMin: integer('actual_min'),
   },
   (t) => [index('task_project_idx').on(t.projectId), index('task_status_idx').on(t.status)],
 );

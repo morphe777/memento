@@ -15,6 +15,7 @@ import {
   InfoTip,
   Loading,
   PageHeader,
+  SearchSelect,
   Tabs,
 } from '../components/ui.tsx';
 import { get, post, put } from '../lib/api.ts';
@@ -92,15 +93,18 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
           ]}
         />
 
-        <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Projet">
-          <option value="">Tous les projets</option>
-          <option value="inbox">Inbox</option>
-          {projects.map(([id, title]) => (
-            <option key={id} value={id}>
-              {title}
-            </option>
-          ))}
-        </select>
+        <div style={{ width: 280 }}>
+          <SearchSelect
+            value={projectId}
+            onChange={setProjectId}
+            ariaLabel="Projet"
+            emptyLabel="Tous les projets"
+            options={[
+              { value: 'inbox', label: 'Inbox' },
+              ...projects.map(([id, title]) => ({ value: id, label: title })),
+            ]}
+          />
+        </div>
       </div>
       <DomainFilter value={domains} onChange={setDomains} />
       {q.isError && <ErrorBox error={q.error} />}

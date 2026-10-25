@@ -511,8 +511,10 @@ export async function buildApp(opts: AppOptions) {
         { schema: { ...tag('Tâches'), params: D.idParam, body: D.taskPatch } },
         async (req) => D.updateTask(ctx(req), req.params.id, req.body),
       );
-      r.post('/tasks/:id/complete', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) =>
-        D.completeTask(ctx(req), req.params.id),
+      r.post(
+        '/tasks/:id/complete',
+        { schema: { ...tag('Tâches'), params: D.idParam, body: D.taskCompleteBody } },
+        async (req) => D.completeTask(ctx(req), req.params.id, { actualMin: req.body?.actualMin }),
       );
       r.post('/tasks/:id/uncomplete', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) =>
         D.uncompleteTask(ctx(req), req.params.id),

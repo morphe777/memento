@@ -79,7 +79,31 @@ describe('MCP L6', () => {
     ]) {
       expect(names).toContain(n);
     }
-    expect(names.some((n: string) => n.startsWith('delete'))).toBe(false);
+    // D-60: deletion tools exist, for explicit requests only (said in their description).
+    for (const n of ['delete_task', 'delete_project', 'delete_objective', 'delete_meta_objective'])
+      expect(names).toContain(n);
+  });
+
+  it('D-60: deletes a task through MCP, journaled as ai:claude', async () => {
+    const created = await rpc('tools/call', {
+      name: 'add_inbox_task',
+      arguments: { title: 'À supprimer', durationMin: 30 },
+    });
+    const id = JSON.parse(created.body.result.content[0].text).id;
+    const { body } = await rpc('tools/call', { name: 'delete_task', arguments: { id } });
+    expect(body.result.isError).toBeFalsy();
+    const changes = (await api.inject({ url: '/api/v1/changes?actor=ai', headers: { cookie } })).json();
+    expect(
+      changes.some(
+        (c: { action: string; title: string }) => c.action === 'delete' && c.title === 'À supprimer',
+      ),
+    ).toBe(true);
+    await api.inject({
+      method: 'POST',
+      url: '/api/v1/changes/mark-reviewed',
+      headers: { cookie },
+      payload: { ids: changes.map((c: { id: string }) => c.id) },
+    });
   });
 
   it('a task created through MCP shows in "À revoir" as ai:claude, and marking it reviewed removes it', async () => {

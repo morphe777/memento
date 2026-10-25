@@ -1,5 +1,5 @@
 // Objectifs (V-01), Objectif = chemin (V-02), Domaines / Domaine (V-15).
-import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core';
+import { closestCenter, DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
@@ -17,6 +17,7 @@ import {
   PageHeader,
   Panel,
   SAVE_HINT,
+  SearchSelect,
   Section,
   StatusPill,
   Tabs,
@@ -248,6 +249,7 @@ function ObjectivePanel({
     criticality: 2,
     status: 'active',
     description: '',
+    recurrence: '' as '' | 'quarterly' | 'yearly',
   };
   const [f, setF] = useState(empty);
   const initial = useRef('');
@@ -264,6 +266,7 @@ function ObjectivePanel({
           criticality: objective.criticality,
           status: objective.status,
           description: objective.description,
+          recurrence: (objective.recurrence ?? '') as '' | 'quarterly' | 'yearly',
         }
       : { ...empty, description: settings.data?.['templates.objective'] ?? '' };
     initial.current = JSON.stringify(start);
@@ -273,8 +276,8 @@ function ObjectivePanel({
     () => {
       const { description, ...rest } = f;
       const body = objective
-        ? { ...rest, metaObjectiveId: f.metaObjectiveId || null }
-        : { ...f, metaObjectiveId: f.metaObjectiveId || null };
+        ? { ...rest, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null }
+        : { ...f, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null };
       return objective ? patch(`/objectives/${objective.id}`, body) : post('/objectives', body);
     },
     { onSuccess: onClose, toast: 'Objectif enregistré.' },
@@ -350,15 +353,27 @@ function ObjectivePanel({
           </select>
         </Field>
       </div>
-      <Field label="Méta-objectif">
-        <select value={f.metaObjectiveId} onChange={(e) => set('metaObjectiveId', e.target.value)}>
-          <option value="">Aucun</option>
-          {metas.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.title}
-            </option>
-          ))}
+      <Field
+        label="Récurrence"
+        info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
+      >
+        <select
+          value={f.recurrence}
+          onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+        >
+          <option value="">Aucune</option>
+          <option value="quarterly">Chaque trimestre</option>
+          <option value="yearly">Chaque année</option>
         </select>
+      </Field>
+      <Field label="Méta-objectif">
+        <SearchSelect
+          value={f.metaObjectiveId}
+          onChange={(v) => set('metaObjectiveId', v)}
+          emptyLabel="Aucun"
+          ariaLabel="Méta-objectif"
+          options={metas.map((m) => ({ value: m.id, label: m.title }))}
+        />
       </Field>
       {!objective && (
         <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
@@ -870,15 +885,32 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
 
 function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][number] }) {
   const dl = useDomainLookup();
+  // Drag the card to another quarter column (user request 25/10/2026); links still work on a simple click.
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: o.id });
   return (
     <div
-      className="card flex flex-col gap-2"
-      style={{ padding: '12px 14px 12px 12px', borderLeft: `4px solid ${dl.color(o.domainId)}` }}
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className="card flex flex-col gap-2 cursor-grab"
+      style={{
+        padding: '12px 14px 12px 12px',
+        borderLeft: `4px solid ${dl.color(o.domainId)}`,
+        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+        zIndex: isDragging ? 30 : undefined,
+        position: 'relative',
+        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.18)' : undefined,
+      }}
     >
       <div className="flex items-start justify-between gap-2">
         <Link to="/objectifs/$id" params={{ id: o.id }} className="text-[15px] font-semibold leading-snug">
           {o.title}
         </Link>
+        {o.recurrence && (
+          <span title={o.recurrence === 'yearly' ? 'Revient chaque année' : 'Revient chaque trimestre'}>
+            ↻
+          </span>
+        )}
         {o.status !== 'active' && <StatusPill>{STATUS_LABEL[o.status]}</StatusPill>}
       </div>
       <div className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>
@@ -943,6 +975,25 @@ function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][n
   );
 }
 
+/** A (lane, quarter) cell of the map: drop target for an objective card (only the quarter changes). */
+function QuarterCell({ id, children }: { id: string; children: ReactNode }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div
+      ref={setNodeRef}
+      className="flex flex-col gap-3 rounded-[14px]"
+      style={{
+        background: 'var(--bin)',
+        padding: 8,
+        minHeight: 80,
+        outline: isOver ? '2px dashed var(--text-ghost)' : undefined,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function ObjectivesMapView({
   includeClosed,
   onEditMeta,
@@ -954,9 +1005,19 @@ function ObjectivesMapView({
     queryKey: ['objectives-map', includeClosed],
     queryFn: () => get<ObjectivesMap>(`/objectives/map${includeClosed ? '?includeClosed=true' : ''}`),
   });
+  const sensors = useSortSensors();
+  const move = useAction(
+    ({ id, quarter }: { id: string; quarter: string }) => post(`/objectives/${id}/quarter`, { quarter }),
+    { toast: 'Objectif déplacé (deadline ramenée dans le trimestre si besoin).' },
+  );
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
-  const { quarters, lanes } = q.data;
+  const { quarters, lanes, currentQuarter } = q.data;
+  const onDragEnd = (e: DragEndEvent) => {
+    const quarter = (e.over?.id as string | undefined)?.split('|')[1];
+    const o = lanes.flatMap((l) => l.objectives).find((x) => x.id === e.active.id);
+    if (o && quarter && quarter !== o.quarter) move.mutate({ id: o.id, quarter });
+  };
   if (!lanes.length) return <Empty>Aucun objectif pour l'instant.</Empty>;
   const cols = `220px repeat(${Math.max(1, quarters.length)}, minmax(280px, 1fr))`;
   const legend: [ReactNode, string][] = [
@@ -982,70 +1043,73 @@ function ObjectivesMapView({
           </span>
         ))}
       </div>
-      <div className="overflow-x-auto">
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
-        >
-          <span />
-          {quarters.map((qt) => (
-            <div key={qt} className="label-caps px-1" style={{ fontSize: 12 }}>
-              {quarterLabel(qt)}
-            </div>
-          ))}
-          {lanes.map((l) => (
-            <Fragment key={l.meta?.id ?? 'none'}>
-              <div className="bin flex flex-col gap-1.5" style={{ padding: '14px 14px 16px' }}>
-                <div className="flex items-start justify-between gap-1">
-                  {l.meta ? (
-                    <Link
-                      to="/meta-objectifs/$id"
-                      params={{ id: l.meta.id }}
-                      className="text-[16px] font-bold leading-snug"
-                    >
-                      {l.meta.title}
-                    </Link>
-                  ) : (
-                    <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
-                  )}
-                  {l.meta && (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      style={{ width: 28, height: 28 }}
-                      aria-label={`Modifier ${l.meta.title}`}
-                      onClick={() => onEditMeta(l.meta!)}
-                    >
-                      <PencilIcon />
-                    </button>
-                  )}
-                </div>
-                {l.meta?.horizonDate && (
-                  <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                    horizon {fmtDate(l.meta.horizonDate)}
-                  </span>
-                )}
-                {l.meta && l.meta.status !== 'active' && (
-                  <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
-                )}
+      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
+        <div className="overflow-x-auto">
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
+          >
+            <span />
+            {quarters.map((qt) => (
+              <div
+                key={qt}
+                className="label-caps px-1"
+                style={{ fontSize: 12, opacity: qt < currentQuarter ? 0.6 : 1 }}
+              >
+                {quarterLabel(qt)}
+                {qt === currentQuarter ? ' · en cours' : qt < currentQuarter ? ' · passé' : ''}
               </div>
-              {quarters.map((qt) => (
-                <div
-                  key={qt}
-                  className="flex flex-col gap-3 rounded-[14px]"
-                  style={{ background: 'var(--bin)', padding: 8, opacity: 1 }}
-                >
-                  {l.objectives
-                    .filter((o) => o.quarter === qt)
-                    .map((o) => (
-                      <MapObjective key={o.id} o={o} />
-                    ))}
+            ))}
+            {lanes.map((l) => (
+              <Fragment key={l.meta?.id ?? 'none'}>
+                <div className="bin flex flex-col gap-1.5" style={{ padding: '14px 14px 16px' }}>
+                  <div className="flex items-start justify-between gap-1">
+                    {l.meta ? (
+                      <Link
+                        to="/meta-objectifs/$id"
+                        params={{ id: l.meta.id }}
+                        className="text-[16px] font-bold leading-snug"
+                      >
+                        {l.meta.title}
+                      </Link>
+                    ) : (
+                      <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
+                    )}
+                    {l.meta && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ width: 28, height: 28 }}
+                        aria-label={`Modifier ${l.meta.title}`}
+                        onClick={() => onEditMeta(l.meta!)}
+                      >
+                        <PencilIcon />
+                      </button>
+                    )}
+                  </div>
+                  {l.meta?.horizonDate && (
+                    <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                      horizon {fmtDate(l.meta.horizonDate)}
+                    </span>
+                  )}
+                  {l.meta && l.meta.status !== 'active' && (
+                    <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
+                  )}
                 </div>
-              ))}
-            </Fragment>
-          ))}
+                {quarters.map((qt) => (
+                  <QuarterCell key={qt} id={`${l.meta?.id ?? 'none'}|${qt}`}>
+                    {l.objectives
+                      .filter((o) => o.quarter === qt)
+                      .map((o) => (
+                        <MapObjective key={o.id} o={o} />
+                      ))}
+                  </QuarterCell>
+                ))}
+              </Fragment>
+            ))}
+          </div>
         </div>
-      </div>
+      </DndContext>
     </div>
   );
 }

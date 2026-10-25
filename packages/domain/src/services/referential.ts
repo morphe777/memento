@@ -17,6 +17,7 @@ import type {
 } from '../schemas.ts';
 import { withTemplate } from '../settings.ts';
 import { recomputeProjectDomains } from './projects.ts';
+import { renewObjective } from './recurrence.ts';
 
 const { domain, group, metaObjective, objective, project, projectGroup, resourceLink } = schema;
 
@@ -286,6 +287,12 @@ export function updateObjective(ctx: Ctx, id: string, patch: ObjectivePatch) {
       .run();
     const after = getObjective(ctx, id);
     audit(ctx, 'objective', id, 'update', before, after);
+    // D-62: closing a recurring objective (not abandoning it) renews it for the next quarter / year.
+    if (
+      ['active', 'paused'].includes(before.status) &&
+      ['achieved', 'partial', 'failed'].includes(after.status)
+    )
+      renewObjective(ctx, id);
     return after;
   });
 }
