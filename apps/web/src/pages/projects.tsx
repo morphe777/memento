@@ -1094,6 +1094,34 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         />
       </Field>
 
+      <FormSection title="Calendrier">
+        <div className="grid gap-3" style={three}>
+          <Field label="Début">
+            <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
+          </Field>
+          <Field
+            label="Fin"
+            info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
+          >
+            <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+          </Field>
+          <Field
+            label="Récurrence"
+            info="Projet qui revient (compta du mois, entretien annuel…) : une fois terminé, Mémento le recrée avec ses tâches (toutes à faire) et le prévoit pour la période suivante. Pour arrêter, retire la récurrence sur la nouvelle occurrence."
+          >
+            <select
+              value={f.recurrence}
+              onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+            >
+              <option value="">Aucune</option>
+              <option value="monthly">Chaque mois</option>
+              <option value="quarterly">Chaque trimestre</option>
+              <option value="yearly">Chaque année</option>
+            </select>
+          </Field>
+        </div>
+      </FormSection>
+
       <FormSection title="Rattachement et priorité">
         <div className="grid gap-3" style={two}>
           <Field label="Objectif">
@@ -1143,34 +1171,6 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
             </select>
           </Field>
         )}
-      </FormSection>
-
-      <FormSection title="Calendrier">
-        <div className="grid gap-3" style={three}>
-          <Field label="Début">
-            <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
-          </Field>
-          <Field
-            label="Fin"
-            info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
-          >
-            <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
-          </Field>
-          <Field
-            label="Récurrence"
-            info="Projet qui revient (compta du mois, entretien annuel…) : une fois terminé, Mémento le recrée avec ses tâches (toutes à faire) et le prévoit pour la période suivante. Pour arrêter, retire la récurrence sur la nouvelle occurrence."
-          >
-            <select
-              value={f.recurrence}
-              onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
-            >
-              <option value="">Aucune</option>
-              <option value="monthly">Chaque mois</option>
-              <option value="quarterly">Chaque trimestre</option>
-              <option value="yearly">Chaque année</option>
-            </select>
-          </Field>
-        </div>
       </FormSection>
 
       <FormSection title="Organisation">

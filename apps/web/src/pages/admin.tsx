@@ -614,22 +614,39 @@ function DomainsConfig() {
   const reorder = useAction((ids: string[]) => post('/domains/reorder', { ids }), {
     toast: 'Ordre de priorité enregistré.',
   });
-  const update = useAction(
-    ({ id, body }: { id: string; body: Partial<Domain> }) => patch(`/domains/${id}`, body),
-    { toast: 'Domaine enregistré.' },
+  const update = useAction(({ id, body }: { id: string; body: Partial<Domain> }) =>
+    patch(`/domains/${id}`, body),
   );
+  // One draft for the whole list, saved by a single « Enregistrer » like the other settings pages.
+  const fieldsOf = (d: Domain): DomainFields => ({
+    name: d.name,
+    weight: d.weight,
+    colorLight: d.colorLight,
+    colorDark: d.colorDark,
+  });
+  const [drafts, setDrafts] = useState<Record<string, DomainFields>>({});
+  useEffect(() => setDrafts(Object.fromEntries(dl.domains.map((d) => [d.id, fieldsOf(d)]))), [dl.domains]);
+  const changed = dl.domains.filter(
+    (d) => drafts[d.id] && JSON.stringify(drafts[d.id]) !== JSON.stringify(fieldsOf(d)),
+  );
+  const save = useAction(() => Promise.all(changed.map((d) => patch(`/domains/${d.id}`, drafts[d.id]))), {
+    toast: 'Domaines enregistrés.',
+  });
   const create = useAction(
     (body: { name: string; colorLight: string; colorDark: string }) => post('/domains', body),
     { toast: 'Domaine ajouté.' },
   );
   const [name, setName] = useState('');
   const byId = new Map(dl.domains.map((d) => [d.id, d]));
-  const proposeWeights = () => {
-    order.forEach((id, i) => {
-      const weight = Math.round(((order.length - i) / order.length) * 1000) / 1000;
-      update.mutate({ id, body: { weight } });
-    });
-  };
+  const proposeWeights = () =>
+    setDrafts((ds) =>
+      Object.fromEntries(
+        Object.entries(ds).map(([id, f]) => [
+          id,
+          { ...f, weight: Math.round(((order.length - order.indexOf(id)) / order.length) * 1000) / 1000 },
+        ]),
+      ),
+    );
   const onDragEnd = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
     const next = arrayMove(order, order.indexOf(String(e.active.id)), order.indexOf(String(e.over.id)));
@@ -658,7 +675,14 @@ function DomainsConfig() {
                     <span className="mono text-[12px]" style={{ width: 24, color: 'var(--text-faint)' }}>
                       #{i + 1}
                     </span>
-                    <DomainEditor d={d} onSave={(body) => update.mutate({ id, body })} />
+                    {drafts[id] && (
+                      <DomainEditor
+                        d={d}
+                        f={drafts[id]}
+                        onChange={(f) => setDrafts((ds) => ({ ...ds, [id]: f }))}
+                        onArchive={() => update.mutate({ id, body: { archived: !d.archived } })}
+                      />
+                    )}
                   </SortableDomain>
                 );
               })}
@@ -666,13 +690,21 @@ function DomainsConfig() {
           </DndContext>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => save.mutate(undefined)}
+            disabled={!changed.length || save.isPending}
+          >
+            Enregistrer
+          </button>
           <button type="button" className="btn" onClick={proposeWeights}>
             Recalculer les poids depuis l'ordre
           </button>
           <InfoTip>
             Remplace tous les poids par la proposition linéaire : le domaine n°1 reçoit 1, puis chaque rang
             perd 1/8 (n°2 = 0,875 … n°8 = 0,125). Pratique après avoir réordonné les domaines. Tu peux ensuite
-            ajuster chaque poids à la main.
+            ajuster chaque poids à la main, puis « Enregistrer ».
           </InfoTip>
         </div>
       </Section>
@@ -707,23 +739,19 @@ function DomainsConfig() {
   );
 }
 
-function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) => void }) {
-  const [f, setF] = useState({
-    name: d.name,
-    weight: d.weight,
-    colorLight: d.colorLight,
-    colorDark: d.colorDark,
-  });
-  useEffect(
-    () =>
-      setF({
-        name: d.name,
-        weight: d.weight,
-        colorLight: d.colorLight,
-        colorDark: d.colorDark,
-      }),
-    [d],
-  );
+type DomainFields = Pick<Domain, 'name' | 'weight' | 'colorLight' | 'colorDark'>;
+
+function DomainEditor({
+  d,
+  f,
+  onChange: setF,
+  onArchive,
+}: {
+  d: Domain;
+  f: DomainFields;
+  onChange: (f: DomainFields) => void;
+  onArchive: () => void;
+}) {
   return (
     <>
       <input
@@ -762,14 +790,7 @@ function DomainEditor({ d, onSave }: { d: Domain; onSave: (b: Partial<Domain>) =
           style={{ width: 44, padding: 2 }}
         />
       </label>
-      <button type="button" className="btn btn-sm" onClick={() => onSave(f)}>
-        Enregistrer
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm btn-ghost"
-        onClick={() => onSave({ archived: !d.archived })}
-      >
+      <button type="button" className="btn btn-sm btn-ghost" onClick={onArchive}>
         {d.archived ? 'Désarchiver' : 'Archiver'}
       </button>
     </>
