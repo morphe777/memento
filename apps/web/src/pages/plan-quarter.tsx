@@ -230,10 +230,9 @@ function ObjectiveRow({ o, note, action }: { o: Row; note?: string; action: Reac
   const p = o.projects;
   return (
     <div
-      className="flex flex-wrap items-center gap-3"
+      className="row-line flex flex-wrap items-center gap-3"
       style={{
         padding: '12px 16px',
-        borderBottom: '1px solid var(--divider)',
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
       }}
     >

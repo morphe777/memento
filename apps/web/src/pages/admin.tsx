@@ -119,11 +119,7 @@ export function ReviewPage() {
         {q.isLoading && <Loading />}
         {q.data?.length === 0 && <Empty>Rien à revoir.</Empty>}
         {q.data?.map((c) => (
-          <div
-            key={c.id}
-            className="flex items-center gap-3"
-            style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider)' }}
-          >
+          <div key={c.id} className="row-line flex items-center gap-3" style={{ padding: '10px 16px' }}>
             <input
               type="checkbox"
               aria-label="Sélectionner"
@@ -585,12 +581,11 @@ function SortableDomain({ d, children }: { d: Domain; children: React.ReactNode 
   return (
     <div
       ref={setNodeRef}
-      className="flex flex-wrap items-center gap-3"
+      className="row-line flex flex-wrap items-center gap-3"
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
         padding: '10px 12px',
-        borderBottom: '1px solid var(--divider)',
         background: 'var(--surface)',
         position: 'relative',
       }}
@@ -835,10 +830,7 @@ function GroupsConfig() {
                   {dl.name(g.domainId)}
                 </div>
               )}
-              <div
-                className="flex flex-wrap items-center gap-3"
-                style={{ padding: '8px 12px', borderBottom: '1px solid var(--divider)' }}
-              >
+              <div className="row-line flex flex-wrap items-center gap-3" style={{ padding: '8px 12px' }}>
                 <span className="dot" style={{ background: dl.color(g.domainId) }} />
                 <input
                   defaultValue={g.name}
@@ -957,10 +949,9 @@ function AccessConfig() {
         {(tokens.data ?? []).map((t) => (
           <div
             key={t.id}
-            className="flex flex-wrap items-center gap-3"
+            className="row-line flex flex-wrap items-center gap-3"
             style={{
               padding: '10px 12px',
-              borderBottom: '1px solid var(--divider)',
               opacity: t.revokedAt ? 0.5 : 1,
             }}
           >

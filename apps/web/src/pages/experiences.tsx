@@ -151,10 +151,7 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
 function Row({ t, onOpen, meta }: { t: Item; onOpen: (id: string) => void; meta?: string }) {
   const dl = useDomainLookup();
   return (
-    <div
-      className="flex items-center gap-3"
-      style={{ minHeight: 40, borderBottom: '1px solid var(--divider)' }}
-    >
+    <div className="row-line flex items-center gap-3" style={{ minHeight: 40 }}>
       <span className="dot" style={{ background: dl.color(t.domainId) }} />
       <button
         type="button"

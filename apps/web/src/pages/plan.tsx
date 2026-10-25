@@ -339,10 +339,9 @@ function ProjectCard({
               {card.hidden.map((h) => (
                 <div
                   key={h.taskId}
-                  className="flex items-center gap-3"
+                  className="row-line flex items-center gap-3"
                   style={{
                     padding: '8px 18px',
-                    borderBottom: '1px solid var(--divider)',
                     color: 'var(--text-faint)',
                   }}
                 >
@@ -398,10 +397,9 @@ function PlanTaskRow({
   const bonus = t.selection === 'bonus';
   return (
     <div
-      className="flex flex-wrap items-center gap-3"
+      className="row-line flex flex-wrap items-center gap-3"
       style={{
         padding: '10px 18px',
-        borderBottom: '1px solid var(--divider)',
         background: week ? 'var(--row-week)' : bonus ? 'var(--row-bonus)' : 'var(--surface)',
         opacity: t.locked ? 0.45 : 1,
       }}

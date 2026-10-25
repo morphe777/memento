@@ -95,8 +95,8 @@ export function ReportsPage() {
             key={r.id}
             to="/rapports/$id"
             params={{ id: r.id }}
-            className="flex justify-between items-center gap-3 hover:no-underline"
-            style={{ padding: '14px 20px', borderBottom: '1px solid var(--divider)' }}
+            className="row-line flex justify-between items-center gap-3 hover:no-underline"
+            style={{ padding: '14px 20px' }}
           >
             <span className="text-[15px] font-semibold">{periodTitle(r.kind, r.periodKey)}</span>
             <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>

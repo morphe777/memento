@@ -8,6 +8,7 @@ import { Breadcrumb } from '../components/shell.tsx';
 import {
   GroupPicker,
   QuickAdd,
+  ResourceList,
   Resources,
   TaskDrawer,
   TaskList,
@@ -28,6 +29,7 @@ import {
   Section,
   StatusPill,
   Tabs,
+  useTableSort,
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
@@ -44,10 +46,9 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
     <Link
       to="/projets/$id"
       params={{ id: p.id }}
-      className="flex items-center gap-3 hover:no-underline"
+      className="row-line flex items-center gap-3 hover:no-underline"
       style={{
         padding: '10px 16px',
-        borderBottom: '1px solid var(--divider)',
         opacity: muted ? 0.6 : 1,
         borderLeft: accent ? `3px solid ${accent}` : undefined,
       }}
@@ -290,25 +291,29 @@ function ProjectTree({ projects }: { projects: Project[] }) {
   );
 }
 
+const PROJECT_STATUS_ORDER: Record<string, number> = {
+  active: 0,
+  ready: 1,
+  paused: 2,
+  idea: 3,
+  done: 4,
+  abandoned: 5,
+};
+
+type ProjectSort = 'title' | 'domain' | 'status' | 'dueDate' | 'progress';
+
 function ProjectTable({ projects }: { projects: Project[] }) {
-  const [sort, setSort] = useState<'title' | 'dueDate' | 'domain'>('title');
   const dl = useDomainLookup();
-  const sorted = [...projects].sort((a, b) =>
-    sort === 'title'
-      ? a.title.localeCompare(b.title)
-      : sort === 'dueDate'
-        ? (a.dueDate ?? '9').localeCompare(b.dueDate ?? '9')
-        : (dl.get(a.domainIds[0])?.priorityRank ?? 9) - (dl.get(b.domainIds[0])?.priorityRank ?? 9),
-  );
-  const th = (k: typeof sort, label: string) => (
-    <th
-      className="text-left font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer"
-      style={{ color: 'var(--text-muted)' }}
-      onClick={() => setSort(k)}
-    >
-      {label} {sort === k ? '↓' : ''}
-    </th>
-  );
+  const cmp: Record<ProjectSort, (a: Project, b: Project) => number> = {
+    title: (a, b) => a.title.localeCompare(b.title),
+    domain: (a, b) =>
+      (dl.get(a.domainIds[0])?.priorityRank ?? 99) - (dl.get(b.domainIds[0])?.priorityRank ?? 99),
+    status: (a, b) => (PROJECT_STATUS_ORDER[a.status] ?? 9) - (PROJECT_STATUS_ORDER[b.status] ?? 9),
+    dueDate: (a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999'),
+    progress: (a, b) =>
+      a.taskStats.doneMin / (a.taskStats.totalMin || 1) - b.taskStats.doneMin / (b.taskStats.totalMin || 1),
+  };
+  const { sorted, th } = useTableSort(projects, cmp, 'title', (a, b) => a.title.localeCompare(b.title));
   return (
     <div className="card overflow-x-auto">
       <table className="w-full border-collapse text-[14px]">
@@ -316,18 +321,14 @@ function ProjectTable({ projects }: { projects: Project[] }) {
           <tr style={{ borderBottom: '1px solid var(--border)' }}>
             {th('title', 'Projet')}
             {th('domain', 'Domaine')}
-            <th className="text-left text-[12px] uppercase py-2 px-3" style={{ color: 'var(--text-muted)' }}>
-              Statut
-            </th>
+            {th('status', 'Statut')}
             {th('dueDate', 'Échéance')}
-            <th className="text-right text-[12px] uppercase py-2 px-3" style={{ color: 'var(--text-muted)' }}>
-              Fait / total
-            </th>
+            {th('progress', 'Fait / total', 'right')}
           </tr>
         </thead>
         <tbody>
           {sorted.map((p) => (
-            <tr key={p.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+            <tr className="row-line" key={p.id}>
               <td className="py-2.5 px-3">
                 <Link to="/projets/$id" params={{ id: p.id }} className="font-medium">
                   {p.title}
@@ -683,9 +684,11 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
         </section>
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 300px', maxWidth: 420 }}>
           <ProjectInfo p={p} onEdit={() => setEditing(true)} />
-          <Section>
-            <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
-          </Section>
+          {p.resources.length > 0 && (
+            <Section title="Ressources">
+              <ResourceList resources={p.resources} />
+            </Section>
+          )}
         </aside>
       </div>
       {editing && <ProjectEditPanel p={p} open onClose={() => setEditing(false)} />}
@@ -699,6 +702,55 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
 
 const IMPORTANCE_LABEL = { low: 'Basse', normal: 'Normale', high: 'Haute' } as const;
 
+/** Monochrome 16 px line icons of the project facts: the setup reads at a glance (user request 25/10/2026). */
+function FactIcon({ name }: { name: string }) {
+  const paths: Record<string, React.ReactNode> = {
+    dates: (
+      <>
+        <rect x="2.5" y="3.5" width="11" height="10" rx="1.6" />
+        <path d="M2.5 6.8h11M5.5 2v3M10.5 2v3" />
+      </>
+    ),
+    objective: (
+      <>
+        <circle cx="8" cy="8" r="5.8" />
+        <circle cx="8" cy="8" r="3.2" />
+        <circle cx="8" cy="8" r="0.9" fill="currentColor" />
+      </>
+    ),
+    high: <path d="M4 10.5 8 6.5l4 4M4 6.5l4-4 4 4" />,
+    normal: <path d="M4 6.5h8M4 9.5h8" />,
+    low: <path d="M4 5.5l4 4 4-4M4 9.5l4 4 4-4" />,
+    sequential: (
+      <>
+        <circle cx="3" cy="8" r="1.6" />
+        <circle cx="8" cy="8" r="1.6" />
+        <circle cx="13" cy="8" r="1.6" />
+        <path d="M4.6 8h1.8M9.6 8h1.8" />
+      </>
+    ),
+    parallel: <path d="M3 4.5h10M3 8h10M3 11.5h10" />,
+    recurrence: <path d="M13 8a5 5 0 1 1-1.6-3.7M13 2.5v2.6h-2.6" />,
+  };
+  return (
+    <svg
+      aria-hidden="true"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="flex-none"
+      style={{ color: 'var(--text-faint)', marginTop: 2 }}
+    >
+      {paths[name]}
+    </svg>
+  );
+}
+
 /** Read-only facts of the project (edit through « Modifier »). */
 function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
   const dl = useDomainLookup();
@@ -707,16 +759,14 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
   const daysLeft =
     p.dueDate && today ? Math.round((Date.parse(p.dueDate) - Date.parse(today)) / 86_400_000) : null;
   const pct = p.taskStats.totalMin ? Math.round((p.taskStats.doneMin / p.taskStats.totalMin) * 100) : 0;
-  const row = (label: string, value: React.ReactNode) => (
-    <div
-      className="flex flex-col gap-0.5"
-      style={{ padding: '10px 0', borderBottom: '1px solid var(--divider)' }}
-    >
+  const row = (label: string, value: React.ReactNode, icon?: string) => (
+    <div className="row-line flex flex-col gap-0.5" style={{ padding: '10px 0' }}>
       <span className="label-caps" style={{ fontSize: 11 }}>
         {label}
       </span>
-      <span className="text-[14px]" style={{ color: 'var(--text-2)' }}>
-        {value}
+      <span className="text-[14px] flex items-start gap-2 min-w-0" style={{ color: 'var(--text-2)' }}>
+        {icon && <FactIcon name={icon} />}
+        <span className="min-w-0">{value}</span>
       </span>
     </div>
   );
@@ -734,10 +784,7 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
         <PencilIcon />
       </button>
       {(p.status === 'idea' || p.status === 'ready' || p.status === 'paused') && (
-        <div
-          className="flex flex-col gap-1.5"
-          style={{ padding: '12px 0', borderBottom: '1px solid var(--divider)' }}
-        >
+        <div className="row-line flex flex-col gap-1.5" style={{ padding: '12px 0' }}>
           <span className="label-caps flex items-center gap-1.5" style={{ fontSize: 11 }}>
             Projet complet ?
             <InfoTip>
@@ -818,6 +865,7 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
         ) : (
           <span style={{ color: 'var(--text-faint)' }}>Non planifié</span>
         ),
+        'dates',
       )}
       {row(
         'Objectif',
@@ -828,6 +876,7 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
         ) : (
           <span style={{ color: 'var(--text-faint)' }}>Hors objectif</span>
         ),
+        'objective',
       )}
       {row(
         'Groupes',
@@ -847,13 +896,12 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
         </span>,
       )}
       {p.recurrence &&
-        row('Récurrence', <span>↻ {RECURRENCE_LABEL[p.recurrence]} · recréé à la fin du projet</span>)}
-      {row(
-        'Importance',
-        <span style={{ color: p.importance === 'high' ? 'var(--late-text)' : undefined }}>
-          {IMPORTANCE_LABEL[p.importance]}
-        </span>,
-      )}
+        row(
+          'Récurrence',
+          <span>{RECURRENCE_LABEL[p.recurrence]} · recréé à la fin du projet</span>,
+          'recurrence',
+        )}
+      {row('Importance', IMPORTANCE_LABEL[p.importance], p.importance)}
       {row(
         'Organisation',
         <span>
@@ -861,6 +909,7 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
           {p.isFree ? ' · libre dans le chemin' : ''}
           {p.monthFlag ? ` · projet du mois (${p.monthFlag})` : ''}
         </span>,
+        p.sequenceMode,
       )}
     </section>
   );
@@ -953,6 +1002,16 @@ function ProjectActions({ p }: { p: ProjectDetail }) {
   );
 }
 
+/** A titled group of fields in an edit panel (same look as the task drawer sections). */
+function FormSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 pt-3" style={{ borderTop: '1px solid var(--border)' }}>
+      <div className="label-caps">{title}</div>
+      {children}
+    </div>
+  );
+}
+
 /** « Modifier le projet »: every editable field in one dialog (description is edited in place under the title). */
 function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
@@ -1017,7 +1076,8 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
     toast: 'Projet supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
-  const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' };
+  const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' };
+  const three = { gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))' };
   return (
     <Panel open={open} onClose={close} onCancel={onClose} title="Modifier le projet" hint={SAVE_HINT}>
       <Field label="Titre">
@@ -1033,27 +1093,87 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
           placeholder="ex. Contrat d'installation signé"
         />
       </Field>
-      <div className="grid gap-3" style={two}>
-        <Field label="Début">
-          <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
-        </Field>
-        <Field
-          label="Fin"
-          info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
-        >
-          <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
-        </Field>
-      </div>
-      <div className="grid gap-3" style={two}>
-        <Field label="Objectif">
-          <SearchSelect
-            value={f.objectiveId}
-            onChange={(v) => set('objectiveId', v)}
-            emptyLabel="Hors objectif"
-            ariaLabel="Objectif"
-            options={(objectives.data ?? []).map((o) => ({ value: o.id, label: o.title, hint: o.quarter }))}
-          />
-        </Field>
+
+      <FormSection title="Rattachement et priorité">
+        <div className="grid gap-3" style={two}>
+          <Field label="Objectif">
+            <SearchSelect
+              value={f.objectiveId}
+              onChange={(v) => set('objectiveId', v)}
+              emptyLabel="Hors objectif"
+              ariaLabel="Objectif"
+              options={(objectives.data ?? []).map((o) => ({ value: o.id, label: o.title, hint: o.quarter }))}
+            />
+          </Field>
+          <Field
+            label="Importance"
+            info="Priorité propre au projet, indépendante du domaine : Haute ×1,5, Normale ×1, Basse ×0,5 sur la valeur du score. Un projet Santé « basse » peut ainsi passer après un projet Famille « haute »."
+          >
+            <select
+              value={f.importance}
+              onChange={(e) => set('importance', e.target.value as typeof f.importance)}
+            >
+              <option value="high">Haute</option>
+              <option value="normal">Normale</option>
+              <option value="low">Basse</option>
+            </select>
+          </Field>
+        </div>
+        <div className="field">
+          <span className="flex items-center gap-1.5">
+            Groupes
+            <InfoTip>Au moins un groupe. Les domaines du projet viennent de ses groupes.</InfoTip>
+          </span>
+          <GroupPicker value={groupIds} onChange={setGroupIds} />
+        </div>
+        {domains.length > 1 && (
+          <Field
+            label="Domaine principal"
+            info="Le domaine principal donne sa couleur au projet et pèse le plus dans son score : son poids compte en entier, celui des autres domaines pour moitié. C'est aussi lui qui reçoit les heures du projet dans Ma semaine et Planifier (les rapports comptent tous les domaines servis)."
+          >
+            <select
+              value={domains.includes(primary) ? primary : domains[0]}
+              onChange={(e) => setPrimary(e.target.value)}
+            >
+              {domains.map((d) => (
+                <option key={d} value={d}>
+                  {dl.name(d)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+      </FormSection>
+
+      <FormSection title="Calendrier">
+        <div className="grid gap-3" style={three}>
+          <Field label="Début">
+            <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
+          </Field>
+          <Field
+            label="Fin"
+            info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
+          >
+            <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+          </Field>
+          <Field
+            label="Récurrence"
+            info="Projet qui revient (compta du mois, entretien annuel…) : une fois terminé, Mémento le recrée avec ses tâches (toutes à faire) et le prévoit pour la période suivante. Pour arrêter, retire la récurrence sur la nouvelle occurrence."
+          >
+            <select
+              value={f.recurrence}
+              onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+            >
+              <option value="">Aucune</option>
+              <option value="monthly">Chaque mois</option>
+              <option value="quarterly">Chaque trimestre</option>
+              <option value="yearly">Chaque année</option>
+            </select>
+          </Field>
+        </div>
+      </FormSection>
+
+      <FormSection title="Organisation">
         <Field
           label="Enchaînement des tâches"
           info="Séquentiel : une tâche attend la précédente. Parallèle : toutes les tâches sont disponibles."
@@ -1066,61 +1186,13 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
             <option value="parallel">Parallèle</option>
           </select>
         </Field>
-      </div>
-      <Field
-        label="Importance"
-        info="Priorité propre au projet, indépendante du domaine : Basse ×0,5, Normale ×1, Haute ×1,5 sur la valeur du score. Un projet Santé « basse » peut ainsi passer après un projet Famille « haute »."
-      >
-        <select
-          value={f.importance}
-          onChange={(e) => set('importance', e.target.value as typeof f.importance)}
-        >
-          <option value="low">Basse</option>
-          <option value="normal">Normale</option>
-          <option value="high">Haute</option>
-        </select>
-      </Field>
-      <Field
-        label="Récurrence"
-        info="Projet qui revient (compta du mois, entretien annuel…) : une fois terminé, Mémento le recrée avec ses tâches (toutes à faire) et le prévoit pour la période suivante. Pour arrêter, retire la récurrence sur la nouvelle occurrence."
-      >
-        <select
-          value={f.recurrence}
-          onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
-        >
-          <option value="">Aucune</option>
-          <option value="monthly">Chaque mois</option>
-          <option value="quarterly">Chaque trimestre</option>
-          <option value="yearly">Chaque année</option>
-        </select>
-      </Field>
-      <div className="flex flex-col gap-2">
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} />
           Libre dans le chemin de l'objectif (n'attend pas les projets placés avant lui)
         </label>
-      </div>
-      <div className="field">
-        <span className="flex items-center gap-1.5">
-          Groupes
-          <InfoTip>Au moins un groupe. Les domaines du projet viennent de ses groupes.</InfoTip>
-        </span>
-        <GroupPicker value={groupIds} onChange={setGroupIds} />
-      </div>
-      {domains.length > 1 && (
-        <Field label="Domaine principal (couleur)">
-          <select
-            value={domains.includes(primary) ? primary : domains[0]}
-            onChange={(e) => setPrimary(e.target.value)}
-          >
-            {domains.map((d) => (
-              <option key={d} value={d}>
-                {dl.name(d)}
-              </option>
-            ))}
-          </select>
-        </Field>
-      )}
+      </FormSection>
+
+      <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
       <div
         className="flex flex-wrap gap-2 items-center pt-3"
         style={{ borderTop: '1px solid var(--border)' }}
@@ -1157,7 +1229,6 @@ type IdeaSort = 'title' | 'domain' | 'group' | 'createdAt';
 
 export function IdeasPage() {
   const [domains, setDomains] = useState<string[]>([]);
-  const [sort, setSort] = useState<{ key: IdeaSort; desc: boolean }>({ key: 'createdAt', desc: false });
   const [creating, setCreating] = useState(false);
   const q = useQuery({ queryKey: ['ideas'], queryFn: () => get<Project[]>('/ideas') });
   const dl = useDomainLookup();
@@ -1175,18 +1246,11 @@ export function IdeasPage() {
     group: (a, b) => groupName(a).localeCompare(groupName(b)),
     createdAt: (a, b) => a.createdAt.localeCompare(b.createdAt),
   };
-  const rows = (q.data ?? [])
-    .filter((p) => !domains.length || p.domainIds.some((d) => domains.includes(d)))
-    .sort((a, b) => (sort.desc ? -1 : 1) * cmp[sort.key](a, b) || a.title.localeCompare(b.title));
-  const th = (key: IdeaSort, label: string) => (
-    <th
-      className="text-left font-semibold text-[12px] uppercase tracking-wide py-2 px-3 cursor-pointer whitespace-nowrap select-none"
-      style={{ color: 'var(--text-muted)' }}
-      aria-sort={sort.key === key ? (sort.desc ? 'descending' : 'ascending') : undefined}
-      onClick={() => setSort((s) => ({ key, desc: s.key === key ? !s.desc : false }))}
-    >
-      {label} {sort.key === key ? (sort.desc ? '↑' : '↓') : ''}
-    </th>
+  const { sorted: rows, th } = useTableSort(
+    (q.data ?? []).filter((p) => !domains.length || p.domainIds.some((d) => domains.includes(d))),
+    cmp,
+    'createdAt',
+    (a, b) => a.title.localeCompare(b.title),
   );
   return (
     <div className="flex flex-col gap-6">
@@ -1211,12 +1275,12 @@ export function IdeasPage() {
               {th('domain', 'Domaine')}
               {th('group', 'Groupe')}
               {th('createdAt', 'Depuis')}
-              <th />
+              <th aria-label="Actions" />
             </tr>
           </thead>
           <tbody>
             {rows.map((p) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid var(--divider)' }}>
+              <tr className="row-line" key={p.id}>
                 <td className="py-2.5 px-3">
                   <Link to="/projets/$id" params={{ id: p.id }} className="font-medium">
                     {p.title}
