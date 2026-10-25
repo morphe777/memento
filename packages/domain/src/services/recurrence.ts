@@ -5,6 +5,7 @@
 import { and, asc, eq, inArray, schema } from '@memento/db';
 import { type Ctx, ctxNow, ctxNowIso } from '../context.ts';
 import { DomainError } from '../errors.ts';
+import { OBJECTIVE_RECURRENCE_MONTHS } from '../rules/recurrence.ts';
 import { addMonths, monthOf, parisDate, quarterOf, shiftMonth } from '../time.ts';
 import { createProject, getProject, getProjectRow, promoteProject, setProjectMonth } from './projects.ts';
 import { createObjective, getObjective } from './referential.ts';
@@ -13,7 +14,6 @@ import { createTask } from './tasks.ts';
 const { project, projectGroup, task, objective } = schema;
 
 export const PROJECT_RECURRENCE_MONTHS = { monthly: 1, quarterly: 3, yearly: 12 } as const;
-export const OBJECTIVE_RECURRENCE_MONTHS = { quarterly: 3, yearly: 12 } as const;
 const OPEN_OBJECTIVE = ['active', 'paused'];
 
 /** The open occurrence that renews this objective, if any (to re-attach renewed projects). */

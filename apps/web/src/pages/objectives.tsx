@@ -981,6 +981,47 @@ function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][n
   );
 }
 
+/**
+ * D-65: upcoming occurrence of a recurring objective (not created yet): a dashed, muted card so that the
+ * load recurrences will bring stays visible when planning ahead. Not draggable; links to the current one.
+ */
+function MapUpcoming({
+  o,
+  deadline,
+}: {
+  o: ObjectivesMap['lanes'][number]['objectives'][number];
+  deadline: string;
+}) {
+  const dl = useDomainLookup();
+  return (
+    <Link
+      to="/objectifs/$id"
+      params={{ id: o.id }}
+      className="flex flex-col gap-1 rounded-[14px] hover:no-underline"
+      style={{
+        padding: '10px 14px 10px 12px',
+        border: '1.5px dashed var(--btn-border)',
+        borderLeft: `4px solid ${dl.color(o.domainId)}`,
+        opacity: 0.75,
+      }}
+      title="Occurrence à venir : créée quand l'actuelle sera close"
+    >
+      <span className="flex items-start justify-between gap-2">
+        <span className="text-[14px] font-semibold leading-snug" style={{ color: 'var(--text-2)' }}>
+          {o.title}
+        </span>
+        <span aria-hidden style={{ color: 'var(--text-faint)' }}>
+          ↻
+        </span>
+      </span>
+      <span className="flex justify-between gap-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        <span>À venir · {o.recurrence === 'yearly' ? 'chaque année' : 'chaque trimestre'}</span>
+        <span className="mono">{fmtDate(deadline)}</span>
+      </span>
+    </Link>
+  );
+}
+
 /** A (lane, quarter) cell of the map: drop target for an objective card (only the quarter changes). */
 function QuarterCell({ id, children }: { id: string; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
@@ -1025,6 +1066,15 @@ function ObjectivesMapView({
     if (o && quarter && quarter !== o.quarter) move.mutate({ id: o.id, quarter });
   };
   if (!lanes.length) return <Empty>Aucun objectif pour l'instant.</Empty>;
+  /** Objectives of a quarter, recurring ones to come included (D-65): the load at a glance. */
+  const loadLabel = (qt: string) => {
+    const all = lanes.flatMap((l) => l.objectives);
+    const real = all.filter((o) => o.quarter === qt).length;
+    const upcoming = all.filter((o) => o.upcoming.some((u) => u.quarter === qt)).length;
+    const n = real + upcoming;
+    if (!n) return 'aucun objectif';
+    return `${n} objectif${n > 1 ? 's' : ''}${upcoming ? ` dont ${upcoming} à venir` : ''}`;
+  };
   const cols = `220px repeat(${Math.max(1, quarters.length)}, minmax(280px, 1fr))`;
   const legend: [ReactNode, string][] = [
     [<PathStatus key="d" p={{ status: 'done' } as never} />, 'terminé'],
@@ -1064,6 +1114,9 @@ function ObjectivesMapView({
               >
                 {quarterLabel(qt)}
                 {qt === currentQuarter ? ' · en cours' : qt < currentQuarter ? ' · passé' : ''}
+                <span className="block normal-case font-normal" style={{ letterSpacing: 0 }}>
+                  {loadLabel(qt)}
+                </span>
               </div>
             ))}
             {lanes.map((l) => (
@@ -1109,6 +1162,11 @@ function ObjectivesMapView({
                       .map((o) => (
                         <MapObjective key={o.id} o={o} />
                       ))}
+                    {l.objectives.flatMap((o) =>
+                      o.upcoming
+                        .filter((u) => u.quarter === qt)
+                        .map((u) => <MapUpcoming key={`${o.id}|${qt}`} o={o} deadline={u.deadline} />),
+                    )}
                   </QuarterCell>
                 ))}
               </Fragment>

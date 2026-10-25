@@ -898,6 +898,28 @@ describe('D-61 temps réellement passé', () => {
   });
 });
 
+describe('D-65 occurrences à venir sur la carte', () => {
+  it('a recurring objective shows its upcoming quarters until it is renewed', () => {
+    const ctx = makeCtx(); // 23 Oct 2026: map shows 2026-Q4 → 2027-Q3
+    const o = createObjective(ctx, { title: 'Bilan santé', deadline: '2026-12-15', recurrence: 'quarterly' });
+    createObjective(ctx, { title: 'Bilan annuel', deadline: '2026-12-20', recurrence: 'yearly' });
+    const find = (title: string) =>
+      getObjectivesMap(ctx)
+        .lanes.flatMap((l) => l.objectives)
+        .find((x) => x.title === title && x.status === 'active')!;
+    expect(find('Bilan santé').upcoming).toEqual([
+      { quarter: '2027-Q1', deadline: '2027-03-15' },
+      { quarter: '2027-Q2', deadline: '2027-06-15' },
+      { quarter: '2027-Q3', deadline: '2027-09-15' },
+    ]);
+    expect(find('Bilan annuel').upcoming).toEqual([]); // next one is in 2027-Q4, beyond the map
+    updateObjective(ctx, o.id, { status: 'achieved' }); // renewed: the projection moves to the new occurrence
+    const next = find('Bilan santé');
+    expect(next.quarter).toBe('2027-Q1');
+    expect(next.upcoming.map((u) => u.quarter)).toEqual(['2027-Q2', '2027-Q3']);
+  });
+});
+
 describe('D-62 récurrence', () => {
   it('a completed recurring project is renewed with its tasks, planned for the next month', () => {
     const ctx = makeCtx();

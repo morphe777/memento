@@ -13,6 +13,7 @@ import {
   readiness,
   resolveProjectDomains,
 } from '../rules/projects.ts';
+import { upcomingObjectiveOccurrences } from '../rules/recurrence.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
 import { withTemplate } from '../settings.ts';
 import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
@@ -613,9 +614,26 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
     );
   };
   const metas = ctx.db.select().from(schema.metaObjective).orderBy(asc(schema.metaObjective.createdAt)).all();
+  // Rolling year (user request 25/10/2026): the current quarter and the next three are always shown, to plan
+  // ahead; any other quarter holding an objective (late, or further away) is shown too.
+  const current = quarterOf(parisDate(ctxNow(ctx)));
+  const rolling = [0, 1, 2, 3].map((n) => shiftQuarter(current, n));
+  const quarters = [...new Set([...rolling, ...objectives.map((o) => o.quarter)])].sort();
+  // D-65: a recurring open objective that has not been renewed yet shows its upcoming occurrences.
+  const renewed = new Set(
+    ctx.db
+      .select({ previousId: objective.previousId })
+      .from(objective)
+      .all()
+      .map((r) => r.previousId),
+  );
   const withPath = objectives.map((o) => {
     const path = getObjectivePath(ctx, o.id).filter((p) => p.status !== 'abandoned');
-    return { ...o, domainId: dominant(path), path };
+    const upcoming =
+      OPEN_OBJECTIVE.has(o.status) && !renewed.has(o.id)
+        ? upcomingObjectiveOccurrences(o, quarters[quarters.length - 1])
+        : [];
+    return { ...o, domainId: dominant(path), path, upcoming };
   });
   const lanes = [
     ...metas
@@ -631,10 +649,5 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
       ),
     },
   ].filter((l) => l.meta || l.objectives.length);
-  // Rolling year (user request 25/10/2026): the current quarter and the next three are always shown, to plan
-  // ahead; any other quarter holding an objective (late, or further away) is shown too.
-  const current = quarterOf(parisDate(ctxNow(ctx)));
-  const rolling = [0, 1, 2, 3].map((n) => shiftQuarter(current, n));
-  const quarters = [...new Set([...rolling, ...withPath.map((o) => o.quarter)])].sort();
   return { quarters, currentQuarter: current, lanes };
 }
