@@ -276,6 +276,28 @@ export async function buildApp(opts: AppOptions) {
           return D.proposeWithAi(c, req.body.scope, req.body.period, llm);
         },
       );
+      // D-70: « Découper avec l'IA »: proposed tasks of a project (nothing created; POST /tasks/batch adds them).
+      r.post(
+        '/ai/breakdown',
+        { schema: { ...tag('IA'), body: D.aiBreakdownBody }, preHandler: userOnly },
+        async (req) => {
+          const c = ctx(req);
+          const s = D.getSettings(c);
+          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+          return D.breakdownWithAi(c, req.body, llm);
+        },
+      );
+      // D-68: « Rédiger avec l'IA »: a description proposal, returned to the editor (nothing saved).
+      r.post(
+        '/ai/describe',
+        { schema: { ...tag('IA'), body: D.aiDescribeBody }, preHandler: userOnly },
+        async (req) => {
+          const c = ctx(req);
+          const s = D.getSettings(c);
+          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+          return D.describeWithAi(c, req.body, llm);
+        },
+      );
       // D-57: wipe objectives, projects and tasks (configuration kept). A SQLite backup is taken first.
       r.post(
         '/purge',
@@ -368,6 +390,11 @@ export async function buildApp(opts: AppOptions) {
 
       // ---------- Meta-objectives & objectives ----------
       r.get('/meta-objectives', { schema: tag('Objectifs') }, async (req) => D.listMetaObjectives(ctx(req)));
+      r.post(
+        '/meta-objectives/reorder',
+        { schema: { ...tag('Objectifs'), body: D.reorderBody } },
+        async (req) => D.reorderMetaObjectives(ctx(req), req.body.ids),
+      );
       r.get('/meta-objectives/:id', { schema: { ...tag('Objectifs'), params: D.idParam } }, async (req) =>
         D.getMetaObjective(ctx(req), req.params.id),
       );
@@ -609,6 +636,12 @@ export async function buildApp(opts: AppOptions) {
         '/objectives/:id/quarter',
         { schema: { ...tag('Objectifs'), params: D.idParam, body: D.objectiveQuarterBody } },
         async (req) => D.setObjectiveQuarter(ctx(req), req.params.id, req.body.quarter),
+      );
+      // D-69: map « Réorganiser »: drop an objective in a (meta-objective, quarter) cell at a place.
+      r.post(
+        '/objectives/:id/place',
+        { schema: { ...tag('Objectifs'), params: D.idParam, body: D.objectivePlaceBody } },
+        async (req) => D.placeObjective(ctx(req), req.params.id, req.body),
       );
       r.get(
         '/weeks/:isoWeek/execution',

@@ -77,6 +77,12 @@ const projectFields = {
 };
 export const quarterKey = z.string().regex(/^\d{4}-Q[1-4]$/);
 export const objectiveQuarterBody = z.object({ quarter: quarterKey });
+/** D-69: drop on the map — target cell and its wanted order. */
+export const objectivePlaceBody = z.object({
+  metaObjectiveId: uuid.nullable(),
+  quarter: quarterKey,
+  ids: z.array(uuid).max(200),
+});
 export const monthKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 /** D-42: choose (month) or drop (null) a project for a month: Planifier › Mois. */
 export const projectMonthBody = z.object({ month: monthKey.nullable() });

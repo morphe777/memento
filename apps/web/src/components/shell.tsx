@@ -15,6 +15,7 @@ import {
   useToasts,
 } from '../lib/hooks.ts';
 import type { SearchResult } from '../lib/types.ts';
+import { CaptureSheet, PlusIcon } from './capture.tsx';
 import { DomainDot } from './ui.tsx';
 
 const NAV: { section: string; items: { to: string; label: string }[] }[] = [
@@ -57,6 +58,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const phone = useIsPhone();
   const theme = useResolvedTheme();
   const [searchOpen, setSearchOpen] = useState(false);
+  // D-68: ?capturer=1 (iOS Shortcut, home-screen bookmark) opens the capture sheet on any page.
+  const [captureOpen, setCaptureOpen] = useState(
+    () => new URLSearchParams(window.location.search).get('capturer') === '1',
+  );
   const settings = useSettings();
   useEffect(() => {
     const c = settings.data?.['experience.badge_color'];
@@ -81,7 +86,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
-      {!phone && <Sidebar onSearch={() => setSearchOpen(true)} />}
+      {!phone && <Sidebar onSearch={() => setSearchOpen(true)} onCapture={() => setCaptureOpen(true)} />}
       <div className="flex-1 min-w-0 flex flex-col">
         {phone && (
           <div
@@ -114,13 +119,32 @@ export function AppShell({ children }: { children: ReactNode }) {
         </main>
       </div>
       {phone && <BottomTabs />}
+      {phone && (
+        <button
+          type="button"
+          className="fixed z-30 grid place-items-center rounded-full border-0 shadow-lg"
+          aria-label="Capturer dans l’Inbox"
+          onClick={() => setCaptureOpen(true)}
+          style={{
+            right: 16,
+            bottom: 'calc(env(safe-area-inset-bottom) + 84px)',
+            width: 56,
+            height: 56,
+            background: 'var(--inverse-bg)',
+            color: 'var(--inverse-text)',
+          }}
+        >
+          <PlusIcon />
+        </button>
+      )}
+      <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       <Toasts />
     </div>
   );
 }
 
-function Sidebar({ onSearch }: { onSearch: () => void }) {
+function Sidebar({ onSearch, onCapture }: { onSearch: () => void; onCapture: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const me = useMe();
   const groups = useGroups();
@@ -153,6 +177,9 @@ function Sidebar({ onSearch }: { onSearch: () => void }) {
       >
         <span>Rechercher</span>
         <span className="mono text-[11px]">⌘K</span>
+      </button>
+      <button type="button" className="btn btn-sm justify-start gap-1.5" onClick={onCapture}>
+        <span aria-hidden>+</span> Capturer dans l’Inbox
       </button>
       {NAV.map((s) => (
         <div key={s.section} className="flex flex-col gap-0.5">
@@ -587,10 +614,11 @@ function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }
 
 function Toasts() {
   const toasts = useToasts();
+  const phone = useIsPhone();
   return (
     <div
       className="fixed z-[60] flex flex-col gap-2"
-      style={{ right: 16, bottom: 'calc(env(safe-area-inset-bottom) + 88px)' }}
+      style={{ right: 16, bottom: `calc(env(safe-area-inset-bottom) + ${phone ? 152 : 88}px)` }}
       aria-live="polite"
     >
       {toasts.map((t) => (

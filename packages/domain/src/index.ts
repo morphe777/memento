@@ -1,3 +1,5 @@
+export * from './ai/breakdown.ts';
+export * from './ai/describe.ts';
 export * from './ai/prompts.ts';
 export * from './ai/propose.ts';
 export * from './ai/providers.ts';

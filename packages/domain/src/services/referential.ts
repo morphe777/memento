@@ -190,7 +190,25 @@ export function deleteGroup(ctx: Ctx, id: string) {
 // ---------- Meta-objectives ----------
 
 export const listMetaObjectives = (ctx: Ctx) =>
-  ctx.db.select().from(metaObjective).orderBy(asc(metaObjective.createdAt)).all();
+  ctx.db
+    .select()
+    .from(metaObjective)
+    .orderBy(asc(metaObjective.position), asc(metaObjective.createdAt))
+    .all();
+
+/** D-69: order of the meta-objectives (lanes of the map), chosen by the user. Ids not given keep their place after. */
+export function reorderMetaObjectives(ctx: Ctx, ids: string[]) {
+  return tx(ctx, () => {
+    const all = listMetaObjectives(ctx);
+    for (const id of ids) getMetaObjective(ctx, id);
+    const order = [...ids, ...all.map((m) => m.id).filter((id) => !ids.includes(id))];
+    order.forEach((id, i) => {
+      ctx.db.update(metaObjective).set({ position: i }).where(eq(metaObjective.id, id)).run();
+    });
+    audit(ctx, 'meta_objective', 'order', 'reorder', { ids: all.map((m) => m.id) }, { ids: order });
+    return listMetaObjectives(ctx);
+  });
+}
 export const getMetaObjective = (ctx: Ctx, id: string) =>
   assertFound(
     ctx.db.select().from(metaObjective).where(eq(metaObjective.id, id)).get(),

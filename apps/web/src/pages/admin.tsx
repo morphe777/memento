@@ -282,6 +282,8 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.week',
       'ai.prompt.month',
       'ai.prompt.quarter',
+      'ai.prompt.describe',
+      'ai.prompt.breakdown',
     ],
   };
   // D-66: on the IA tab, a typed key is saved with the rest (its own endpoint, never read back).
@@ -1053,6 +1055,16 @@ const AI_PROMPTS = [
   ['ai.prompt.week', 'Prompt Semaine', 'Comment choisir les tâches de la semaine.'],
   ['ai.prompt.month', 'Prompt Mois', 'Comment choisir les projets du mois.'],
   ['ai.prompt.quarter', 'Prompt Trimestre', 'Comment choisir les objectifs du trimestre.'],
+  [
+    'ai.prompt.describe',
+    'Prompt Description',
+    "« Rédiger avec l'IA » dans les descriptions : ton, structure, ce qu'elle ne doit pas inventer.",
+  ],
+  [
+    'ai.prompt.breakdown',
+    'Prompt Découpage',
+    "« Découper avec l'IA » sur un projet : nombre et taille des tâches, quand poser des questions.",
+  ],
 ] as const;
 
 /** D-58 / D-66: Configuration › IA. Provider, URL, API key and model; the key is written, never read back. */

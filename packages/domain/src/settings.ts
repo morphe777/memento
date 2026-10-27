@@ -47,6 +47,8 @@ export const settingsSchema = z.object({
   'ai.prompt.week': z.string().trim().min(1).max(8000),
   'ai.prompt.month': z.string().trim().min(1).max(8000),
   'ai.prompt.quarter': z.string().trim().min(1).max(8000),
+  'ai.prompt.describe': z.string().trim().min(1).max(8000),
+  'ai.prompt.breakdown': z.string().trim().min(1).max(8000),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -88,6 +90,8 @@ export const DEFAULT_SETTINGS: Settings = {
   'ai.prompt.week': DEFAULT_AI_PROMPTS.week,
   'ai.prompt.month': DEFAULT_AI_PROMPTS.month,
   'ai.prompt.quarter': DEFAULT_AI_PROMPTS.quarter,
+  'ai.prompt.describe': DEFAULT_AI_PROMPTS.describe, // D-68: « Rédiger avec l'IA »
+  'ai.prompt.breakdown': DEFAULT_AI_PROMPTS.breakdown, // D-70: « Découper avec l'IA »
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

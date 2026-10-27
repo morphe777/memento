@@ -347,13 +347,7 @@ export function QuickAdd({
         style={{ flex: '0 1 112px', minWidth: 0 }}
       >
         <option value="">Durée ?</option>
-        <option value="5">5 min</option>
-        <option value="15">15 min</option>
-        <option value="5">5 min</option>
-        <option value="15">15 min</option>
-        <option value="30">30 min</option>
-        <option value="60">1 h</option>
-        <option value="120">2 h</option>
+        <DurationOptions />
       </select>
       {withSchedule && (
         <>
@@ -386,6 +380,18 @@ export function QuickAdd({
   );
 }
 
+/** RB-03 (D-67): the allowed durations, one list for every duration select (the domain refuses the others). */
+export const DURATIONS = [5, 15, 30, 60, 120] as const satisfies readonly TaskDuration[];
+
+export function DurationOptions({ long = '' }: { long?: string }) {
+  return DURATIONS.map((d) => (
+    <option key={d} value={d}>
+      {fmtMin(d)}
+      {d === 120 ? long : ''}
+    </option>
+  ));
+}
+
 export function DurationSelect({
   value,
   onChange,
@@ -396,9 +402,7 @@ export function DurationSelect({
   return (
     <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
       <option value="">Non estimée</option>
-      <option value="30">30 min</option>
-      <option value="60">1 h</option>
-      <option value="120">2 h (déconseillé)</option>
+      <DurationOptions long=" (déconseillé)" />
     </select>
   );
 }
@@ -502,6 +506,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
       </Field>
       <DescriptionBlock
         text={t.description}
+        ai={{ kind: 'task', id: t.id }}
         lines={8}
         saving={saveDescription.isPending}
         onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}

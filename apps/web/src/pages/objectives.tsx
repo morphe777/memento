@@ -1,11 +1,18 @@
 // Objectifs (V-01), Objectif = chemin (V-02), Domaines / Domaine (V-15).
-import { closestCenter, DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
+import {
+  type CollisionDetection,
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  pointerWithin,
+  useDroppable,
+} from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
-import { DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
+import { AiDescribe, DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { LockIcon, ResourceList, Resources, useSortSensors } from '../components/tasks.tsx';
 import {
@@ -153,6 +160,7 @@ export function ObjectivesPage() {
               {meta && (
                 <DescriptionBlock
                   text={meta.description}
+                  ai={{ kind: 'meta_objective', id: meta.id }}
                   lines={3}
                   emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
                   onSave={(description, done) =>
@@ -379,6 +387,11 @@ function ObjectivePanel({
       </Field>
       {!objective && (
         <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
+          <AiDescribe
+            request={{ kind: 'objective', title: f.title, parentId: f.metaObjectiveId || undefined }}
+            current={f.description}
+            onUse={(v) => set('description', v)}
+          />
           <textarea
             value={f.description}
             onChange={(e) => set('description', e.target.value)}
@@ -492,6 +505,11 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
       </div>
       {!meta && (
         <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
+          <AiDescribe
+            request={{ kind: 'meta_objective', title }}
+            current={description}
+            onUse={setDescription}
+          />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
@@ -668,6 +686,7 @@ export function ObjectivePage({ id }: { id: string }) {
       </div>
       <DescriptionBlock
         text={o.data.description}
+        ai={{ kind: 'objective', id: o.data.id }}
         lines={16}
         saving={saveDescription.isPending}
         emptyLabel="Pas encore de description : pourquoi cet objectif, ce que « réussi » veut dire, le contexte."
@@ -832,6 +851,7 @@ export function DomainPage({ id }: { id: string }) {
       </div>
       <DescriptionBlock
         text={d.description}
+        ai={{ kind: 'domain', id: d.id }}
         lines={6}
         saving={saveDescription.isPending}
         emptyLabel="Pas encore de description : ce qui entre dans ce domaine, et ce qui n'y entre pas. L'IA s'en sert pour classer les projets."
@@ -889,20 +909,31 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
   return <span title="Idée" style={{ ...base, border: '1.5px dashed var(--text-ghost)' }} />;
 }
 
-function MapObjective({ o }: { o: ObjectivesMap['lanes'][number]['objectives'][number] }) {
+function MapObjective({
+  o,
+  reorg = false,
+}: {
+  o: ObjectivesMap['lanes'][number]['objectives'][number];
+  reorg?: boolean;
+}) {
   const dl = useDomainLookup();
-  // Drag the card to another quarter column (user request 25/10/2026); links still work on a simple click.
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: o.id });
+  // D-69: only in « Réorganiser » mode the card moves (another quarter, another meta-objective, another
+  // place in its cell): a missed click can no longer move it.
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: o.id,
+    disabled: !reorg,
+  });
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className="card flex flex-col gap-2 cursor-grab"
+      {...(reorg ? { ...attributes, ...listeners } : {})}
+      className={`card flex flex-col gap-2${reorg ? ' cursor-grab' : ''}`}
       style={{
         padding: '12px 14px 12px 12px',
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined,
+        outline: reorg ? '1.5px dashed var(--btn-border)' : undefined,
+        transform: CSS.Translate.toString(transform),
+        transition,
         zIndex: isDragging ? 30 : undefined,
         position: 'relative',
         boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.18)' : undefined,
@@ -1022,8 +1053,8 @@ function MapUpcoming({
   );
 }
 
-/** A (lane, quarter) cell of the map: drop target for an objective card (only the quarter changes). */
-function QuarterCell({ id, children }: { id: string; children: ReactNode }) {
+/** A (lane, quarter) cell of the map: drop target for an objective card, sortable inside (D-69). */
+function QuarterCell({ id, ids, children }: { id: string; ids: string[]; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div
@@ -1036,7 +1067,9 @@ function QuarterCell({ id, children }: { id: string; children: ReactNode }) {
         outline: isOver ? '2px dashed var(--text-ghost)' : undefined,
       }}
     >
-      {children}
+      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+        {children}
+      </SortableContext>
     </div>
   );
 }
@@ -1053,17 +1086,68 @@ function ObjectivesMapView({
     queryFn: () => get<ObjectivesMap>(`/objectives/map${includeClosed ? '?includeClosed=true' : ''}`),
   });
   const sensors = useSortSensors();
-  const move = useAction(
-    ({ id, quarter }: { id: string; quarter: string }) => post(`/objectives/${id}/quarter`, { quarter }),
-    { toast: 'Objectif déplacé (deadline ramenée dans le trimestre si besoin).' },
+  const [reorg, setReorg] = useState(false);
+  const place = useAction(
+    ({ id, ...body }: { id: string; metaObjectiveId: string | null; quarter: string; ids: string[] }) =>
+      post(`/objectives/${id}/place`, body),
   );
+  const reorderMetas = useAction((ids: string[]) => post('/meta-objectives/reorder', { ids }));
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
   const { quarters, lanes, currentQuarter } = q.data;
+  const metaKey = (id: string | null | undefined) => id ?? 'none';
+  const cellIds = (meta: string, qt: string) =>
+    (lanes.find((l) => metaKey(l.meta?.id) === meta)?.objectives ?? [])
+      .filter((o) => o.quarter === qt)
+      .map((o) => o.id);
+  const laneIds = lanes.flatMap((l) => (l.meta ? [`lane:${l.meta.id}`] : []));
+  /** Lanes only collide with lanes, cards with cards and cells (the card under the pointer wins). */
+  const collision: CollisionDetection = (args) => {
+    const lane = String(args.active.id).startsWith('lane:');
+    const droppableContainers = args.droppableContainers.filter(
+      (c) => String(c.id).startsWith('lane:') === lane,
+    );
+    const within = pointerWithin({ ...args, droppableContainers });
+    if (within.length)
+      return [...within].sort(
+        (a, b) => Number(String(a.id).includes('|')) - Number(String(b.id).includes('|')),
+      );
+    return closestCenter({ ...args, droppableContainers });
+  };
   const onDragEnd = (e: DragEndEvent) => {
-    const quarter = (e.over?.id as string | undefined)?.split('|')[1];
-    const o = lanes.flatMap((l) => l.objectives).find((x) => x.id === e.active.id);
-    if (o && quarter && quarter !== o.quarter) move.mutate({ id: o.id, quarter });
+    const active = String(e.active.id);
+    const over = e.over ? String(e.over.id) : null;
+    if (!over || active === over) return;
+    if (active.startsWith('lane:')) {
+      const from = laneIds.indexOf(active);
+      const to = laneIds.indexOf(over);
+      if (from >= 0 && to >= 0) reorderMetas.mutate(arrayMove(laneIds, from, to).map((x) => x.slice(5)));
+      return;
+    }
+    const o = lanes.flatMap((l) => l.objectives).find((x) => x.id === active);
+    if (!o) return;
+    // Target cell: the cell itself (dropped in its empty part: at the end) or the card it was dropped on.
+    let meta: string;
+    let qt: string;
+    let overCard: string | null = null;
+    if (over.includes('|')) [meta, qt] = over.split('|');
+    else {
+      const target = lanes.flatMap((l) => l.objectives.map((x) => ({ l, x }))).find((t) => t.x.id === over);
+      if (!target) return;
+      meta = metaKey(target.l.meta?.id);
+      qt = target.x.quarter;
+      overCard = over;
+    }
+    const sameCell = meta === metaKey(o.metaObjectiveId) && qt === o.quarter;
+    let ids = cellIds(meta, qt);
+    if (sameCell) {
+      if (!overCard) return;
+      ids = arrayMove(ids, ids.indexOf(active), ids.indexOf(overCard));
+    } else {
+      const at = overCard ? ids.indexOf(overCard) : ids.length;
+      ids = [...ids.slice(0, at), active, ...ids.slice(at)];
+    }
+    place.mutate({ id: active, metaObjectiveId: meta === 'none' ? null : meta, quarter: qt, ids });
   };
   if (!lanes.length) return <Empty>Aucun objectif pour l'instant.</Empty>;
   /** Objectives of a quarter, recurring ones to come included (D-65): the load at a glance. */
@@ -1091,89 +1175,146 @@ function ObjectivesMapView({
   ];
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        {legend.map(([icon, label]) => (
-          <span key={label} className="flex items-center gap-1.5">
-            {icon}
-            {label}
+      <div className="flex flex-wrap items-center gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
+        <button
+          type="button"
+          className={reorg ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
+          onClick={() => setReorg((r) => !r)}
+          aria-pressed={reorg}
+        >
+          {reorg ? 'Terminer' : 'Réorganiser'}
+        </button>
+        {reorg ? (
+          <span>
+            Glisse une carte vers un autre trimestre, un autre méta-objectif ou une autre place ; les
+            méta-objectifs se trient par leur poignée ⠿.
           </span>
-        ))}
+        ) : (
+          legend.map(([icon, label]) => (
+            <span key={label} className="flex items-center gap-1.5">
+              {icon}
+              {label}
+            </span>
+          ))
+        )}
       </div>
-      <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="overflow-x-auto">
-          <div
-            className="grid gap-3"
-            style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
-          >
-            <span />
-            {quarters.map((qt) => (
-              <div
-                key={qt}
-                className="label-caps px-1"
-                style={{ fontSize: 12, opacity: qt < currentQuarter ? 0.6 : 1 }}
-              >
-                {quarterLabel(qt)}
-                {qt === currentQuarter ? ' · en cours' : qt < currentQuarter ? ' · passé' : ''}
-                <span className="block normal-case font-normal" style={{ letterSpacing: 0 }}>
-                  {loadLabel(qt)}
-                </span>
-              </div>
-            ))}
-            {lanes.map((l) => (
-              <Fragment key={l.meta?.id ?? 'none'}>
-                <div className="bin flex flex-col gap-1.5" style={{ padding: '14px 14px 16px' }}>
-                  <div className="flex items-start justify-between gap-1">
-                    {l.meta ? (
-                      <Link
-                        to="/meta-objectifs/$id"
-                        params={{ id: l.meta.id }}
-                        className="text-[16px] font-bold leading-snug"
-                      >
-                        {l.meta.title}
-                      </Link>
-                    ) : (
-                      <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
-                    )}
-                    {l.meta && (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        style={{ width: 28, height: 28 }}
-                        aria-label={`Modifier ${l.meta.title}`}
-                        onClick={() => onEditMeta(l.meta!)}
-                      >
-                        <PencilIcon />
-                      </button>
-                    )}
-                  </div>
-                  {l.meta?.horizonDate && (
-                    <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                      horizon {fmtDate(l.meta.horizonDate)}
-                    </span>
-                  )}
-                  {l.meta && l.meta.status !== 'active' && (
-                    <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
-                  )}
+      <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
+        <SortableContext items={laneIds} strategy={verticalListSortingStrategy}>
+          <div className="overflow-x-auto">
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
+            >
+              <span />
+              {quarters.map((qt) => (
+                <div
+                  key={qt}
+                  className="label-caps px-1"
+                  style={{ fontSize: 12, opacity: qt < currentQuarter ? 0.6 : 1 }}
+                >
+                  {quarterLabel(qt)}
+                  {qt === currentQuarter ? ' · en cours' : qt < currentQuarter ? ' · passé' : ''}
+                  <span className="block normal-case font-normal" style={{ letterSpacing: 0 }}>
+                    {loadLabel(qt)}
+                  </span>
                 </div>
-                {quarters.map((qt) => (
-                  <QuarterCell key={qt} id={`${l.meta?.id ?? 'none'}|${qt}`}>
-                    {l.objectives
-                      .filter((o) => o.quarter === qt)
-                      .map((o) => (
-                        <MapObjective key={o.id} o={o} />
-                      ))}
-                    {l.objectives.flatMap((o) =>
-                      o.upcoming
-                        .filter((u) => u.quarter === qt)
-                        .map((u) => <MapUpcoming key={`${o.id}|${qt}`} o={o} deadline={u.deadline} />),
+              ))}
+              {lanes.map((l) => (
+                <Fragment key={l.meta?.id ?? 'none'}>
+                  <LaneHeader id={l.meta ? `lane:${l.meta.id}` : 'lane-none'} reorg={reorg && !!l.meta}>
+                    <div className="flex items-start justify-between gap-1">
+                      {l.meta ? (
+                        <Link
+                          to="/meta-objectifs/$id"
+                          params={{ id: l.meta.id }}
+                          className="text-[16px] font-bold leading-snug"
+                        >
+                          {l.meta.title}
+                        </Link>
+                      ) : (
+                        <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
+                      )}
+                      {l.meta && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          style={{ width: 28, height: 28 }}
+                          aria-label={`Modifier ${l.meta.title}`}
+                          onClick={() => onEditMeta(l.meta!)}
+                        >
+                          <PencilIcon />
+                        </button>
+                      )}
+                    </div>
+                    {l.meta?.horizonDate && (
+                      <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+                        horizon {fmtDate(l.meta.horizonDate)}
+                      </span>
                     )}
-                  </QuarterCell>
-                ))}
-              </Fragment>
-            ))}
+                    {l.meta && l.meta.status !== 'active' && (
+                      <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
+                    )}
+                  </LaneHeader>
+                  {quarters.map((qt) => (
+                    <QuarterCell
+                      key={qt}
+                      id={`${metaKey(l.meta?.id)}|${qt}`}
+                      ids={cellIds(metaKey(l.meta?.id), qt)}
+                    >
+                      {l.objectives
+                        .filter((o) => o.quarter === qt)
+                        .map((o) => (
+                          <MapObjective key={o.id} o={o} reorg={reorg} />
+                        ))}
+                      {l.objectives.flatMap((o) =>
+                        o.upcoming
+                          .filter((u) => u.quarter === qt)
+                          .map((u) => <MapUpcoming key={`${o.id}|${qt}`} o={o} deadline={u.deadline} />),
+                      )}
+                    </QuarterCell>
+                  ))}
+                </Fragment>
+              ))}
+            </div>
           </div>
-        </div>
+        </SortableContext>
       </DndContext>
+    </div>
+  );
+}
+
+/** D-69: header of a lane; in « Réorganiser » mode a handle ⠿ drags it up or down among the meta-objectives. */
+function LaneHeader({ id, reorg, children }: { id: string; reorg: boolean; children: ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+    disabled: !reorg,
+  });
+  return (
+    <div
+      ref={setNodeRef}
+      className="bin flex gap-2"
+      style={{
+        padding: '14px 14px 16px',
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 30 : undefined,
+        position: 'relative',
+        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.18)' : undefined,
+      }}
+    >
+      {reorg && (
+        <button
+          type="button"
+          className="icon-btn flex-none cursor-grab"
+          style={{ width: 28, height: 28, touchAction: 'none' }}
+          aria-label="Déplacer le méta-objectif"
+          {...attributes}
+          {...listeners}
+        >
+          ⠿
+        </button>
+      )}
+      <div className="flex flex-col gap-1.5 flex-1 min-w-0">{children}</div>
     </div>
   );
 }
@@ -1215,6 +1356,7 @@ export function MetaObjectivePage({ id }: { id: string }) {
       </div>
       <DescriptionBlock
         text={m.description}
+        ai={{ kind: 'meta_objective', id: m.id }}
         lines={16}
         saving={saveDescription.isPending}
         emptyLabel="Pas encore de description : pourquoi ce cap compte, à quoi ressemble la réussite, l'horizon."

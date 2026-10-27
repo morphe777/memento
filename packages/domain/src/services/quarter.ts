@@ -1,14 +1,14 @@
 // Planifier › Trimestre (decision D-48): choose the objectives of a quarter against the time available.
 // Ready-to-display page: capacity of the quarter, its objectives with the remaining work of their path,
 // open objectives of other quarters (to pull in), meta-objective coverage and alerts.
-import { asc, eq, schema } from '@memento/db';
+import { and, asc, eq, isNull, schema } from '@memento/db';
 import { audit, type Ctx, ctxNow, ctxNowIso, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { getSettings } from '../settings.ts';
 import { isValidQuarter, parisDate, quarterEnd, quarterOf, quarterStart, shiftQuarter } from '../time.ts';
 import { capacityBetween, workDoneBetween } from './month.ts';
 import { getObjectivePath } from './projects.ts';
-import { getObjective, refreshObjectiveProgress } from './referential.ts';
+import { getObjective, refreshObjectiveProgress, updateObjective } from './referential.ts';
 
 const { objective, metaObjective } = schema;
 const OPEN = new Set(['active', 'paused']);
@@ -116,6 +116,40 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
     alerts,
     navigation: { previous: shiftQuarter(quarter, -1), next: shiftQuarter(quarter, 1) },
   };
+}
+
+/**
+ * D-69: drop an objective in a (meta-objective, quarter) cell of the map, at a place. `ids` is the wanted order
+ * of the cell (the moved objective included). The quarter change follows D-48 (deadline brought into it).
+ */
+export function placeObjective(
+  ctx: Ctx,
+  id: string,
+  target: { metaObjectiveId: string | null; quarter: string; ids: string[] },
+) {
+  return tx(ctx, () => {
+    const before = getObjective(ctx, id);
+    if (target.quarter !== before.quarter) setObjectiveQuarter(ctx, id, target.quarter);
+    if (target.metaObjectiveId !== before.metaObjectiveId)
+      updateObjective(ctx, id, { metaObjectiveId: target.metaObjectiveId });
+    const ids = target.ids.includes(id) ? target.ids : [...target.ids, id];
+    ids.forEach((oid, i) => {
+      ctx.db
+        .update(schema.objective)
+        .set({ position: i })
+        .where(
+          and(
+            eq(schema.objective.id, oid),
+            eq(schema.objective.quarter, target.quarter),
+            target.metaObjectiveId
+              ? eq(schema.objective.metaObjectiveId, target.metaObjectiveId)
+              : isNull(schema.objective.metaObjectiveId),
+          ),
+        )
+        .run();
+    });
+    return getObjective(ctx, id);
+  });
 }
 
 /**

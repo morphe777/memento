@@ -6,6 +6,7 @@ import {
   addProjectDependency,
   addTaskDependency,
   aiStatus,
+  breakdownWithAi,
   buildEngineInput,
   checkAi,
   closeWeek,
@@ -20,6 +21,7 @@ import {
   deleteObjective,
   deleteProject,
   deleteTask,
+  describeWithAi,
   exportData,
   generateReport,
   getAiKey,
@@ -45,11 +47,13 @@ import {
   markReviewed,
   parseJsonObject,
   patchSettings,
+  placeObjective,
   promoteProject,
   propose,
   proposeWeek,
   proposeWithAi,
   purgeData,
+  reorderMetaObjectives,
   reorderTasks,
   replanProject,
   rollMonth,
@@ -944,6 +948,134 @@ describe('D-58 Proposer avec l’IA', () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+});
+
+describe('D-68 rédiger une description avec l’IA', () => {
+  it('sends the template, what is written, the context and the remark; returns the text without saving', async () => {
+    const ctx = makeCtx();
+    const o = createObjective(ctx, { title: 'Garage rangé', deadline: '2026-12-20' });
+    const { project, tasks } = activeProject(ctx, 'Garage', 'Travaux', 2, { objectiveId: o.id });
+    let sent: { system: string; user: string } | null = null;
+    const llm = async (req: { system: string; user: string }) => {
+      sent = req;
+      return { text: '{"text":"## Résultat attendu\\nUn garage où la voiture rentre."}', model: 'fake' };
+    };
+    const r = await describeWithAi(
+      ctx,
+      { kind: 'project', id: project.id, current: 'Vider, trier', remark: 'plus court' },
+      llm,
+    );
+    expect(r.text).toMatch(/voiture rentre/);
+    const data = JSON.parse(sent!.user.slice(sent!.user.indexOf('{')));
+    expect(data.kind).toBe('projet');
+    expect(data.item.objective.title).toBe('Garage rangé');
+    expect(data.item.tasks).toEqual(tasks.map((t) => t.title));
+    expect(data.current).toBe('Vider, trier');
+    expect(data.remark).toBe('plus court');
+    expect(data.template).toMatch(/Résultat attendu/);
+    expect(sent!.system).toMatch(/rédiges la description/);
+    expect(getProject(ctx, project.id).description).not.toMatch(/voiture/); // nothing saved
+    // A creation form: title + parent, no id; the untouched template is not sent as « current ».
+    const tpl = getSettings(ctx)['templates.objective'];
+    await describeWithAi(ctx, { kind: 'objective', title: 'Courir 10 km', current: tpl }, llm);
+    expect(JSON.parse(sent!.user.slice(sent!.user.indexOf('{'))).current).toBeNull();
+    await expect(describeWithAi(ctx, { kind: 'task', current: '' }, llm)).rejects.toMatchObject({
+      code: 'AI_DESCRIBE_EMPTY',
+    });
+    await expect(
+      describeWithAi(ctx, { kind: 'task', id: tasks[0].id }, async () => ({
+        text: '{"text":""}',
+        model: 'x',
+      })),
+    ).rejects.toMatchObject({ code: 'AI_BAD_ANSWER' });
+  });
+});
+
+describe('D-70 découper un projet avec l’IA', () => {
+  it('needs a written description, sends the dialogue and existing tasks, snaps durations, creates nothing', async () => {
+    const ctx = makeCtx();
+    const { project, tasks } = activeProject(ctx, 'Garage', 'Travaux', 1);
+    const llm = async () => ({ text: '{"message":"ok","questions":[],"tasks":[]}', model: 'x' });
+    // The untouched template is not a description.
+    updateProject(ctx, project.id, { description: getSettings(ctx)['templates.project'] });
+    await expect(breakdownWithAi(ctx, { projectId: project.id }, llm)).rejects.toMatchObject({
+      code: 'AI_BREAKDOWN_NO_DESCRIPTION',
+    });
+    updateProject(ctx, project.id, { description: 'Vider le garage, trier, revendre, ranger.' });
+    let user = '';
+    const answer = {
+      message: 'Découpé en 3.',
+      questions: ['Tu as une remorque ?', ' '],
+      tasks: [
+        { title: 'Trier les cartons', durationMin: 90, description: 'Trois tas.' },
+        { title: '  ', durationMin: 30, description: '' },
+        { title: 'Poster les annonces', durationMin: 10, description: '' },
+        { title: 'Déposer à la déchetterie', durationMin: 400, description: '' },
+      ],
+    };
+    const r = await breakdownWithAi(
+      ctx,
+      { projectId: project.id, messages: [{ role: 'user', text: 'oublie la partie admin' }] },
+      async (req) => {
+        user = req.user;
+        return { text: JSON.stringify(answer), model: 'fake' };
+      },
+    );
+    expect(r.questions).toEqual(['Tu as une remorque ?']);
+    expect(r.tasks.map((t) => [t.title, t.durationMin])).toEqual([
+      ['Trier les cartons', 120],
+      ['Poster les annonces', 15],
+      ['Déposer à la déchetterie', 120],
+    ]);
+    const data = JSON.parse(user.slice(user.indexOf('{')));
+    expect(data.existingTasks.map((t: { title: string }) => t.title)).toEqual([tasks[0].title]);
+    expect(data.conversation).toEqual([{ role: 'user', text: 'oublie la partie admin' }]);
+    expect(data.allowedDurationsMin).toEqual([5, 15, 30, 60, 120]);
+    expect(listTasks(ctx, { projectId: project.id })).toHaveLength(1); // nothing created
+  });
+});
+
+describe('D-69 carte : réorganiser', () => {
+  it('moves an objective to another meta-objective and quarter at a place, and orders the meta-objectives', () => {
+    const ctx = makeCtx();
+    const a = createMetaObjective(ctx, { title: 'Santé' });
+    const b = createMetaObjective(ctx, { title: 'Maison' });
+    const o1 = createObjective(ctx, { title: 'O1', deadline: '2026-12-10', metaObjectiveId: b.id });
+    const o2 = createObjective(ctx, { title: 'O2', deadline: '2026-12-20', metaObjectiveId: b.id });
+    const o3 = createObjective(ctx, { title: 'O3', deadline: '2027-02-10', metaObjectiveId: a.id });
+    const cell = (meta: string, q: string) =>
+      getObjectivesMap(ctx)
+        .lanes.find((l) => l.meta?.id === meta)!
+        .objectives.filter((o) => o.quarter === q)
+        .map((o) => o.title);
+    // Same cell: O2 before O1.
+    placeObjective(ctx, o2.id, { metaObjectiveId: b.id, quarter: '2026-Q4', ids: [o2.id, o1.id] });
+    expect(cell(b.id, '2026-Q4')).toEqual(['O2', 'O1']);
+    // O3 goes to Maison, 2026-Q4, between O2 and O1: deadline brought into the quarter (D-48).
+    const moved = placeObjective(ctx, o3.id, {
+      metaObjectiveId: b.id,
+      quarter: '2026-Q4',
+      ids: [o2.id, o3.id, o1.id],
+    });
+    expect(moved).toMatchObject({ metaObjectiveId: b.id, quarter: '2026-Q4', deadline: '2026-12-31' });
+    expect(cell(b.id, '2026-Q4')).toEqual(['O2', 'O3', 'O1']);
+    // Out of any meta-objective.
+    placeObjective(ctx, o1.id, { metaObjectiveId: null, quarter: '2026-Q4', ids: [o1.id] });
+    expect(getObjective(ctx, o1.id).metaObjectiveId).toBeNull();
+    expect(getObjectivesMap(ctx).lanes.map((l) => l.meta?.title ?? null)).toEqual(['Santé', 'Maison', null]);
+    reorderMetaObjectives(ctx, [b.id, a.id]);
+    expect(
+      getObjectivesMap(ctx)
+        .lanes.map((l) => l.meta?.title ?? null)
+        .slice(0, 2),
+    ).toEqual(['Maison', 'Santé']);
+    reorderMetaObjectives(ctx, [a.id]);
+    expect(
+      getObjectivesMap(ctx)
+        .lanes.map((l) => l.meta?.title ?? null)
+        .slice(0, 2),
+    ).toEqual(['Santé', 'Maison']);
   });
 });
 
