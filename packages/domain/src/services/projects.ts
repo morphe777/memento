@@ -594,7 +594,7 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
   const objectives = ctx.db
     .select()
     .from(objective)
-    .orderBy(asc(objective.deadline))
+    .orderBy(asc(objective.position), asc(objective.deadline)) // D-69: the user's order inside a cell
     .all()
     .filter((o) => OPEN_OBJECTIVE.has(o.status) || (f.includeClosed && o.deadline.slice(0, 4) === year));
   const ranks = new Map(
@@ -613,7 +613,11 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
       null
     );
   };
-  const metas = ctx.db.select().from(schema.metaObjective).orderBy(asc(schema.metaObjective.createdAt)).all();
+  const metas = ctx.db
+    .select()
+    .from(schema.metaObjective)
+    .orderBy(asc(schema.metaObjective.position), asc(schema.metaObjective.createdAt))
+    .all();
   // Rolling year (user request 25/10/2026): the current quarter and the next three are always shown, to plan
   // ahead; any other quarter holding an objective (late, or further away) is shown too.
   const current = quarterOf(parisDate(ctxNow(ctx)));

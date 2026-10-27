@@ -5,7 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Markdown } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
-import { TaskDrawer } from '../components/tasks.tsx';
+import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
 import { Duration, Empty, ErrorBox, InfoTip, Loading, PageHeader, Section } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
 import { fmtDate } from '../lib/format.ts';
@@ -242,11 +242,7 @@ function AddIdea() {
         style={{ width: 120 }}
       >
         <option value="">Durée ?</option>
-        <option value="5">5 min</option>
-        <option value="15">15 min</option>
-        <option value="30">30 min</option>
-        <option value="60">1 h</option>
-        <option value="120">2 h</option>
+        <DurationOptions />
       </select>
       <select
         value={domainId}

@@ -252,6 +252,17 @@ input[type="checkbox"] {
   border: 1px solid var(--border);
   border-radius: 14px;
 }
+/* D-68: text and AI proposal side by side when there is room, stacked otherwise. */
+.ai-split {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr));
+  align-items: stretch;
+}
+.ai-split > textarea {
+  width: 100%;
+  box-sizing: border-box;
+}
 .bin {
   background: var(--bin);
   border-radius: 18px;

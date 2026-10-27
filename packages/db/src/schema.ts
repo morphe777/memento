@@ -49,6 +49,7 @@ export const metaObjective = sqliteTable('meta_objective', {
   status: text('status', { enum: ['active', 'paused', 'achieved', 'abandoned'] })
     .notNull()
     .default('active'),
+  position: integer('position').notNull().default(0), // D-69: order of the lanes on the map
 });
 
 export const objective = sqliteTable('objective', {
@@ -70,6 +71,7 @@ export const objective = sqliteTable('objective', {
   // D-62: a recurring objective is renewed (next quarter / next year) when it is closed.
   recurrence: text('recurrence', { enum: ['quarterly', 'yearly'] }),
   previousId: text('previous_id'), // the occurrence this one renews
+  position: integer('position').notNull().default(0), // D-69: order inside a (meta-objective, quarter) cell
 });
 
 export const project = sqliteTable(

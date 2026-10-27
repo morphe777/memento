@@ -39,9 +39,9 @@ const ACTION_COLOR: Record<Change['action'], string> = {
   remove: 'var(--danger, #C0392B)',
 };
 
-function StarIcon() {
+export function StarIcon({ size = 20 }: { size?: number }) {
   return (
-    <svg aria-hidden="true" width="20" height="20" viewBox="0 0 16 16">
+    <svg aria-hidden="true" width={size} height={size} viewBox="0 0 16 16">
       <path
         d="M8 1.5l1.6 4.2 4.4.3-3.4 2.8 1.1 4.3L8 10.7l-3.7 2.4 1.1-4.3L2 6l4.4-.3z"
         fill="none"

@@ -109,6 +109,25 @@ réaffichée ni exportée. Les variables `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, 
 `GEMINI_API_KEY` ou `MEMENTO_AI_API_KEY` restent lues si aucune clé n'est saisie. Ollama n'en demande pas ; en
 Docker, renseigner son URL (ex. `http://192.168.1.10:11434/v1`). Les prompts semaine / mois / trimestre se modifient dans la même page.
 
+### 5. Capturer depuis l'iPhone
+
+Dans l'app (ajoutée à l'écran d'accueil via Safari › Partager › « Sur l'écran d'accueil ») : bouton rond **+**
+en bas à droite, sur toutes les pages (titre, durée 15 min par défaut, domaine facultatif). Sur PC / iPad :
+« Capturer dans l'Inbox » dans le menu. L'adresse `…/semaine?capturer=1` ouvre directement la fenêtre de capture.
+
+Raccourcis iOS (app Raccourcis) :
+
+- **Le plus simple** : action « Ouvrir les URL » avec `http://memento.internal.lcl/semaine?capturer=1`
+  (ton adresse), nommée « Capturer » : « Dis Siri, Capturer », ou une icône dédiée sur l'écran d'accueil.
+- **À la voix, sans ouvrir l'app** : créer un jeton `iphone` (Configuration › Accès, lecture-écriture), puis
+  1. « Dicter le texte » ;
+  2. « Obtenir le contenu de l'URL » : `http://memento.internal.lcl/api/v1/tasks`, méthode POST, en-tête
+     `Authorization: Bearer mem_…`, corps JSON `title` = Texte dicté, `durationMin` = 15 (nombre) ;
+  3. « Afficher une notification » « Ajouté à l'Inbox ».
+  La tâche est alors journalisée « ai:iphone » et apparaît dans « À revoir ».
+
+Les deux passent par le réseau de la maison (VPN dehors).
+
 ## Sauvegarde
 
 La base est un seul fichier SQLite (`data/memento.db`, mode WAL). Pour une sauvegarde à chaud cohérente :

@@ -3,6 +3,7 @@ import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
+import { BreakdownButton } from '../components/breakdown.tsx';
 import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
@@ -625,6 +626,7 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
       </div>
       <DescriptionBlock
         text={p.description}
+        ai={{ kind: 'project', id: p.id }}
         lines={6}
         saving={saveDescription.isPending}
         onSave={(text, done) => saveDescription.mutate(text, { onSuccess: done })}
@@ -679,7 +681,12 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
             </div>
           )}
           <div style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
-            <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
+              </div>
+              <BreakdownButton projectId={p.id} description={p.description} />
+            </div>
           </div>
         </section>
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 300px', maxWidth: 420 }}>

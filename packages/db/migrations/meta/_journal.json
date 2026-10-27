@@ -36,6 +36,13 @@
       "when": 1792914152317,
       "tag": "0004_recurrence_actual_time",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793099320538,
+      "tag": "0005_map_positions",
+      "breakpoints": true
     }
   ]
 }
