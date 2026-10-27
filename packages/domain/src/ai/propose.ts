@@ -81,7 +81,7 @@ function common(ctx: Ctx) {
   const s = getSettings(ctx);
   return {
     today: parisDate(ctxNow(ctx)),
-    instructions: s['ai.instructions'] || null,
+    userContext: s['ai.instructions'] || null,
     domains: listDomains(ctx, false).map((d) => ({
       id: d.id,
       name: d.name,

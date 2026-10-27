@@ -82,7 +82,7 @@ export async function breakdownWithAi(ctx: Ctx, raw: AiBreakdownInput, llm: Llm)
     },
     existingTasks: existing,
     allowedDurationsMin: ALLOWED_DURATIONS,
-    instructions: settings['ai.instructions'].trim() || null,
+    userContext: settings['ai.instructions'].trim() || null,
     conversation: input.messages,
   };
   const { text, model } = await llm({

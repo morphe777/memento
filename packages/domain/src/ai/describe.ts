@@ -1,5 +1,5 @@
 // D-68: « Rédiger avec l'IA » — proposes the description of a meta-objective, objective, project, task or
-// domain from its template, what is already written, the user's instructions and the surrounding items.
+// domain from its template, what is already written, what the user says about himself (userContext) and the surrounding items.
 // Nothing is saved here: the text comes back to the editor, where the user keeps, edits or discards it.
 import { and, eq, inArray, ne, schema } from '@memento/db';
 import { z } from 'zod';
@@ -214,7 +214,7 @@ export async function describeWithAi(ctx: Ctx, raw: AiDescribeInput, llm: Llm) {
     template: template.trim() || null,
     current: input.current.trim() && input.current.trim() !== template.trim() ? input.current : null,
     remark: input.remark || null,
-    instructions: settings['ai.instructions'].trim() || null,
+    userContext: settings['ai.instructions'].trim() || null,
   };
   const { text, model } = await llm({
     system: `${settings['ai.prompt.describe']}\n\nRéponds uniquement par un objet JSON {"text": string} : text est la description en Markdown.`,
