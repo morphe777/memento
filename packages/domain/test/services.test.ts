@@ -416,9 +416,9 @@ describe('L3 planification', () => {
     updateProject(ctx, a.id, { status: 'abandoned' });
     const map = getObjectivesMap(ctx);
     expect(map.quarters).toEqual(['2026-Q4', '2027-Q1', '2027-Q2', '2027-Q3']); // rolling year
-    expect(map.lanes.map((l) => l.meta?.title ?? null)).toEqual(['Autonomie', null]);
-    expect(map.lanes[0].objectives.map((o) => o.id)).toEqual([q4.id, q1.id]);
-    expect(map.lanes[0].objectives[0].path.map((p) => p.title)).toEqual(['B']);
+    expect(map.lanes.map((l) => l.meta?.title ?? null)).toEqual([null, 'Autonomie']);
+    expect(map.lanes[1].objectives.map((o) => o.id)).toEqual([q4.id, q1.id]);
+    expect(map.lanes[1].objectives[0].path.map((p) => p.title)).toEqual(['B']);
   });
 
   it('RB-02 readiness checklist lists what an idea still needs', () => {
@@ -1063,19 +1063,18 @@ describe('D-69 carte : réorganiser', () => {
     // Out of any meta-objective.
     placeObjective(ctx, o1.id, { metaObjectiveId: null, quarter: '2026-Q4', ids: [o1.id] });
     expect(getObjective(ctx, o1.id).metaObjectiveId).toBeNull();
-    expect(getObjectivesMap(ctx).lanes.map((l) => l.meta?.title ?? null)).toEqual(['Santé', 'Maison', null]);
+    const order = () => getObjectivesMap(ctx).lanes.map((l) => l.meta?.title ?? null);
+    // « Sans méta-objectif » on top by default.
+    expect(order()).toEqual([null, 'Santé', 'Maison']);
     reorderMetaObjectives(ctx, [b.id, a.id]);
-    expect(
-      getObjectivesMap(ctx)
-        .lanes.map((l) => l.meta?.title ?? null)
-        .slice(0, 2),
-    ).toEqual(['Maison', 'Santé']);
+    expect(order()).toEqual([null, 'Maison', 'Santé']);
     reorderMetaObjectives(ctx, [a.id]);
-    expect(
-      getObjectivesMap(ctx)
-        .lanes.map((l) => l.meta?.title ?? null)
-        .slice(0, 2),
-    ).toEqual(['Santé', 'Maison']);
+    expect(order()).toEqual([null, 'Santé', 'Maison']);
+    // It moves like the others: 'none' marks its place.
+    reorderMetaObjectives(ctx, [a.id, 'none', b.id]);
+    expect(order()).toEqual(['Santé', null, 'Maison']);
+    reorderMetaObjectives(ctx, [a.id, b.id, 'none']);
+    expect(order()).toEqual(['Santé', 'Maison', null]);
   });
 });
 

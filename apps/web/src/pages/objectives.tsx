@@ -31,7 +31,7 @@ import {
 } from '../components/ui.tsx';
 import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { toast, useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useIsPhone, useMe, useSettings } from '../lib/hooks.ts';
 import type {
   MetaObjective,
   Objective,
@@ -68,6 +68,8 @@ export function ObjectivesPage() {
     queryFn: () => get<Project[]>('/projects?status=active,paused,done'),
   });
   const [creating, setCreating] = useState<'objective' | 'meta' | null>(null);
+  // « + » of a map cell: the objective starts in that meta-objective, due at the end of that quarter.
+  const [preset, setPreset] = useState<{ metaObjectiveId: string; deadline: string } | undefined>();
   const [editingMeta, setEditingMeta] = useState<MetaObjective | null>(null);
   const saveMetaDescription = useAction(
     ({ id, description }: { id: string; description: string }) =>
@@ -76,6 +78,10 @@ export function ObjectivesPage() {
   );
   const [showClosed, setShowClosed] = useState(false);
   const [view, setView] = useState<'map' | 'list'>('map');
+  // D-69: « Réorganiser » sits with the page actions, map view only, never on iPhone (no drag there).
+  const phone = useIsPhone();
+  const [reorgMode, setReorg] = useState(false);
+  const reorg = reorgMode && view === 'map' && !phone;
   const dl = useDomainLookup();
   const me = useMe();
   const year = me.data?.today.slice(0, 4);
@@ -83,13 +89,16 @@ export function ObjectivesPage() {
   const list = (objectives.data ?? []).filter(
     (o) => o.status === 'active' || o.status === 'paused' || (showClosed && o.deadline.slice(0, 4) === year),
   );
-  const groups = [
-    ...(metas.data ?? []).map((m) => ({
-      meta: m as MetaObjective | null,
-      items: list.filter((o) => o.metaObjectiveId === m.id),
-    })),
-    { meta: null, items: list.filter((o) => !o.metaObjectiveId) },
-  ];
+  const settings = useSettings();
+  const groups = (metas.data ?? []).map((m) => ({
+    meta: m as MetaObjective | null,
+    items: list.filter((o) => o.metaObjectiveId === m.id),
+  }));
+  // D-69: « Sans méta-objectif » at the place chosen on the map (on top by default).
+  groups.splice(Math.min(settings.data?.['map.no_meta_position'] ?? 0, groups.length), 0, {
+    meta: null,
+    items: list.filter((o) => !o.metaObjectiveId),
+  });
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -99,6 +108,16 @@ export function ObjectivesPage() {
           title="Objectifs"
           actions={
             <>
+              {view === 'map' && !phone && (
+                <button
+                  type="button"
+                  className={reorg ? 'btn btn-primary' : 'btn'}
+                  onClick={() => setReorg((r) => !r)}
+                  aria-pressed={reorg}
+                >
+                  {reorg ? 'Terminer' : 'Réorganiser'}
+                </button>
+              )}
               <button type="button" className="btn" onClick={() => setCreating('meta')}>
                 + Méta-objectif
               </button>
@@ -124,7 +143,17 @@ export function ObjectivesPage() {
         </label>
       </div>
       {objectives.isError && <ErrorBox error={objectives.error} />}
-      {view === 'map' && <ObjectivesMapView includeClosed={showClosed} onEditMeta={setEditingMeta} />}
+      {view === 'map' && (
+        <ObjectivesMapView
+          includeClosed={showClosed}
+          reorg={reorg}
+          onEditMeta={setEditingMeta}
+          onCreateIn={(p) => {
+            setPreset(p);
+            setCreating('objective');
+          }}
+        />
+      )}
       {view === 'list' &&
         groups.map(({ meta, items }) =>
           items.length || meta ? (
@@ -225,8 +254,12 @@ export function ObjectivesPage() {
         )}
       <ObjectivePanel
         open={creating === 'objective'}
-        onClose={() => setCreating(null)}
+        onClose={() => {
+          setCreating(null);
+          setPreset(undefined);
+        }}
         metas={metas.data ?? []}
+        preset={preset}
       />
       <MetaPanel open={creating === 'meta'} onClose={() => setCreating(null)} />
       {editingMeta && <MetaPanel open meta={editingMeta} onClose={() => setEditingMeta(null)} />}
@@ -239,11 +272,13 @@ function ObjectivePanel({
   onClose,
   metas,
   objective,
+  preset,
 }: {
   open: boolean;
   onClose: () => void;
   metas: MetaObjective[];
   objective?: Objective & { resources?: Resource[] };
+  preset?: { metaObjectiveId: string; deadline: string };
 }) {
   const settings = useSettings();
   const me = useMe();
@@ -276,7 +311,7 @@ function ObjectivePanel({
           description: objective.description,
           recurrence: (objective.recurrence ?? '') as '' | 'quarterly' | 'yearly',
         }
-      : { ...empty, description: settings.data?.['templates.objective'] ?? '' };
+      : { ...empty, ...preset, description: settings.data?.['templates.objective'] ?? '' };
     initial.current = JSON.stringify(start);
     setF(start);
   }, [open]);
@@ -1054,7 +1089,24 @@ function MapUpcoming({
 }
 
 /** A (lane, quarter) cell of the map: drop target for an objective card, sortable inside (D-69). */
-function QuarterCell({ id, ids, children }: { id: string; ids: string[]; children: ReactNode }) {
+/** Last day of a quarter (« 2026-Q4 » → 2026-12-31): the deadline of an objective added from its cell. */
+function quarterEnd(qt: string) {
+  const [y, q] = [Number(qt.slice(0, 4)), Number(qt.slice(-1))];
+  const last = new Date(Date.UTC(y, q * 3, 0)).getUTCDate();
+  return `${y}-${String(q * 3).padStart(2, '0')}-${last}`;
+}
+
+function QuarterCell({
+  id,
+  ids,
+  onAdd,
+  children,
+}: {
+  id: string;
+  ids: string[];
+  onAdd?: () => void;
+  children: ReactNode;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div
@@ -1067,6 +1119,18 @@ function QuarterCell({ id, ids, children }: { id: string; ids: string[]; childre
         outline: isOver ? '2px dashed var(--text-ghost)' : undefined,
       }}
     >
+      {onAdd && (
+        <button
+          type="button"
+          className="icon-btn self-start"
+          style={{ width: 26, height: 26, minHeight: 0, marginBottom: -4 }}
+          aria-label="Ajouter un objectif sur ce trimestre"
+          title="Ajouter un objectif sur ce trimestre (deadline : fin du trimestre)"
+          onClick={onAdd}
+        >
+          +
+        </button>
+      )}
       <SortableContext items={ids} strategy={verticalListSortingStrategy}>
         {children}
       </SortableContext>
@@ -1076,17 +1140,20 @@ function QuarterCell({ id, ids, children }: { id: string; ids: string[]; childre
 
 function ObjectivesMapView({
   includeClosed,
+  reorg,
   onEditMeta,
+  onCreateIn,
 }: {
   includeClosed: boolean;
+  reorg: boolean;
   onEditMeta: (m: MetaObjective) => void;
+  onCreateIn: (p: { metaObjectiveId: string; deadline: string }) => void;
 }) {
   const q = useQuery({
     queryKey: ['objectives-map', includeClosed],
     queryFn: () => get<ObjectivesMap>(`/objectives/map${includeClosed ? '?includeClosed=true' : ''}`),
   });
   const sensors = useSortSensors();
-  const [reorg, setReorg] = useState(false);
   const place = useAction(
     ({ id, ...body }: { id: string; metaObjectiveId: string | null; quarter: string; ids: string[] }) =>
       post(`/objectives/${id}/place`, body),
@@ -1100,7 +1167,7 @@ function ObjectivesMapView({
     (lanes.find((l) => metaKey(l.meta?.id) === meta)?.objectives ?? [])
       .filter((o) => o.quarter === qt)
       .map((o) => o.id);
-  const laneIds = lanes.flatMap((l) => (l.meta ? [`lane:${l.meta.id}`] : []));
+  const laneIds = lanes.map((l) => `lane:${metaKey(l.meta?.id)}`);
   /** Lanes only collide with lanes, cards with cards and cells (the card under the pointer wins). */
   const collision: CollisionDetection = (args) => {
     const lane = String(args.active.id).startsWith('lane:');
@@ -1176,18 +1243,10 @@ function ObjectivesMapView({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        <button
-          type="button"
-          className={reorg ? 'btn btn-sm btn-primary' : 'btn btn-sm'}
-          onClick={() => setReorg((r) => !r)}
-          aria-pressed={reorg}
-        >
-          {reorg ? 'Terminer' : 'Réorganiser'}
-        </button>
         {reorg ? (
           <span>
-            Glisse une carte vers un autre trimestre, un autre méta-objectif ou une autre place ; les
-            méta-objectifs se trient par leur poignée ⠿.
+            Glisse une carte vers un autre trimestre, un autre méta-objectif ou une autre place ; les lignes
+            (« Sans méta-objectif » comprise) se trient par leur poignée ⠿.
           </span>
         ) : (
           legend.map(([icon, label]) => (
@@ -1221,7 +1280,7 @@ function ObjectivesMapView({
               ))}
               {lanes.map((l) => (
                 <Fragment key={l.meta?.id ?? 'none'}>
-                  <LaneHeader id={l.meta ? `lane:${l.meta.id}` : 'lane-none'} reorg={reorg && !!l.meta}>
+                  <LaneHeader id={`lane:${metaKey(l.meta?.id)}`} reorg={reorg}>
                     <div className="flex items-start justify-between gap-1">
                       {l.meta ? (
                         <Link
@@ -1260,6 +1319,11 @@ function ObjectivesMapView({
                       key={qt}
                       id={`${metaKey(l.meta?.id)}|${qt}`}
                       ids={cellIds(metaKey(l.meta?.id), qt)}
+                      onAdd={
+                        qt < currentQuarter || reorg
+                          ? undefined
+                          : () => onCreateIn({ metaObjectiveId: l.meta?.id ?? '', deadline: quarterEnd(qt) })
+                      }
                     >
                       {l.objectives
                         .filter((o) => o.quarter === qt)

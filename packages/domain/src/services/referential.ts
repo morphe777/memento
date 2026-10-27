@@ -197,14 +197,26 @@ export const listMetaObjectives = (ctx: Ctx) =>
     .all();
 
 /** D-69: order of the meta-objectives (lanes of the map), chosen by the user. Ids not given keep their place after. */
-export function reorderMetaObjectives(ctx: Ctx, ids: string[]) {
+/**
+ * D-69: listed meta-objectives first, in this order, the others after. 'none' in the list places the
+ * « Sans méta-objectif » lane of the map: before the meta-objective that follows it (setting map.no_meta_position).
+ */
+export function reorderMetaObjectives(ctx: Ctx, input: string[]) {
   return tx(ctx, () => {
     const all = listMetaObjectives(ctx);
+    const ids = input.filter((id) => id !== 'none');
     for (const id of ids) getMetaObjective(ctx, id);
     const order = [...ids, ...all.map((m) => m.id).filter((id) => !ids.includes(id))];
     order.forEach((id, i) => {
       ctx.db.update(metaObjective).set({ position: i }).where(eq(metaObjective.id, id)).run();
     });
+    const none = input.indexOf('none');
+    if (none >= 0)
+      ctx.db
+        .insert(schema.setting)
+        .values({ key: 'map.no_meta_position', value: none })
+        .onConflictDoUpdate({ target: schema.setting.key, set: { value: none, updatedAt: ctxNowIso(ctx) } })
+        .run();
     audit(ctx, 'meta_objective', 'order', 'reorder', { ids: all.map((m) => m.id) }, { ids: order });
     return listMetaObjectives(ctx);
   });

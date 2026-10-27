@@ -392,7 +392,7 @@ export async function buildApp(opts: AppOptions) {
       r.get('/meta-objectives', { schema: tag('Objectifs') }, async (req) => D.listMetaObjectives(ctx(req)));
       r.post(
         '/meta-objectives/reorder',
-        { schema: { ...tag('Objectifs'), body: D.reorderBody } },
+        { schema: { ...tag('Objectifs'), body: D.metaReorderBody } },
         async (req) => D.reorderMetaObjectives(ctx(req), req.body.ids),
       );
       r.get('/meta-objectives/:id', { schema: { ...tag('Objectifs'), params: D.idParam } }, async (req) =>
