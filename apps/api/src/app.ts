@@ -287,6 +287,17 @@ export async function buildApp(opts: AppOptions) {
           return D.breakdownWithAi(c, req.body, llm);
         },
       );
+      // D-75: « Proposer un chemin avec l'IA »: proposed projects of an objective (nothing created).
+      r.post(
+        '/ai/path',
+        { schema: { ...tag('IA'), body: D.aiPathBody }, preHandler: userOnly },
+        async (req) => {
+          const c = ctx(req);
+          const s = D.getSettings(c);
+          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+          return D.pathWithAi(c, req.body, llm);
+        },
+      );
       // D-68: « Rédiger avec l'IA »: a description proposal, returned to the editor (nothing saved).
       r.post(
         '/ai/describe',

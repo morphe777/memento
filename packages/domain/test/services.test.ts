@@ -29,6 +29,7 @@ import {
   getExperiencesPage,
   getMonthPlanningPage,
   getObjective,
+  getObjectivePath,
   getObjectivesMap,
   getPlanningPage,
   getProject,
@@ -47,6 +48,7 @@ import {
   markReviewed,
   parseJsonObject,
   patchSettings,
+  pathWithAi,
   placeObjective,
   promoteProject,
   propose,
@@ -1033,6 +1035,43 @@ describe('D-70 découper un projet avec l’IA', () => {
     expect(data.conversation).toEqual([{ role: 'user', text: 'oublie la partie admin' }]);
     expect(data.allowedDurationsMin).toEqual([5, 15, 30, 60, 120]);
     expect(listTasks(ctx, { projectId: project.id })).toHaveLength(1); // nothing created
+  });
+});
+
+describe('D-75 proposer un chemin avec l’IA', () => {
+  it('sends the objective, its meta-objective and existing path, trims the answer, creates nothing', async () => {
+    const ctx = makeCtx();
+    const meta = createMetaObjective(ctx, { title: 'Autonomie énergétique' });
+    const o = createObjective(ctx, {
+      title: 'Panneaux posés',
+      deadline: '2026-12-20',
+      metaObjectiveId: meta.id,
+    });
+    const { project } = activeProject(ctx, 'Devis', 'Travaux', 1);
+    updateProject(ctx, project.id, { objectiveId: o.id });
+    let user = '';
+    let system = '';
+    const answer = {
+      message: 'Trois étapes.',
+      questions: [' ', 'Toit orienté sud ?'],
+      projects: [
+        { title: ' Choisir l’installateur ', successCriterion: 'Contrat signé', description: 'Comparer.' },
+        { title: '  ', successCriterion: '', description: '' },
+        { title: 'Démarches mairie', successCriterion: 'Accord reçu', description: '' },
+      ],
+    };
+    const r = await pathWithAi(ctx, { objectiveId: o.id }, async (req) => {
+      user = req.user;
+      system = req.system;
+      return { text: JSON.stringify(answer), model: 'fake' };
+    });
+    expect(system).toContain(getSettings(ctx)['ai.prompt.path']);
+    expect(r.questions).toEqual(['Toit orienté sud ?']);
+    expect(r.projects.map((p) => p.title)).toEqual(['Choisir l’installateur', 'Démarches mairie']);
+    const data = JSON.parse(user.slice(user.indexOf('{')));
+    expect(data.metaObjective.title).toBe('Autonomie énergétique');
+    expect(data.existingProjects.map((p: { title: string }) => p.title)).toEqual([project.title]);
+    expect(getObjectivePath(ctx, o.id)).toHaveLength(1); // nothing created
   });
 });
 

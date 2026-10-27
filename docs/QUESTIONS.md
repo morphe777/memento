@@ -37,3 +37,12 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 - Tests de bout en bout Playwright : différés, comme demandé (« pas pour le moment »). Les écrans ont été vérifiés par captures automatiques.
 - Purge des idées (DM-87) : le réglage existe, mais la proposition de purge en revue trimestrielle n'est pas encore codée.
 - Notifications, raccourci iOS de saisie rapide, bouton « Proposer avec l'IA » (v2).
+
+## Parcours de saisie : notés pour plus tard (revue UX du 27/10/2026)
+
+- **Rattacher un projet existant depuis l'objectif** (recherche parmi les idées et projets sans objectif). Aujourd'hui : depuis la fiche du projet.
+- **Fil d'Ariane du projet** par l'objectif (Objectifs › Méta › Objectif › Projet) et « projet précédent / suivant » du chemin.
+- **Message de confirmation avec un lien « Ouvrir »** quand une création laisse sur place.
+- **Raccourci clavier « N »** = nouvel élément enfant de la page en cours.
+- **Saisie de tâches plus rapide** : coller plusieurs lignes = plusieurs tâches ; durée retenue d'une tâche à l'autre ou tapée dans le titre (« … 30m »). Pas compris le 27/10 : à réexpliquer.
+- **Chantier « Atelier »** : une page en plan dépliable Méta › Objectif › Projet › Tâche, remplie au clavier (Entrée = élément suivant, Tab = un niveau plus bas, Maj+Tab = un niveau plus haut), pour vider sa tête d'un coup.

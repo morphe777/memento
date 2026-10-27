@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { BreakdownButton } from '../components/breakdown.tsx';
 import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
+import { pathDefaultGroups, rememberGroups } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
   GroupPicker,
@@ -35,7 +36,14 @@ import {
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
-import type { InboxPage as InboxPageData, Objective, Project, ProjectDetail, Task } from '../lib/types.ts';
+import type {
+  InboxPage as InboxPageData,
+  Objective,
+  PathProject,
+  Project,
+  ProjectDetail,
+  Task,
+} from '../lib/types.ts';
 import { TaskBoard, TaskTable, type TaskView, useBoardTasks } from './tasks.tsx';
 import { Chevron } from './week.tsx';
 
@@ -529,31 +537,53 @@ export function NewProjectPanel({
   open,
   onClose,
   defaultGroup,
+  objective,
 }: {
   open: boolean;
   onClose: () => void;
   defaultGroup?: string;
+  /** Created from an objective page: appended at the end of its path, and we stay there. */
+  objective?: { id: string; title: string };
 }) {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [groupIds, setGroupIds] = useState<string[]>(defaultGroup ? [defaultGroup] : []);
-  const create = useAction(() => post<Project>('/projects', { title, groupIds }), {
-    onSuccess: (p) => {
-      onClose();
-      setTitle('');
-      navigate({ to: '/projets/$id', params: { id: p.id } });
-    },
+  // D-75: from an objective, the groups of the last project of its path (else the last used ones).
+  const path = useQuery({
+    queryKey: ['objective-path', objective?.id],
+    queryFn: () => get<PathProject[]>(`/objectives/${objective!.id}/path`),
+    enabled: open && !!objective,
   });
+  useEffect(() => {
+    if (open && objective && path.data) setGroupIds(pathDefaultGroups(path.data));
+  }, [open, path.data]);
+  const create = useAction(
+    () => post<Project>('/projects', { title, groupIds, objectiveId: objective?.id ?? null }),
+    {
+      onSuccess: (p) => {
+        rememberGroups(groupIds);
+        onClose();
+        setTitle('');
+        if (objective) toast(`« ${p.title} » ajouté au chemin.`);
+        else navigate({ to: '/projets/$id', params: { id: p.id } });
+      },
+    },
+  );
   return (
     <Panel open={open} onClose={onClose} title="Nouvelle idée / nouveau projet">
       <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
         Tout commence en idée : un titre et un groupe suffisent. Tu la promeus en projet quand elle est prête
         (critère de succès, dates, tâches).
+        {objective && <> Elle s'ajoute à la fin du chemin de « {objective.title} ».</>}
       </p>
       <Field label="Titre">
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && title.trim() && groupIds.length && !create.isPending)
+              create.mutate(undefined);
+          }}
           placeholder="ex. Installer des panneaux photovoltaïques"
         />
       </Field>
@@ -758,6 +788,53 @@ function FactIcon({ name }: { name: string }) {
   );
 }
 
+/** D-75: the missing success criterion is typed right in the checklist (Entrée or leaving the field saves; Échap cancels). */
+function CriterionInline({ projectId, label }: { projectId: string; label: string }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const cancelled = useRef(false);
+  const save = useAction((v: string) => patch(`/projects/${projectId}`, { successCriterion: v }), {
+    toast: 'Critère de succès enregistré.',
+  });
+  if (!editing)
+    return (
+      <button
+        type="button"
+        className="border-0 bg-transparent p-0 text-left cursor-pointer underline decoration-dotted"
+        style={{ color: 'inherit', font: 'inherit', minHeight: 0 }}
+        title="Cliquer pour l'écrire ici"
+        onClick={() => {
+          cancelled.current = false;
+          setEditing(true);
+        }}
+      >
+        {label}
+      </button>
+    );
+  return (
+    <input
+      autoFocus
+      value={value}
+      maxLength={500}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          cancelled.current = true;
+          setEditing(false);
+        }
+        if (e.key === 'Enter') e.currentTarget.blur(); // the blur saves
+      }}
+      onBlur={() => {
+        if (value.trim() && !cancelled.current && !save.isPending) save.mutate(value.trim());
+        else setEditing(false);
+      }}
+      placeholder="C'est réussi quand…"
+      aria-label="Critère de succès"
+      className="flex-1 min-w-0 text-[14px]"
+    />
+  );
+}
+
 /** Read-only facts of the project (edit through « Modifier »). */
 function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
   const dl = useDomainLookup();
@@ -778,6 +855,7 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
     </div>
   );
   const ready = p.readiness.every((r) => r.ok);
+  const promote = useAction(() => post(`/projects/${p.id}/promote`), { toast: 'Idée promue : projet prêt.' });
   return (
     <section className="card relative" style={{ padding: '6px 48px 8px 18px' }}>
       <button
@@ -820,14 +898,28 @@ function ProjectInfo({ p, onEdit }: { p: ProjectDetail; onEdit: () => void }) {
                 {r.ok ? '✓' : ''}
               </span>
               <span className="sr-only">{r.ok ? 'Fait :' : 'Manque :'}</span>
-              {r.label}
+              {r.code === 'SUCCESS_CRITERION_MISSING' && !r.ok ? (
+                <CriterionInline projectId={p.id} label={r.label} />
+              ) : (
+                r.label
+              )}
             </span>
           ))}
           <span className="text-[12px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
             {ready
               ? 'Complet : il peut devenir projet du mois.'
-              : 'Complète via « Modifier » et la liste des tâches.'}
+              : 'Complète ici, via « Modifier » et la liste des tâches.'}
           </span>
+          {ready && p.status === 'idea' && (
+            <button
+              type="button"
+              className="btn btn-sm btn-primary self-start"
+              disabled={promote.isPending}
+              onClick={() => promote.mutate(undefined)}
+            >
+              Promouvoir en projet prêt
+            </button>
+          )}
         </div>
       )}
       {row(

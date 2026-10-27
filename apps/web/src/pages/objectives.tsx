@@ -13,8 +13,17 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
 import { AiDescribe, DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
+import { PathAiButton, PathQuickAdd } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
-import { LockIcon, ResourceList, Resources, useSortSensors } from '../components/tasks.tsx';
+import {
+  LockIcon,
+  QuickAdd,
+  ResourceList,
+  Resources,
+  TaskDrawer,
+  TaskList,
+  useSortSensors,
+} from '../components/tasks.tsx';
 import {
   ConfirmDialog,
   Empty,
@@ -39,7 +48,9 @@ import type {
   PathProject,
   Project,
   Resource,
+  Task,
 } from '../lib/types.ts';
+import { NewProjectPanel } from './projects.tsx';
 
 function Progress({ pct }: { pct: number }) {
   return (
@@ -312,21 +323,33 @@ function ObjectivePanel({
           description: objective.description,
           recurrence: (objective.recurrence ?? '') as '' | 'quarterly' | 'yearly',
         }
-      : { ...empty, ...preset, description: settings.data?.['templates.objective'] ?? '' };
+      : {
+          ...empty,
+          deadline: me.data ? quarterEnd(quarterOfDate(me.data.today)) : '',
+          ...preset,
+          description: settings.data?.['templates.objective'] ?? '',
+        };
     initial.current = JSON.stringify(start);
     setF(start);
   }, [open]);
+  const navigate = useNavigate();
   const save = useAction(
     () => {
       const { description, ...rest } = f;
       const body = objective
         ? { ...rest, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null }
         : { ...f, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null };
-      return objective ? patch(`/objectives/${objective.id}`, body) : post('/objectives', body);
+      return objective ? patch(`/objectives/${objective.id}`, body) : post<Objective>('/objectives', body);
     },
-    { onSuccess: onClose, toast: 'Objectif enregistré.' },
+    {
+      // D-75: a new objective opens right away, to lay its path.
+      onSuccess: (r) => {
+        onClose();
+        if (!objective && r) navigate({ to: '/objectifs/$id', params: { id: (r as Objective).id } });
+      },
+      toast: 'Objectif enregistré.',
+    },
   );
-  const navigate = useNavigate();
   const [deleting, setDeleting] = useState(false);
   const remove = useAction(() => del(`/objectives/${objective!.id}`), {
     onSuccess: () => navigate({ to: '/objectifs' }),
@@ -350,91 +373,201 @@ function ObjectivePanel({
       title={objective ? 'Modifier l’objectif' : 'Nouvel objectif trimestriel'}
     >
       <Field label="Titre">
-        <input value={f.title} onChange={(e) => set('title', e.target.value)} />
-      </Field>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}>
-        <Field label="Indicateur (SMART)">
-          <input
-            value={f.smartIndicator}
-            onChange={(e) => set('smartIndicator', e.target.value)}
-            placeholder="ex. POC publiés"
-          />
-        </Field>
-        <Field label="Cible">
-          <input value={f.smartTarget} onChange={(e) => set('smartTarget', e.target.value)} placeholder="2" />
-        </Field>
-        <Field label="Actuel">
-          <input
-            value={f.smartCurrent}
-            onChange={(e) => set('smartCurrent', e.target.value)}
-            placeholder="0"
-          />
-        </Field>
-      </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-        <Field label="Deadline (dans le trimestre)">
-          <input
-            type="date"
-            value={f.deadline}
-            min={me.data?.today}
-            onChange={(e) => set('deadline', e.target.value)}
-          />
-        </Field>
-        <Field
-          label="Récurrence"
-          info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
-        >
-          <select
-            value={f.recurrence}
-            onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
-          >
-            <option value="">Aucune</option>
-            <option value="quarterly">Chaque trimestre</option>
-            <option value="yearly">Chaque année</option>
-          </select>
-        </Field>
-      </div>
-      <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-        <Field label="Statut">
-          <select value={f.status} onChange={(e) => set('status', e.target.value)}>
-            {['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'].map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Criticité">
-          <select value={f.criticality} onChange={(e) => set('criticality', Number(e.target.value))}>
-            <option value={3}>3 · critique</option>
-            <option value={2}>2 · moyenne</option>
-            <option value={1}>1 · faible</option>
-          </select>
-        </Field>
-      </div>
-      <Field label="Méta-objectif">
-        <SearchSelect
-          value={f.metaObjectiveId}
-          onChange={(v) => set('metaObjectiveId', v)}
-          emptyLabel="Aucun"
-          ariaLabel="Méta-objectif"
-          options={metas.map((m) => ({ value: m.id, label: m.title }))}
+        <input
+          autoFocus={!objective}
+          value={f.title}
+          onChange={(e) => set('title', e.target.value)}
+          onKeyDown={(e) => {
+            if (!objective && e.key === 'Enter' && f.title.trim() && f.deadline && !save.isPending)
+              save.mutate(undefined);
+          }}
         />
       </Field>
       {!objective && (
-        <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
-          <AiDescribe
-            request={{ kind: 'objective', title: f.title, parentId: f.metaObjectiveId || undefined }}
-            current={f.description}
-            onUse={(v) => set('description', v)}
-          />
-          <textarea
-            value={f.description}
-            onChange={(e) => set('description', e.target.value)}
-            className="mono"
-            style={{ minHeight: 260, fontSize: 14 }}
-          />
-        </Field>
+        <>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
+            <Field
+              label="Trimestre"
+              info="La deadline est le dernier jour du trimestre ; tu peux la préciser plus bas."
+            >
+              <select
+                value={f.deadline ? quarterOfDate(f.deadline) : ''}
+                onChange={(e) => set('deadline', quarterEnd(e.target.value))}
+              >
+                {quarterChoices(me.data?.today, f.deadline).map((q) => (
+                  <option key={q} value={q}>
+                    {quarterLabel(q)}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Méta-objectif">
+              <SearchSelect
+                value={f.metaObjectiveId}
+                onChange={(v) => set('metaObjectiveId', v)}
+                emptyLabel="Aucun"
+                ariaLabel="Méta-objectif"
+                options={metas.map((m) => ({ value: m.id, label: m.title }))}
+              />
+            </Field>
+          </div>
+          <details>
+            <summary className="cursor-pointer text-[14px]" style={{ color: 'var(--text-muted)' }}>
+              Compléter (facultatif) : mesure, deadline précise, criticité, récurrence, description
+            </summary>
+            <div className="flex flex-col gap-3 pt-3">
+              <div
+                className="grid gap-3"
+                style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}
+              >
+                <Field label="Indicateur (SMART)">
+                  <input
+                    value={f.smartIndicator}
+                    onChange={(e) => set('smartIndicator', e.target.value)}
+                    placeholder="ex. POC publiés"
+                  />
+                </Field>
+                <Field label="Cible">
+                  <input
+                    value={f.smartTarget}
+                    onChange={(e) => set('smartTarget', e.target.value)}
+                    placeholder="2"
+                  />
+                </Field>
+                <Field label="Actuel">
+                  <input
+                    value={f.smartCurrent}
+                    onChange={(e) => set('smartCurrent', e.target.value)}
+                    placeholder="0"
+                  />
+                </Field>
+              </div>
+              <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+                <Field label="Deadline (dans le trimestre)">
+                  <input
+                    type="date"
+                    value={f.deadline}
+                    min={me.data?.today}
+                    onChange={(e) => set('deadline', e.target.value)}
+                  />
+                </Field>
+                <Field
+                  label="Récurrence"
+                  info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
+                >
+                  <select
+                    value={f.recurrence}
+                    onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+                  >
+                    <option value="">Aucune</option>
+                    <option value="quarterly">Chaque trimestre</option>
+                    <option value="yearly">Chaque année</option>
+                  </select>
+                </Field>
+              </div>
+              <Field label="Criticité">
+                <select value={f.criticality} onChange={(e) => set('criticality', Number(e.target.value))}>
+                  <option value={3}>3 · critique</option>
+                  <option value={2}>2 · moyenne</option>
+                  <option value={1}>1 · faible</option>
+                </select>
+              </Field>
+              <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
+                <AiDescribe
+                  request={{ kind: 'objective', title: f.title, parentId: f.metaObjectiveId || undefined }}
+                  current={f.description}
+                  onUse={(v) => set('description', v)}
+                />
+                <textarea
+                  value={f.description}
+                  onChange={(e) => set('description', e.target.value)}
+                  className="mono"
+                  style={{ minHeight: 260, fontSize: 14 }}
+                />
+              </Field>
+            </div>
+          </details>
+        </>
+      )}
+      {objective && (
+        <>
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}
+          >
+            <Field label="Indicateur (SMART)">
+              <input
+                value={f.smartIndicator}
+                onChange={(e) => set('smartIndicator', e.target.value)}
+                placeholder="ex. POC publiés"
+              />
+            </Field>
+            <Field label="Cible">
+              <input
+                value={f.smartTarget}
+                onChange={(e) => set('smartTarget', e.target.value)}
+                placeholder="2"
+              />
+            </Field>
+            <Field label="Actuel">
+              <input
+                value={f.smartCurrent}
+                onChange={(e) => set('smartCurrent', e.target.value)}
+                placeholder="0"
+              />
+            </Field>
+          </div>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <Field label="Deadline (dans le trimestre)">
+              <input
+                type="date"
+                value={f.deadline}
+                min={me.data?.today}
+                onChange={(e) => set('deadline', e.target.value)}
+              />
+            </Field>
+            <Field
+              label="Récurrence"
+              info="Objectif qui revient (bilan santé, révision du budget…) : une fois clos (atteint, partiel ou manqué, pas abandonné), Mémento le recrée pour le trimestre ou l'année suivante, avec la même deadline décalée."
+            >
+              <select
+                value={f.recurrence}
+                onChange={(e) => set('recurrence', e.target.value as typeof f.recurrence)}
+              >
+                <option value="">Aucune</option>
+                <option value="quarterly">Chaque trimestre</option>
+                <option value="yearly">Chaque année</option>
+              </select>
+            </Field>
+          </div>
+          <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            <Field label="Statut">
+              <select value={f.status} onChange={(e) => set('status', e.target.value)}>
+                {['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'].map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABEL[s]}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Criticité">
+              <select value={f.criticality} onChange={(e) => set('criticality', Number(e.target.value))}>
+                <option value={3}>3 · critique</option>
+                <option value={2}>2 · moyenne</option>
+                <option value={1}>1 · faible</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Méta-objectif">
+            <SearchSelect
+              value={f.metaObjectiveId}
+              onChange={(v) => set('metaObjectiveId', v)}
+              emptyLabel="Aucun"
+              ariaLabel="Méta-objectif"
+              options={metas.map((m) => ({ value: m.id, label: m.title }))}
+            />
+          </Field>
+        </>
       )}
       {objective && (
         <Resources ownerType="objective" ownerId={objective.id} resources={objective.resources ?? []} />
@@ -593,7 +726,19 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
   );
 }
 
-function PathRow({ p, index, handle }: { p: PathProject; index: number; handle: React.ReactNode }) {
+function PathRow({
+  p,
+  index,
+  handle,
+  open,
+  onToggle,
+}: {
+  p: PathProject;
+  index: number;
+  handle: React.ReactNode;
+  open: boolean;
+  onToggle: () => void;
+}) {
   const dl = useDomainLookup();
   return (
     <div
@@ -614,6 +759,22 @@ function PathRow({ p, index, handle }: { p: PathProject; index: number; handle: 
       <span className="dot" style={{ background: dl.color(p.domainIds[0]) }} />
       <div className="flex-1 min-w-0 flex flex-col gap-0.5">
         <span className="flex items-center gap-2">
+          <button
+            type="button"
+            className="icon-btn flex-none"
+            style={{ width: 24, height: 24, minHeight: 0 }}
+            aria-expanded={open}
+            aria-label={open ? 'Replier les tâches' : 'Voir et ajouter les tâches'}
+            title={open ? 'Replier les tâches' : 'Voir et ajouter les tâches'}
+            onClick={onToggle}
+          >
+            <span
+              aria-hidden
+              style={{ display: 'inline-block', transform: open ? 'rotate(90deg)' : undefined }}
+            >
+              ▸
+            </span>
+          </button>
           <Link
             to="/projets/$id"
             params={{ id: p.id }}
@@ -632,7 +793,7 @@ function PathRow({ p, index, handle }: { p: PathProject; index: number; handle: 
           {STATUS_LABEL[p.status]}
           {p.isFree ? ' · libre' : ''}
           {p.dueDate ? ` · fin ${fmtDate(p.dueDate)}` : ''} · {fmtMin(p.taskStats.doneMin)} /{' '}
-          {fmtMin(p.taskStats.totalMin)}
+          {fmtMin(p.taskStats.totalMin)} · {p.taskStats.todo} tâche{p.taskStats.todo > 1 ? 's' : ''} à faire
           {p.blocked ? ' · attend le projet précédent' : ''}
         </span>
       </div>
@@ -640,8 +801,41 @@ function PathRow({ p, index, handle }: { p: PathProject; index: number; handle: 
   );
 }
 
-function SortablePath({ p, index }: { p: PathProject; index: number }) {
+/** D-75: the tasks of a path project, unfolded under its row: list (tick, reorder, open) and quick add. */
+function PathTasks({ p, onOpen }: { p: PathProject; onOpen: (taskId: string) => void }) {
+  const dl = useDomainLookup();
+  const tasks = useQuery({
+    queryKey: ['tasks', p.id],
+    queryFn: () => get<Task[]>(`/tasks?projectId=${p.id}`),
+  });
+  return (
+    <div style={{ marginLeft: 40, borderLeft: '2px solid var(--divider-2)', background: 'var(--surface)' }}>
+      {tasks.data && (
+        <TaskList
+          tasks={tasks.data}
+          projectId={p.id}
+          color={() => dl.color(p.domainIds[0])}
+          onOpen={onOpen}
+        />
+      )}
+      <div style={{ padding: '8px 12px', background: 'var(--surface-2)' }}>
+        <QuickAdd projectId={p.id} placeholder={`Nouvelle tâche de « ${p.title} »…`} defaultDuration={60} />
+      </div>
+    </div>
+  );
+}
+
+function SortablePath({
+  p,
+  index,
+  onOpenTask,
+}: {
+  p: PathProject;
+  index: number;
+  onOpenTask: (taskId: string) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: p.id });
+  const [open, setOpen] = useState(false);
   return (
     <div
       ref={setNodeRef}
@@ -651,6 +845,8 @@ function SortablePath({ p, index }: { p: PathProject; index: number }) {
       <PathRow
         p={p}
         index={index}
+        open={open}
+        onToggle={() => setOpen((x) => !x)}
         handle={
           <button
             type="button"
@@ -664,7 +860,56 @@ function SortablePath({ p, index }: { p: PathProject; index: number }) {
           </button>
         }
       />
+      {open && <PathTasks p={p} onOpen={onOpenTask} />}
     </div>
+  );
+}
+
+/** D-75: the current value of the measure, typed in place (Entrée or leaving the field saves, Échap cancels). */
+function MeasureCurrent({ o }: { o: Objective }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+  const cancelled = useRef(false);
+  const save = useAction((v: string) => patch(`/objectives/${o.id}`, { smartCurrent: v }), {
+    toast: 'Mesure mise à jour.',
+    onSuccess: () => setEditing(false),
+  });
+  if (!editing)
+    return (
+      <button
+        type="button"
+        className="border-0 bg-transparent p-0 cursor-pointer mono text-[20px] underline decoration-dotted"
+        style={{ color: 'inherit', minHeight: 0, textUnderlineOffset: 4 }}
+        title="Cliquer pour mettre à jour"
+        onClick={() => {
+          cancelled.current = false;
+          setValue(o.smartCurrent);
+          setEditing(true);
+        }}
+      >
+        {o.smartCurrent || '—'}
+      </button>
+    );
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          cancelled.current = true;
+          setEditing(false);
+        }
+        if (e.key === 'Enter') e.currentTarget.blur(); // the blur saves
+      }}
+      onBlur={() => {
+        if (!cancelled.current && value !== o.smartCurrent && !save.isPending) save.mutate(value.trim());
+        else setEditing(false);
+      }}
+      aria-label="Valeur actuelle"
+      className="mono"
+      style={{ width: 120, fontSize: 18 }}
+    />
   );
 }
 
@@ -682,6 +927,8 @@ export function ObjectivePage({ id }: { id: string }) {
     queryFn: () => get<MetaObjective[]>('/meta-objectives'),
   });
   const [editing, setEditing] = useState(false);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const addInput = useRef<HTMLInputElement>(null);
   const [order, setOrder] = useState<string[]>([]);
   useEffect(() => setOrder((path.data ?? []).map((p) => p.id)), [path.data]);
   const sensors = useSortSensors();
@@ -735,26 +982,45 @@ export function ObjectivePage({ id }: { id: string }) {
             style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
           >
             <h2 className="h2">Chemin · projets dans l'ordre</h2>
-            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-              l'ordre crée le prérequis · glisser pour réordonner
-            </span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                l'ordre crée le prérequis · glisser pour réordonner
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => {
+                  addInput.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                  addInput.current?.focus({ preventScroll: true });
+                }}
+              >
+                + Projet
+              </button>
+              <PathAiButton objectiveId={id} path={path.data} />
+            </div>
           </div>
           {rows.length === 0 && (
-            <Empty>Aucun projet sur ce chemin. Rattache un projet à cet objectif depuis sa fiche.</Empty>
+            <Empty>
+              Aucun projet sur ce chemin. Tape-les ci-dessous (Entrée entre chaque), ou demande un chemin à
+              l'IA.
+            </Empty>
           )}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={order} strategy={verticalListSortingStrategy}>
               {rows.map((p, i) => (
-                <SortablePath key={p.id} p={p} index={i} />
+                <SortablePath key={p.id} p={p} index={i} onOpenTask={setTaskId} />
               ))}
             </SortableContext>
           </DndContext>
+          <div style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
+            <PathQuickAdd objectiveId={id} path={path.data} inputRef={addInput} />
+          </div>
         </section>
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
           <Section title="Mesure">
             <div className="text-[14px]">{o.data.smartIndicator || 'Indicateur à préciser'}</div>
-            <div className="mono text-[20px]">
-              {o.data.smartCurrent || '—'}{' '}
+            <div className="mono text-[20px] flex items-baseline gap-2">
+              <MeasureCurrent o={o.data} />
               <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {o.data.smartTarget || '—'}</span>
             </div>
             <div className="label-caps">Avancement du chemin</div>
@@ -773,6 +1039,7 @@ export function ObjectivePage({ id }: { id: string }) {
         metas={metas.data ?? []}
         objective={o.data}
       />
+      <TaskDrawer taskId={taskId} onClose={() => setTaskId(null)} />
     </div>
   );
 }
@@ -948,9 +1215,12 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
 function MapObjective({
   o,
   drag = false,
+  onAddProject,
 }: {
   o: ObjectivesMap['lanes'][number]['objectives'][number];
   drag?: boolean;
+  /** D-75: an empty path offers « + projet » right on the card. */
+  onAddProject?: (o: { id: string; title: string }) => void;
 }) {
   const dl = useDomainLookup();
   // D-73: the card always moves (another quarter, another meta-objective, another place in its cell),
@@ -993,9 +1263,19 @@ function MapObjective({
       </div>
       <Progress pct={o.progressPct} />
       {o.path.length === 0 ? (
-        <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
-          Aucun projet sur ce chemin
-        </span>
+        onAddProject ? (
+          <button
+            type="button"
+            className="btn btn-sm self-start"
+            onClick={() => onAddProject({ id: o.id, title: o.title })}
+          >
+            + projet
+          </button>
+        ) : (
+          <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+            Aucun projet sur ce chemin
+          </span>
+        )
       ) : (
         <ol className="m-0 p-0 list-none flex flex-col" style={{ borderTop: '1px solid var(--divider)' }}>
           {o.path.map((p, i) => (
@@ -1096,6 +1376,26 @@ function quarterEnd(qt: string) {
   return `${y}-${String(q * 3).padStart(2, '0')}-${last}`;
 }
 
+/** « 2026-10-27 » → « 2026-Q4 ». */
+function quarterOfDate(d: string) {
+  return `${d.slice(0, 4)}-Q${Math.ceil(Number(d.slice(5, 7)) / 3)}`;
+}
+
+/** D-75: quarters offered when creating an objective: the current one and the next four (+ the preset one). */
+function quarterChoices(today: string | undefined, deadline: string) {
+  if (!today) return deadline ? [quarterOfDate(deadline)] : [];
+  let [y, q] = [Number(today.slice(0, 4)), Number(today.slice(5, 7)) / 3];
+  q = Math.ceil(q);
+  const out: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    out.push(`${y}-Q${q}`);
+    if (++q > 4) [y, q] = [y + 1, 1];
+  }
+  const cur = deadline && quarterOfDate(deadline);
+  if (cur && !out.includes(cur)) out.push(cur);
+  return out;
+}
+
 function QuarterCell({
   id,
   ids,
@@ -1161,6 +1461,7 @@ function ObjectivesMapView({
       post(`/objectives/${id}/place`, body),
   );
   const reorderMetas = useAction((ids: string[]) => post('/meta-objectives/reorder', { ids }));
+  const [addingTo, setAddingTo] = useState<{ id: string; title: string } | null>(null);
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
   const { quarters, lanes, currentQuarter } = q.data;
@@ -1330,7 +1631,7 @@ function ObjectivesMapView({
                       {l.objectives
                         .filter((o) => o.quarter === qt)
                         .map((o) => (
-                          <MapObjective key={o.id} o={o} drag={drag && !reorg} />
+                          <MapObjective key={o.id} o={o} drag={drag && !reorg} onAddProject={setAddingTo} />
                         ))}
                       {l.objectives.flatMap((o) =>
                         o.upcoming
@@ -1345,6 +1646,7 @@ function ObjectivesMapView({
           </div>
         </SortableContext>
       </DndContext>
+      {addingTo && <NewProjectPanel open onClose={() => setAddingTo(null)} objective={addingTo} />}
     </div>
   );
 }
@@ -1396,6 +1698,7 @@ export function MetaObjectivePage({ id }: { id: string }) {
     queryFn: () => get<ObjectivesMap>('/objectives/map?includeClosed=true'),
   });
   const [editing, setEditing] = useState(false);
+  const [addingTo, setAddingTo] = useState<{ id: string; title: string } | null>(null);
   const saveDescription = useAction(
     (description: string) => patch(`/meta-objectives/${id}`, { description }),
     { toast: 'Description enregistrée.' },
@@ -1442,12 +1745,13 @@ export function MetaObjectivePage({ id }: { id: string }) {
               <span className="label-caps px-1" style={{ fontSize: 11 }}>
                 {quarterLabel(o.quarter)}
               </span>
-              <MapObjective o={o} />
+              <MapObjective o={o} onAddProject={setAddingTo} />
             </div>
           ))}
         </div>
       </section>
       {editing && <MetaPanel open meta={m} onClose={() => setEditing(false)} />}
+      {addingTo && <NewProjectPanel open onClose={() => setAddingTo(null)} objective={addingTo} />}
     </div>
   );
 }
