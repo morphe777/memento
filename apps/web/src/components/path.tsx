@@ -193,7 +193,10 @@ function PathAiPanel({
     started.current = true;
     ask([]);
   }, []);
-  useEffect(() => end.current?.scrollIntoView({ block: 'nearest' }), [messages, busy]);
+  // Braces: recent Chrome returns a Promise from scrollIntoView, which React would take for a cleanup.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'nearest' });
+  }, [messages, busy]);
   const send = () => {
     const text = reply.trim();
     if (!text || busy) return;
