@@ -1,18 +1,16 @@
 import { DomainError } from '../errors.ts';
 
-export const ALLOWED_DURATIONS = [30, 60, 120] as const;
+export const ALLOWED_DURATIONS = [5, 15, 30, 60, 120] as const;
+export type TaskDuration = (typeof ALLOWED_DURATIONS)[number];
 
-/** RB-03 (DM-32): duration ∈ {30, 60, 120}; > 120 must be split. Null allowed (ideas, drafts). */
+/** RB-03 (DM-32, D-67): duration ∈ {5, 15, 30, 60, 120}; > 120 must be split. Null allowed (ideas, drafts). */
 export function checkTaskDuration(durationMin: number | null | undefined): void {
   if (durationMin === null || durationMin === undefined) return;
   if (durationMin > 120) {
-    throw new DomainError(
-      'TASK_TOO_LONG',
-      'Tâche de plus de 2 h : à découper en tâches de 30 min, 1 h ou 2 h.',
-    );
+    throw new DomainError('TASK_TOO_LONG', 'Tâche de plus de 2 h : à découper en tâches de 2 h au plus.');
   }
   if (!(ALLOWED_DURATIONS as readonly number[]).includes(durationMin)) {
-    throw new DomainError('INVALID_DURATION', 'Durée possible : 30 min, 1 h ou 2 h.');
+    throw new DomainError('INVALID_DURATION', 'Durée possible : 5 min, 15 min, 30 min, 1 h ou 2 h.');
   }
 }
 

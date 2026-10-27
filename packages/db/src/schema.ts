@@ -129,7 +129,7 @@ export const task = sqliteTable(
     projectId: text('project_id').references(() => project.id), // null = Inbox
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
-    durationMin: integer('duration_min'), // 30 | 60 | 120, nullable for ideas (RB-03)
+    durationMin: integer('duration_min'), // 5 | 15 | 30 | 60 | 120, nullable for ideas (RB-03)
     position: integer('position').notNull().default(0),
     isFree: integer('is_free', { mode: 'boolean' }).notNull().default(false),
     isExperience: integer('is_experience', { mode: 'boolean' }).notNull().default(false),
