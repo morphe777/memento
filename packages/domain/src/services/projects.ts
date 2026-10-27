@@ -15,7 +15,7 @@ import {
 } from '../rules/projects.ts';
 import { upcomingObjectiveOccurrences } from '../rules/recurrence.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
-import { withTemplate } from '../settings.ts';
+import { getSettings, withTemplate } from '../settings.ts';
 import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
 import { renewProject } from './recurrence.ts';
 import { refreshObjectiveProgress } from './referential.ts';
@@ -639,19 +639,21 @@ export function getObjectivesMap(ctx: Ctx, f: { includeClosed?: boolean } = {}) 
         : [];
     return { ...o, domainId: dominant(path), path, upcoming };
   });
-  const lanes = [
-    ...metas
-      .filter((m) => f.includeClosed || m.status === 'active' || m.status === 'paused')
-      .map((m) => ({
-        meta: m as typeof m | null,
-        objectives: withPath.filter((o) => o.metaObjectiveId === m.id),
-      })),
-    {
-      meta: null,
-      objectives: withPath.filter(
-        (o) => !o.metaObjectiveId || !metas.some((m) => m.id === o.metaObjectiveId),
-      ),
-    },
-  ].filter((l) => l.meta || l.objectives.length);
+  const metaLanes = metas
+    .filter((m) => f.includeClosed || m.status === 'active' || m.status === 'paused')
+    .map((m) => ({
+      meta: m as typeof m | null,
+      objectives: withPath.filter((o) => o.metaObjectiveId === m.id),
+    }));
+  const noMeta = {
+    meta: null,
+    objectives: withPath.filter((o) => !o.metaObjectiveId || !metas.some((m) => m.id === o.metaObjectiveId)),
+  };
+  // D-69: the « Sans méta-objectif » lane goes before the first meta-objective ranked at or after its place.
+  const at = getSettings(ctx)['map.no_meta_position'];
+  const before = metaLanes.findIndex((l) => metas.indexOf(l.meta!) >= at);
+  const lanes = (
+    before < 0 ? [...metaLanes, noMeta] : [...metaLanes.slice(0, before), noMeta, ...metaLanes.slice(before)]
+  ).filter((l) => l.meta || l.objectives.length);
   return { quarters, currentQuarter: current, lanes };
 }

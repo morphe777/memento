@@ -27,6 +27,8 @@ export const domainPatch = z
   })
   .partial();
 export const reorderBody = z.object({ ids: z.array(uuid).min(1) });
+/** D-69: meta-objectives in order; 'none' marks where the « Sans méta-objectif » lane goes. */
+export const metaReorderBody = z.object({ ids: z.array(z.union([uuid, z.literal('none')])).min(1) });
 
 export const groupCreate = z.object({ name: title, domainId: uuid });
 export const groupPatch = groupCreate.partial();

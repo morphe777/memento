@@ -38,6 +38,7 @@ export const settingsSchema = z.object({
   'ui.projects_default_view': z.enum(['tree', 'list', 'kanban']),
   'month.max_projects': z.number().int().min(1).max(20),
   'quarter.max_objectives': z.number().int().min(1).max(20),
+  'map.no_meta_position': z.number().int().min(0).max(1000),
   // D-58: AI provider for « Proposer avec l'IA ». Keys stay in environment variables, never here.
   'ai.provider': z.enum(['none', 'anthropic', 'openai', 'openrouter', 'google', 'ollama', 'custom']),
   'ai.model': z.string().trim().max(200),
@@ -82,6 +83,7 @@ export const DEFAULT_SETTINGS: Settings = {
   'ui.projects_default_view': 'tree',
   'month.max_projects': 3, // D-47: alert above this many month projects at once
   'quarter.max_objectives': 3, // D-48: alert above this many objectives in a quarter
+  'map.no_meta_position': 0, // D-69: « Sans méta-objectif » lane on top, movable (index among the meta-objectives)
   'ai.provider': 'none', // D-58: off until chosen in Configuration › IA
   'ai.model': '', // empty: the provider's default (Anthropic) or required
   'ai.base_url': '', // empty: the provider's usual URL
