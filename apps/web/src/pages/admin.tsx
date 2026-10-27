@@ -284,6 +284,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.quarter',
       'ai.prompt.describe',
       'ai.prompt.breakdown',
+      'ai.prompt.path',
     ],
   };
   // D-66: on the IA tab, a typed key is saved with the rest (its own endpoint, never read back).
@@ -1064,6 +1065,11 @@ const AI_PROMPTS = [
     'ai.prompt.breakdown',
     'Prompt Découpage',
     "« Découper avec l'IA » sur un projet : nombre et taille des tâches, quand poser des questions.",
+  ],
+  [
+    'ai.prompt.path',
+    'Prompt Chemin',
+    "« Proposer un chemin avec l'IA » sur un objectif : nombre et taille des projets, quand poser des questions.",
   ],
 ] as const;
 

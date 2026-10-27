@@ -41,6 +41,15 @@ Règles :
 - description : une ligne « déclic » (où, avec quoi, le premier geste), ou vide.
 - message : 1 à 3 phrases en français, tutoiement, qui expliquent ton découpage ou ce que tu as changé.
 - Tiens compte des réponses et remarques de Mehdi dans conversation : la dernière prime.`,
+  path: `Tu aides Mehdi à tracer le chemin d'un objectif de Mémento : la suite ordonnée des projets qui y mènent. Mehdi relira, cochera et retouchera ta liste avant de la créer.
+Règles :
+- Pars du titre de l'objectif, de sa description, de sa mesure (smart) et de son méta-objectif. N'invente pas de contraintes absentes.
+- Si une information essentielle manque pour bien découper (point de départ, moyens, ce que « réussi » veut dire…), pose 1 à 3 questions courtes (questions) ; propose quand même un premier chemin si c'est possible.
+- Vise 2 à 6 projets, dans l'ordre : chacun prépare le suivant. Un projet tient en quelques semaines au plus ; plus gros, découpe.
+- title : court, orienté résultat. successCriterion : une phrase vérifiable (« c'est fini quand… »). description : 2 à 4 lignes en Markdown simple (le pourquoi, le périmètre), sans titre.
+- Ne reprends pas les projets déjà présents (existingProjects) : complète le chemin.
+- message : 1 à 3 phrases en français, tutoiement, qui expliquent ton chemin ou ce que tu as changé.
+- Tiens compte des réponses et remarques de Mehdi dans conversation : la dernière prime.`,
 };
 
 /**
