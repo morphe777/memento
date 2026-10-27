@@ -10,7 +10,7 @@ import { Duration, Empty, ErrorBox, InfoTip, Loading, PageHeader, Section } from
 import { get, post } from '../lib/api.ts';
 import { fmtDate } from '../lib/format.ts';
 import { useAction, useDomainLookup } from '../lib/hooks.ts';
-import type { ExperiencesPage as Data } from '../lib/types.ts';
+import type { ExperiencesPage as Data, TaskDuration } from '../lib/types.ts';
 
 type Item = Data['lived'][number];
 
@@ -214,7 +214,7 @@ function Memory({ t, onOpen }: { t: Item; onOpen: (id: string) => void }) {
 function AddIdea() {
   const dl = useDomainLookup();
   const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState<30 | 60 | 120 | null>(120);
+  const [duration, setDuration] = useState<TaskDuration | null>(120);
   const [domainId, setDomainId] = useState('');
   const add = useAction(
     () => post('/experiences', { title: title.trim(), durationMin: duration, domainId: domainId || null }),
@@ -237,11 +237,13 @@ function AddIdea() {
       />
       <select
         value={duration ?? ''}
-        onChange={(e) => setDuration(e.target.value ? (Number(e.target.value) as 30 | 60 | 120) : null)}
+        onChange={(e) => setDuration(e.target.value ? (Number(e.target.value) as TaskDuration) : null)}
         aria-label="Durée"
         style={{ width: 120 }}
       >
         <option value="">Durée ?</option>
+        <option value="5">5 min</option>
+        <option value="15">15 min</option>
         <option value="30">30 min</option>
         <option value="60">1 h</option>
         <option value="120">2 h</option>

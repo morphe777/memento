@@ -120,7 +120,7 @@ export const projectListQuery = z.object({
   objectiveId: uuid.optional(),
 });
 
-export const duration = z.union([z.literal(30), z.literal(60), z.literal(120)]);
+export const duration = z.union([z.literal(5), z.literal(15), z.literal(30), z.literal(60), z.literal(120)]);
 const taskFields = {
   title,
   description: text.optional(),

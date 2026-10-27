@@ -117,8 +117,8 @@ describe('RB-02 promotion', () => {
 });
 
 describe('RB-03 task duration', () => {
-  it('accepts 30/60/120 and null', () => {
-    for (const d of [30, 60, 120, null]) expect(code(() => checkTaskDuration(d))).toBeNull();
+  it('accepts 5/15/30/60/120 and null', () => {
+    for (const d of [5, 15, 30, 60, 120, null]) expect(code(() => checkTaskDuration(d))).toBeNull();
   });
   it('refuses > 120 with split message', () =>
     expect(code(() => checkTaskDuration(240))).toBe('TASK_TOO_LONG'));

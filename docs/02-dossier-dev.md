@@ -88,7 +88,7 @@ Versions : prendre les dernières versions stables au moment du dev ; ne pas fig
 | `objective` | meta_objective_id?, title, description, smart_indicator, smart_target, deadline, quarter, criticality (1-3), status | deadline obligatoire, dans le trimestre (DM-12). status : active, paused, achieved, partial, failed, abandoned. |
 | `project` | title, status, objective_id?, position_in_objective, sequence_mode, primary_domain_id, success_criterion, start_date, due_date, month_flag (YYYY-MM)?, success?, last_touched_at, description | status : idea, active, paused, done, abandoned. Promotion : §5. sequence_mode : sequential (défaut) ou parallel. |
 | `project_group` | project_id, group_id | N-N. Domaines du projet = domaines distincts de ses groupes, 3 max. |
-| `task` | project_id? (null = Inbox), title, description, duration_min, position, is_free, is_experience, status, due_date?, recurrence_rule?, domain_id? (Inbox), postpone_count, done_at | duration_min ∈ {30, 60, 120} (DM-32). status : todo, done, cancelled. |
+| `task` | project_id? (null = Inbox), title, description, duration_min, position, is_free, is_experience, status, due_date?, recurrence_rule?, domain_id? (Inbox), postpone_count, done_at | duration_min ∈ {5, 15, 30, 60, 120} (DM-32, D-67). status : todo, done, cancelled. |
 | `task_dependency` | task_id, depends_on_task_id | Prérequis explicites en plus de l'ordre. Pas de cycle. |
 | `project_dependency` | project_id, depends_on_project_id | Idem pour les projets d'un objectif. |
 | `resource_link` | owner_type, owner_id, label, url | DM-70 : objectif, projet, tâche, groupe. |
@@ -126,7 +126,7 @@ Toutes codées dans `packages/domain`, testées unitairement, appliquées par l'
 | --- | --- | --- |
 | RB-01 | Une Idée n'a besoin que d'un titre | status = idea : aucun autre champ requis (DM-85) |
 | RB-02 | Promotion Idée → Actif exige : critère de succès, ≥ 1 groupe, ≥ 1 tâche, due_date − start_date ≤ 31 jours | Sinon 422 avec la liste des manques (DM-86, DM-23) |
-| RB-03 | Tâche : durée ∈ {30, 60, 120} min | > 120 refusé : message « à découper » (DM-32) |
+| RB-03 | Tâche : durée ∈ {5, 15, 30, 60, 120} min (D-67) | > 120 refusé : message « à découper » (DM-32) |
 | RB-04 | Domaines d'un projet = domaines de ses groupes, 3 max ; principal ∈ cette liste, défaut = le plus prioritaire | Recalculé à chaque changement de groupes (DM-84, DM-91) |
 | RB-05 | Objectif : deadline obligatoire, ≤ fin du trimestre de l'objectif | DM-12 |
 | RB-06 | Disponibilité en mode séquentiel : une tâche est disponible si toutes les tâches non « libres » placées avant sont faites ou choisies dans le plan en cours | DM-51 ; mode parallel : toutes disponibles |

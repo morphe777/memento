@@ -22,7 +22,7 @@ import { Fragment, useEffect, useRef, useState } from 'react';
 import { del, get, patch, post } from '../lib/api.ts';
 import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
-import type { Project, Resource, Task, TaskDetail } from '../lib/types.ts';
+import type { Project, Resource, Task, TaskDetail, TaskDuration } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
 import {
   ConfirmDialog,
@@ -301,7 +301,7 @@ export function QuickAdd({
 }: {
   projectId: string | null;
   placeholder: string;
-  defaultDuration?: 30 | 60 | 120 | null;
+  defaultDuration?: TaskDuration | null;
   /** Inbox: deadline and recurrence can be set right away (RB-11). */
   withSchedule?: boolean;
 }) {
@@ -347,6 +347,10 @@ export function QuickAdd({
         style={{ flex: '0 1 112px', minWidth: 0 }}
       >
         <option value="">Durée ?</option>
+        <option value="5">5 min</option>
+        <option value="15">15 min</option>
+        <option value="5">5 min</option>
+        <option value="15">15 min</option>
         <option value="30">30 min</option>
         <option value="60">1 h</option>
         <option value="120">2 h</option>

@@ -22,7 +22,7 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à Mehd
 | Horodatages | ISO 8601 UTC (`doneAt`, `createdAt`…) |
 | Semaine | ISO `AAAA-Www` (lundi → dimanche), ex. `2026-W45` |
 | Mois | `AAAA-MM` · Trimestre : `AAAA-Qn`, ex. `2026-Q4` |
-| Durée d'une tâche | minutes : **30, 60 ou 120** (2 h max, RB-03) ; `null` = inconnue (idées) |
+| Durée d'une tâche | minutes : **5, 15, 30, 60 ou 120** (2 h max, RB-03) ; `null` = inconnue (idées) |
 | Récurrence | RRULE iCalendar, **Inbox seulement** : `FREQ=WEEKLY`, `FREQ=MONTHLY`, `FREQ=MONTHLY;INTERVAL=3`, `FREQ=YEARLY` |
 | Descriptions | **Markdown** (titres, listes, cases `- [ ]`, tableaux, liens). Pas de HTML |
 | Identifiants | UUID |
@@ -135,7 +135,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `MONTH_IN_PAST` | mois déjà passé |
 | `INVALID_STATUS_TRANSITION` | passage de statut interdit (le message dit lequel utiliser) |
 | `SUCCESS_ANSWER_REQUIRED` | terminer exige `success: true\|false` |
-| `INVALID_DURATION` | durée 30, 60 ou 120 min |
+| `INVALID_DURATION` | durée 5, 15, 30, 60 ou 120 min |
 | `TASK_LOCKED` | la tâche attend la précédente ou un prérequis |
 | `TASK_NOT_TODO` / `TASK_CANCELLED` | tâche déjà faite / annulée |
 | `PROJECT_NOT_ACTIVE` | tâche d'un projet ni prêt ni du mois |

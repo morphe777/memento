@@ -174,7 +174,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'create_project',
-    'Crée un projet (critère de succès, groupes, tâches 30/60/120 min ; dates facultatives) puis le promeut en « prêt » (backlog). Les manques éventuels sont dans le champ gaps.',
+    'Crée un projet (critère de succès, groupes, tâches 5/15/30/60/120 min ; dates facultatives) puis le promeut en « prêt » (backlog). Les manques éventuels sont dans le champ gaps.',
     {
       ...S.projectCreate.shape,
       tasks: z
