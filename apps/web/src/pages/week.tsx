@@ -84,11 +84,48 @@ function eyebrow(ex: Execution) {
   return <WeekNav ex={ex} />;
 }
 
+/** Compact view by default: done tasks and the detail line under each task are hidden until asked for. */
+function useWeekView() {
+  const [showDone, setShowDone] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
+  return { showDone, setShowDone, showDetail, setShowDetail };
+}
+
+function ViewToggles({ view }: { view: ReturnType<typeof useWeekView> }) {
+  return (
+    <span className="flex items-center gap-4 flex-wrap text-[13px]" style={{ color: 'var(--text-muted)' }}>
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input type="checkbox" checked={view.showDone} onChange={(e) => view.setShowDone(e.target.checked)} />
+        Tâches terminées
+      </label>
+      <label className="flex items-center gap-1.5 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={view.showDetail}
+          onChange={(e) => view.setShowDetail(e.target.checked)}
+        />
+        Détails
+      </label>
+    </span>
+  );
+}
+
+function AllDone({ ex }: { ex: Execution }) {
+  const done = ex.tasks.length - ex.remaining;
+  return (
+    <Empty>
+      Tout est fait ({done} tâche{done > 1 ? 's' : ''} terminée{done > 1 ? 's' : ''}).
+    </Empty>
+  );
+}
+
 function WeekDesktop({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false); // V-13: always folded by default, state not remembered
   const [replanOpen, setReplanOpen] = useState(false);
+  const view = useWeekView();
+  const tasks = view.showDone ? ex.tasks : ex.tasks.filter((t) => !t.done);
   const mixRows = useDomainRows(ex.domainMix);
   return (
     <div className="flex flex-col gap-6">
@@ -106,6 +143,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
             <h2 className="h2">
               À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
             </h2>
+            <ViewToggles view={view} />
           </div>
           {!ex.plan || ex.tasks.length === 0 ? (
             <Empty>
@@ -114,14 +152,17 @@ function WeekDesktop({ ex }: { ex: Execution }) {
                 Planifier la semaine
               </Link>
             </Empty>
+          ) : tasks.length === 0 ? (
+            <AllDone ex={ex} />
           ) : (
-            ex.tasks.map((t) => (
+            tasks.map((t) => (
               <WeekRow
                 key={t.taskId}
                 t={t}
                 onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
                 color={dl.color(t.domainId)}
                 domainName={dl.name(t.domainId)}
+                detail={view.showDetail}
               />
             ))
           )}
@@ -157,9 +198,11 @@ function WeekDesktop({ ex }: { ex: Execution }) {
                     <span className="text-[15px]" style={{ color: 'var(--text-2)' }}>
                       {b.title}
                     </span>
-                    <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                      {dl.name(b.domainId)} · <ProjectLink r={b} />
-                    </span>
+                    {view.showDetail && (
+                      <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                        {dl.name(b.domainId)} · <ProjectLink r={b} />
+                      </span>
+                    )}
                   </div>
                   <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-muted)' }}>
                     {fmtMin(b.durationMin)}
@@ -264,16 +307,18 @@ function WeekRow({
   onToggle,
   color,
   domainName,
+  detail,
 }: {
   t: Row;
   onToggle: () => void;
   color: string;
   domainName: string;
+  detail: boolean;
 }) {
   return (
     <div
-      className="row-line flex gap-3.5 items-start"
-      style={{ padding: '14px 20px', opacity: t.done ? 0.65 : 1 }}
+      className={`row-line flex gap-3.5 ${detail ? 'items-start' : 'items-center'}`}
+      style={{ padding: detail ? '14px 20px' : '10px 20px', opacity: t.done ? 0.65 : 1 }}
     >
       <TaskCheck done={t.done} color={color} onToggle={onToggle} label={t.title} />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
@@ -287,18 +332,22 @@ function WeekRow({
           {t.isExperience && <ExperienceBadge />}
           {t.kind === 'bonus' && <BonusBadge />}
         </div>
-        <div className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-          <span className="dot" style={{ background: color }} />
-          <span className="font-medium" style={{ color: 'var(--text-2)' }}>
-            {domainName}
-          </span>
-          <span>·</span>
-          <ProjectLink r={t} />
-        </div>
-        {t.why && !t.done && (
-          <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            {t.why}
-          </div>
+        {detail && (
+          <>
+            <div className="flex items-center gap-2 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+              <span className="dot" style={{ background: color }} />
+              <span className="font-medium" style={{ color: 'var(--text-2)' }}>
+                {domainName}
+              </span>
+              <span>·</span>
+              <ProjectLink r={t} />
+            </div>
+            {t.why && !t.done && (
+              <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                {t.why}
+              </div>
+            )}
+          </>
         )}
         {t.done && <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />}
       </div>
@@ -373,6 +422,8 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false);
+  const view = useWeekView();
+  const tasks = view.showDone ? ex.tasks : ex.tasks.filter((t) => !t.done);
   return (
     <div className="flex flex-col" style={{ gap: 12 }}>
       <div className="flex flex-col gap-1" style={{ padding: '16px 8px 0' }}>
@@ -403,13 +454,17 @@ function WeekPhone({ ex }: { ex: Execution }) {
       </div>
       <div className="card overflow-hidden flex flex-col">
         <div
-          className="text-[15px] font-semibold"
+          className="flex flex-col gap-2"
           style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider-2)' }}
         >
-          À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
+          <span className="text-[15px] font-semibold">
+            À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
+          </span>
+          <ViewToggles view={view} />
         </div>
         {(!ex.plan || ex.tasks.length === 0) && <Empty>Pas encore de plan pour cette semaine.</Empty>}
-        {ex.tasks.map((t) => {
+        {ex.tasks.length > 0 && tasks.length === 0 && <AllDone ex={ex} />}
+        {tasks.map((t) => {
           const color = dl.color(t.domainId);
           return (
             <div
@@ -433,13 +488,15 @@ function WeekPhone({ ex }: { ex: Execution }) {
                 >
                   {t.title}
                 </span>
-                <span
-                  className="text-[12px] flex flex-wrap gap-1.5 items-center"
-                  style={{ color: 'var(--text-muted)' }}
-                >
-                  {dl.name(t.domainId)} · {t.isExperience ? 'Expérience' : t.why}
-                  {t.kind === 'bonus' && <BonusBadge />}
-                </span>
+                {view.showDetail && (
+                  <span
+                    className="text-[12px] flex flex-wrap gap-1.5 items-center"
+                    style={{ color: 'var(--text-muted)' }}
+                  >
+                    {dl.name(t.domainId)} · {t.isExperience ? 'Expérience' : t.why}
+                    {t.kind === 'bonus' && <BonusBadge />}
+                  </span>
+                )}
                 {t.done && (
                   <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />
                 )}
@@ -480,9 +537,11 @@ function WeekPhone({ ex }: { ex: Execution }) {
                 <span className="text-[14px]" style={{ color: 'var(--text-2)' }}>
                   {b.title}
                 </span>
-                <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                  {dl.name(b.domainId)} · {fmtMin(b.durationMin)}
-                </span>
+                {view.showDetail && (
+                  <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                    {dl.name(b.domainId)} · {fmtMin(b.durationMin)}
+                  </span>
+                )}
               </div>
               <button
                 type="button"
