@@ -147,6 +147,7 @@ export function ObjectivesPage() {
         <ObjectivesMapView
           includeClosed={showClosed}
           reorg={reorg}
+          drag={!phone}
           onEditMeta={setEditingMeta}
           onCreateIn={(p) => {
             setPreset(p);
@@ -946,27 +947,26 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
 
 function MapObjective({
   o,
-  reorg = false,
+  drag = false,
 }: {
   o: ObjectivesMap['lanes'][number]['objectives'][number];
-  reorg?: boolean;
+  drag?: boolean;
 }) {
   const dl = useDomainLookup();
-  // D-69: only in « Réorganiser » mode the card moves (another quarter, another meta-objective, another
-  // place in its cell): a missed click can no longer move it.
+  // D-73: the card always moves (another quarter, another meta-objective, another place in its cell),
+  // « Réorganiser » only sorts the lanes. A click stays a click (the drag starts after 4 px).
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: o.id,
-    disabled: !reorg,
+    disabled: !drag,
   });
   return (
     <div
       ref={setNodeRef}
-      {...(reorg ? { ...attributes, ...listeners } : {})}
-      className={`card flex flex-col gap-2${reorg ? ' cursor-grab' : ''}`}
+      {...(drag ? { ...attributes, ...listeners } : {})}
+      className="card flex flex-col gap-2"
       style={{
         padding: '12px 14px 12px 12px',
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
-        outline: reorg ? '1.5px dashed var(--btn-border)' : undefined,
         transform: CSS.Translate.toString(transform),
         transition,
         zIndex: isDragging ? 30 : undefined,
@@ -1141,11 +1141,13 @@ function QuarterCell({
 function ObjectivesMapView({
   includeClosed,
   reorg,
+  drag,
   onEditMeta,
   onCreateIn,
 }: {
   includeClosed: boolean;
   reorg: boolean;
+  drag: boolean;
   onEditMeta: (m: MetaObjective) => void;
   onCreateIn: (p: { metaObjectiveId: string; deadline: string }) => void;
 }) {
@@ -1245,8 +1247,8 @@ function ObjectivesMapView({
       <div className="flex flex-wrap items-center gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
         {reorg ? (
           <span>
-            Glisse une carte vers un autre trimestre, un autre méta-objectif ou une autre place ; les lignes
-            (« Sans méta-objectif » comprise) se trient par leur poignée ⠿.
+            Trie les lignes (« Sans méta-objectif » comprise) par leur poignée ⠿. Les cartes, elles, se
+            glissent hors de ce mode vers un autre trimestre ou un autre méta-objectif.
           </span>
         ) : (
           legend.map(([icon, label]) => (
@@ -1328,7 +1330,7 @@ function ObjectivesMapView({
                       {l.objectives
                         .filter((o) => o.quarter === qt)
                         .map((o) => (
-                          <MapObjective key={o.id} o={o} reorg={reorg} />
+                          <MapObjective key={o.id} o={o} drag={drag && !reorg} />
                         ))}
                       {l.objectives.flatMap((o) =>
                         o.upcoming
@@ -1347,7 +1349,7 @@ function ObjectivesMapView({
   );
 }
 
-/** D-69: header of a lane; in « Réorganiser » mode a handle ⠿ drags it up or down among the meta-objectives. */
+/** D-69, D-73: header of a lane; « Réorganiser » only shows its handle ⠿ to sort the meta-objectives. */
 function LaneHeader({ id, reorg, children }: { id: string; reorg: boolean; children: ReactNode }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id,
