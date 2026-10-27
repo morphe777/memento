@@ -1241,8 +1241,8 @@ function AiConfig({
         </p>
       )}
       <Field
-        label="Tes consignes"
-        info="Ce que l'IA doit savoir de toi en plus des données : contraintes, préférences (ex. « le mercredi je suis avec les enfants »)."
+        label="Ton contexte"
+        info="Qui tu es, ce que Mémento ne sait pas : situation, contraintes, préférences, biais connus (ex. « je sous-estime le temps caché des projets »). Des faits sur toi, pas des ordres : les règles de chaque travail sont dans les prompts ci-dessous. Envoyé à chaque appel à l'IA (planification, descriptions, découpage)."
       >
         <textarea
           value={s['ai.instructions']}
