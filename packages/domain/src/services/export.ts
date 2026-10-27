@@ -1,6 +1,7 @@
 // Configuration › Données (decision D-45): full export of the data as JSON, as a backup / for other tools.
-// Secrets are never exported: password hashes, sessions and API token hashes are left out.
-import { schema } from '@memento/db';
+// Secrets are never exported: password hashes, sessions, API token hashes and AI keys (D-66) are left out.
+import { schema, sql } from '@memento/db';
+import { SECRET_SETTING_PREFIX } from '../ai/providers.ts';
 import { audit, type Ctx, ctxNow, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
 
@@ -26,7 +27,11 @@ export function exportData(ctx: Ctx) {
       weekPlan: ctx.db.select().from(s.weekPlan).all(),
       weekPlanItem: ctx.db.select().from(s.weekPlanItem).all(),
       report: ctx.db.select().from(s.report).all(),
-      setting: ctx.db.select().from(s.setting).all(),
+      setting: ctx.db
+        .select()
+        .from(s.setting)
+        .all()
+        .filter((r) => !r.key.startsWith(SECRET_SETTING_PREFIX)),
       auditLog: ctx.db.select().from(s.auditLog).all(),
       apiToken: ctx.db
         .select({
@@ -87,10 +92,19 @@ export function importData(ctx: Ctx, data: unknown) {
     if (!Array.isArray(d.tables[key]))
       throw new DomainError('INVALID_EXPORT', `Export incomplet : table « ${key} » absente.`);
   return tx(ctx, () => {
-    for (const [, table] of [...IMPORT_ORDER].reverse()) ctx.db.delete(table).run();
+    // The stored AI keys (D-66) are not in the file: they stay as they are.
+    for (const [, table] of [...IMPORT_ORDER].reverse())
+      if (table === schema.setting)
+        ctx.db
+          .delete(table)
+          .where(sql`${schema.setting.key} not like ${`${SECRET_SETTING_PREFIX}%`}`)
+          .run();
+      else ctx.db.delete(table).run();
     const counts: Record<string, number> = {};
     for (const [key, table] of IMPORT_ORDER) {
-      const rows = d.tables![key] as Record<string, unknown>[];
+      let rows = d.tables![key] as Record<string, unknown>[];
+      if (table === schema.setting)
+        rows = rows.filter((r) => !String(r.key).startsWith(SECRET_SETTING_PREFIX));
       for (let i = 0; i < rows.length; i += 200)
         ctx.db
           .insert(table)

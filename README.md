@@ -102,11 +102,12 @@ Version : visible en bas du menu de l'application, dans `GET /api/v1/health`, da
 
 ### 4. IA (« Proposer avec l'IA »)
 
-Choisir le fournisseur et le modèle dans Configuration › IA (Anthropic, OpenAI, OpenRouter, Google Gemini, Ollama ou
-tout serveur compatible OpenAI). La clé se met dans les variables d'environnement de la stack, jamais dans
-l'application : `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` ou
-`MEMENTO_AI_API_KEY` (valable pour tous). Ollama n'en demande pas ; en Docker, renseigner son URL
-(ex. `http://192.168.1.10:11434/v1`). Les prompts semaine / mois / trimestre se modifient dans la même page.
+Dans Configuration › IA : choisir le fournisseur (Anthropic, OpenAI, OpenRouter, Google Gemini, Ollama ou tout
+serveur compatible OpenAI), vérifier l'URL (pré-remplie), coller la clé d'API, puis « Tester et charger les
+modèles » et choisir le modèle dans la liste. La clé est gardée dans la base (une par fournisseur), jamais
+réaffichée ni exportée. Les variables `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`,
+`GEMINI_API_KEY` ou `MEMENTO_AI_API_KEY` restent lues si aucune clé n'est saisie. Ollama n'en demande pas ; en
+Docker, renseigner son URL (ex. `http://192.168.1.10:11434/v1`). Les prompts semaine / mois / trimestre se modifient dans la même page.
 
 ## Sauvegarde
 

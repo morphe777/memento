@@ -7,6 +7,7 @@ import {
   addTaskDependency,
   aiStatus,
   buildEngineInput,
+  checkAi,
   closeWeek,
   completeProject,
   completeTask,
@@ -19,7 +20,9 @@ import {
   deleteObjective,
   deleteProject,
   deleteTask,
+  exportData,
   generateReport,
+  getAiKey,
   getExecution,
   getExperiencesPage,
   getMonthPlanningPage,
@@ -30,6 +33,7 @@ import {
   getProjectReadiness,
   getQuarterPlanningPage,
   getSettings,
+  importData,
   listBoardTasks,
   listChanges,
   listDomains,
@@ -52,6 +56,7 @@ import {
   scoreCandidates,
   search,
   seed,
+  setAiKey,
   setObjectiveQuarter,
   setProjectGroups,
   setProjectMonth,
@@ -863,7 +868,7 @@ describe('D-58 Proposer avec l’IA', () => {
     const s = getSettings(ctx);
     expect(aiStatus(s, {}).configured).toBe(false);
     const anth = { ...s, 'ai.provider': 'anthropic' as const };
-    expect(aiStatus(anth, {}).reason).toMatch(/ANTHROPIC_API_KEY/);
+    expect(aiStatus(anth, {}).reason).toMatch(/Clé/);
     expect(aiStatus(anth, { ANTHROPIC_API_KEY: 'k' })).toMatchObject({
       configured: true,
       model: 'claude-opus-5-5',
@@ -872,6 +877,73 @@ describe('D-58 Proposer avec l’IA', () => {
       /Modèle/,
     );
     expect(aiStatus({ ...s, 'ai.provider': 'ollama', 'ai.model': 'm' }, {}).configured).toBe(true);
+  });
+
+  it('D-66: the typed API key is stored per provider, masked, never exported, kept by an import', () => {
+    const ctx = makeCtx();
+    setAiKey(ctx, 'openrouter', ' sk-or-v1-abcdef123456 ');
+    expect(getAiKey(ctx, 'openrouter')).toBe('sk-or-v1-abcdef123456');
+    expect(getAiKey(ctx, 'openai')).toBe('');
+    const s = { ...getSettings(ctx), 'ai.provider': 'openrouter' as const, 'ai.model': 'openai/gpt-5.2' };
+    const st = aiStatus(s, { OPENROUTER_API_KEY: 'env-key' }, getAiKey(ctx, 'openrouter'));
+    expect(st).toMatchObject({ configured: true, keySource: 'saisie', keyHint: '…3456' });
+    expect(JSON.stringify(st)).not.toContain('sk-or-v1');
+    expect(st.baseUrl).toBe('https://openrouter.ai/api/v1');
+    const dump = exportData(ctx);
+    expect(JSON.stringify(dump)).not.toContain('sk-or-v1');
+    expect(Object.keys(getSettings(ctx))).not.toContain('secret.ai.key.openrouter');
+    importData(ctx, dump);
+    expect(getAiKey(ctx, 'openrouter')).toBe('sk-or-v1-abcdef123456');
+    setAiKey(ctx, 'openrouter', '');
+    expect(getAiKey(ctx, 'openrouter')).toBe('');
+  });
+
+  it('D-66: checkAi validates the OpenRouter key and lists models, structured-output ones first', async () => {
+    const calls: { url: string; auth: string | null }[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (url: string, init?: RequestInit) => {
+      calls.push({ url, auth: new Headers(init?.headers).get('authorization') });
+      const body = url.endsWith('/key')
+        ? { data: { limit_remaining: 4.5, usage: 0.5 } }
+        : {
+            data: [
+              {
+                id: 'b/plain',
+                name: 'Plain',
+                supported_parameters: ['max_tokens'],
+                pricing: { prompt: '0', completion: '0' },
+              },
+              {
+                id: 'a/json',
+                name: 'Json',
+                supported_parameters: ['response_format'],
+                pricing: { prompt: '0.000003', completion: '0.000015' },
+              },
+            ],
+          };
+      return new Response(JSON.stringify(body), { status: 200 });
+    }) as typeof fetch;
+    try {
+      const r = await checkAi({ provider: 'openrouter', key: 'sk-or-x' }, {});
+      expect(r.info).toMatch(/4\.50 \$/);
+      expect(r.models.map((m) => m.id)).toEqual(['a/json', 'b/plain']);
+      expect(r.models[0].hint).toMatch(/3 \$ \/ 15 \$/);
+      expect(calls.every((c) => c.auth === 'Bearer sk-or-x')).toBe(true);
+      expect(calls.map((c) => c.url)).toContain('https://openrouter.ai/api/v1/key');
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify({ error: { code: 401, message: 'nope' } }), {
+          status: 401,
+        })) as typeof fetch;
+      await expect(checkAi({ provider: 'openrouter', key: 'bad' }, {})).rejects.toMatchObject({
+        code: 'AI_PROVIDER_ERROR',
+        message: expect.stringMatching(/clé refusée/),
+      });
+      await expect(checkAi({ provider: 'openrouter' }, {})).rejects.toMatchObject({
+        code: 'AI_NOT_CONFIGURED',
+      });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 });
 

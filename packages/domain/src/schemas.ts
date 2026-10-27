@@ -96,6 +96,15 @@ export const aiProposeBody = z.object({
   scope: z.enum(['week', 'month', 'quarter']),
   period: z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/),
 });
+const aiProvider = z.enum(['none', 'anthropic', 'openai', 'openrouter', 'google', 'ollama', 'custom']);
+/** D-66: API key typed in Configuration › IA (empty: cleared). */
+export const aiKeyBody = z.object({ provider: aiProvider, key: z.string().max(500) });
+/** D-66: connection test with the form's values; `key` empty = the stored one. */
+export const aiCheckBody = z.object({
+  provider: aiProvider,
+  baseUrl: z.union([z.literal(''), z.url({ protocol: /^https?$/ })]).optional(),
+  key: z.string().max(500).optional(),
+});
 /** D-57: the confirmation word guards against an accidental call. */
 export const purgeBody = z.object({ confirm: z.literal('SUPPRIMER'), history: z.boolean().default(false) });
 export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });

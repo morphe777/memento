@@ -14,13 +14,14 @@ import {
   InfoTip,
   Loading,
   PageHeader,
+  SearchSelect,
   Section,
   Tabs,
 } from '../components/ui.tsx';
-import { ApiError, del, get, patch, post } from '../lib/api.ts';
+import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
-import type { AiStatus, Change, Domain, Settings } from '../lib/types.ts';
+import type { AiCheck, AiStatus, Change, Domain, Settings } from '../lib/types.ts';
 
 // ---------- À revoir ----------
 
@@ -220,7 +221,7 @@ const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> 
   },
   ia: {
     title: 'IA',
-    info: "Fournisseur appelé par « Proposer avec l'IA » (Planifier). La clé d'API n'est jamais saisie ici : elle se met dans une variable d'environnement du conteneur. Les prompts sont modifiables ; le format de réponse attendu est ajouté automatiquement.",
+    info: "Fournisseur appelé par « Proposer avec l'IA » (Planifier) : URL, clé d'API et modèle. La clé est gardée dans la base, jamais réaffichée ni exportée. Les prompts sont modifiables ; le format de réponse attendu est ajouté automatiquement.",
   },
   templates: {
     title: 'Modèles de description',
@@ -283,7 +284,20 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.quarter',
     ],
   };
-  const submit = () => save.mutate(Object.fromEntries(keys[tab].map((k) => [k, s[k]])) as Partial<Settings>);
+  // D-66: on the IA tab, a typed key is saved with the rest (its own endpoint, never read back).
+  const [aiKey, setAiKey] = useState('');
+  const submit = async () => {
+    if (tab === 'ia' && aiKey.trim()) {
+      try {
+        await put('/ai/key', { provider: s['ai.provider'], key: aiKey });
+        setAiKey('');
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : 'Clé non enregistrée', 'error');
+        return;
+      }
+    }
+    save.mutate(Object.fromEntries(keys[tab].map((k) => [k, s[k]])) as Partial<Settings>);
+  };
   const w = s['engine.weights'];
   return (
     <Section title={SECTION_INFO[tab]?.title} info={SECTION_INFO[tab]?.info}>
@@ -547,7 +561,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
           ))}
         </>
       )}
-      {tab === 'ia' && <AiConfig s={s} setS={setS} />}
+      {tab === 'ia' && <AiConfig s={s} setS={setS} aiKey={aiKey} setAiKey={setAiKey} />}
       <button type="button" className="btn btn-primary self-start" onClick={submit} disabled={save.isPending}>
         Enregistrer
       </button>
@@ -1041,18 +1055,69 @@ const AI_PROMPTS = [
   ['ai.prompt.quarter', 'Prompt Trimestre', 'Comment choisir les objectifs du trimestre.'],
 ] as const;
 
-/** D-58: Configuration › IA. Provider and model here; the API key stays in an environment variable. */
-function AiConfig({ s, setS }: { s: Settings; setS: (s: Settings) => void }) {
+/** D-58 / D-66: Configuration › IA. Provider, URL, API key and model; the key is written, never read back. */
+function AiConfig({
+  s,
+  setS,
+  aiKey,
+  setAiKey,
+}: {
+  s: Settings;
+  setS: (s: Settings) => void;
+  aiKey: string;
+  setAiKey: (k: string) => void;
+}) {
+  const qc = useQueryClient();
   const status = useQuery({ queryKey: ['ai-status'], queryFn: () => get<AiStatus>('/ai/status') });
   const st = status.data;
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => setS({ ...s, [k]: v });
+  const provider = s['ai.provider'];
+  const savedProvider = st?.provider === provider;
+  const [check, setCheck] = useState<AiCheck | null>(null);
+  const [checking, setChecking] = useState(false);
+  const defaultUrl = provider === 'none' ? '' : (st?.defaultUrls[provider] ?? '');
+  // An older configuration may have an empty URL (= the usual one): show it instead of an empty field.
+  useEffect(() => {
+    if (defaultUrl && !s['ai.base_url']) setS({ ...s, 'ai.base_url': defaultUrl });
+  }, [defaultUrl, s, setS]);
+  const changeProvider = (p: Settings['ai.provider']) => {
+    setCheck(null);
+    setAiKey('');
+    // The URL is always shown: switching provider fills in its usual address, and the model starts over.
+    setS({
+      ...s,
+      'ai.provider': p,
+      'ai.base_url': p === 'none' ? '' : (st?.defaultUrls[p] ?? ''),
+      'ai.model': p === st?.provider ? (st?.model ?? '') : '',
+    });
+  };
+  const runCheck = async () => {
+    setChecking(true);
+    try {
+      setCheck(await post<AiCheck>('/ai/check', { provider, baseUrl: s['ai.base_url'], key: aiKey }));
+    } catch (e) {
+      setCheck(null);
+      toast(e instanceof ApiError ? e.message : 'Test impossible', 'error');
+    } finally {
+      setChecking(false);
+    }
+  };
+  const clearKey = async () => {
+    try {
+      await put('/ai/key', { provider, key: '' });
+      toast('Clé effacée.');
+      await qc.invalidateQueries({ queryKey: ['ai-status'] });
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    }
+  };
+  const storedKey = savedProvider && st?.keySource === 'saisie';
+  const envKey = savedProvider && st?.keySource === 'env';
+  const modelOptions = check?.models.map((m) => ({ value: m.id, label: m.label, hint: m.hint })) ?? [];
   return (
     <>
       <Field label="Fournisseur">
-        <select
-          value={s['ai.provider']}
-          onChange={(e) => set('ai.provider', e.target.value as Settings['ai.provider'])}
-        >
+        <select value={provider} onChange={(e) => changeProvider(e.target.value as Settings['ai.provider'])}>
           {AI_PROVIDER_OPTIONS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
@@ -1060,27 +1125,97 @@ function AiConfig({ s, setS }: { s: Settings; setS: (s: Settings) => void }) {
           ))}
         </select>
       </Field>
-      {s['ai.provider'] !== 'none' && (
+      {provider !== 'none' && (
         <>
           <Field
-            label="Modèle"
-            info="Le nom exact du modèle chez le fournisseur (ex. pour OpenRouter : « fournisseur/modèle »). Vide pour Anthropic = claude-opus-5-5."
-          >
-            <input
-              value={s['ai.model']}
-              onChange={(e) => set('ai.model', e.target.value)}
-              placeholder={s['ai.provider'] === 'anthropic' ? 'claude-opus-5-5' : 'nom du modèle'}
-            />
-          </Field>
-          <Field
-            label="URL du serveur"
-            info="Vide = l'adresse habituelle du fournisseur. À renseigner pour Ollama en Docker (ex. http://192.168.1.10:11434/v1) ou un serveur compatible OpenAI."
+            label="URL de l'API"
+            info="Pré-remplie avec l'adresse du fournisseur. À changer pour Ollama en Docker (ex. http://192.168.1.10:11434/v1) ou un autre serveur compatible OpenAI."
           >
             <input
               value={s['ai.base_url']}
               onChange={(e) => set('ai.base_url', e.target.value.trim())}
-              placeholder="adresse par défaut"
+              placeholder={defaultUrl || 'https://…/v1'}
             />
+          </Field>
+          <Field
+            label="Clé d'API"
+            info={
+              provider === 'openrouter'
+                ? 'Créée sur openrouter.ai › Keys (commence par sk-or-). Gardée dans la base de Mémento, jamais réaffichée ni exportée.'
+                : provider === 'ollama'
+                  ? 'Inutile pour un Ollama local.'
+                  : 'Gardée dans la base de Mémento, jamais réaffichée ni exportée.'
+            }
+          >
+            <div className="flex gap-2 items-center flex-wrap">
+              <input
+                type="password"
+                autoComplete="off"
+                value={aiKey}
+                onChange={(e) => setAiKey(e.target.value)}
+                placeholder={
+                  storedKey
+                    ? `Clé enregistrée (${st?.keyHint}) — en saisir une autre pour la remplacer`
+                    : envKey
+                      ? `Clé lue dans ${st?.keyEnv} (${st?.keyHint})`
+                      : 'Coller la clé ici'
+                }
+                style={{ flex: '1 1 260px' }}
+              />
+              {storedKey && !aiKey && (
+                <button type="button" className="btn btn-sm" onClick={clearKey}>
+                  Effacer la clé
+                </button>
+              )}
+            </div>
+          </Field>
+          <div className="flex flex-col gap-1">
+            <button type="button" className="btn self-start" onClick={runCheck} disabled={checking}>
+              {checking ? 'Test en cours…' : 'Tester et charger les modèles'}
+            </button>
+            {check && (
+              <span className="text-[14px]" style={{ color: 'var(--ok, #2E7D4F)' }}>
+                ✓ Connexion réussie{check.info ? ` : ${check.info}` : '.'} {check.models.length} modèles
+                disponibles.
+              </span>
+            )}
+          </div>
+          <Field
+            label="Modèle"
+            info={
+              provider === 'openrouter'
+                ? 'Clique « Tester et charger les modèles » pour choisir dans la liste (prix en $ par million de jetons, entrée / sortie). Les modèles capables de rendre un JSON structuré sont en tête. Identifiant au format « fournisseur/modèle ».'
+                : "Clique « Tester et charger les modèles » pour choisir dans la liste, ou saisis l'identifiant exact du modèle."
+            }
+          >
+            {modelOptions.length > 0 ? (
+              <SearchSelect
+                value={s['ai.model']}
+                onChange={(v) => set('ai.model', v)}
+                options={
+                  s['ai.model'] && !modelOptions.some((o) => o.value === s['ai.model'])
+                    ? [
+                        { value: s['ai.model'], label: s['ai.model'], hint: 'absent de la liste' },
+                        ...modelOptions,
+                      ]
+                    : modelOptions
+                }
+                placeholder="Rechercher un modèle…"
+                ariaLabel="Modèle"
+              />
+            ) : (
+              <input
+                value={s['ai.model']}
+                onChange={(e) => set('ai.model', e.target.value.trim())}
+                placeholder={
+                  provider === 'anthropic'
+                    ? 'claude-opus-5-5'
+                    : provider === 'openrouter'
+                      ? 'ex. anthropic/claude-opus-5.5'
+                      : 'identifiant du modèle'
+                }
+              />
+            )}
           </Field>
         </>
       )}
@@ -1090,12 +1225,6 @@ function AiConfig({ s, setS }: { s: Settings; setS: (s: Settings) => void }) {
           style={{ color: st.configured ? 'var(--ok, #2E7D4F)' : 'var(--warn, #B7791F)' }}
         >
           {st.configured ? `✓ Prêt : ${st.providerLabel}, modèle ${st.model}.` : `⚠ ${st.reason}`}
-          {st.keyEnv && (
-            <span style={{ color: 'var(--text-muted)' }}>
-              {' '}
-              Clé lue dans {st.keyEnv} : {st.keyPresent ? 'présente' : 'absente'}.
-            </span>
-          )}
           <span style={{ color: 'var(--text-muted)' }}> (état des réglages enregistrés)</span>
         </p>
       )}

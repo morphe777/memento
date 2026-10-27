@@ -252,15 +252,27 @@ export async function buildApp(opts: AppOptions) {
       );
       // D-58: « Proposer avec l'IA ». Interface only (it spends the user's AI credits); the proposal is
       // returned, never applied: the user applies it through the usual planning endpoints.
-      r.get('/ai/status', { schema: tag('IA'), preHandler: userOnly }, async (req) =>
-        D.aiStatus(D.getSettings(ctx(req)), process.env),
+      r.get('/ai/status', { schema: tag('IA'), preHandler: userOnly }, async (req) => {
+        const s = D.getSettings(ctx(req));
+        return D.aiStatus(s, process.env, D.getAiKey(ctx(req), s['ai.provider']));
+      });
+      // D-66: the API key is typed in Configuration › IA; it is written here and never read back.
+      r.put('/ai/key', { schema: { ...tag('IA'), body: D.aiKeyBody }, preHandler: userOnly }, async (req) =>
+        D.setAiKey(ctx(req), req.body.provider, req.body.key),
+      );
+      // D-66: connection test + model list, with the form's values (not yet saved).
+      r.post(
+        '/ai/check',
+        { schema: { ...tag('IA'), body: D.aiCheckBody }, preHandler: userOnly },
+        async (req) => D.checkAi(req.body, process.env, D.getAiKey(ctx(req), req.body.provider)),
       );
       r.post(
         '/ai/propose',
         { schema: { ...tag('IA'), body: D.aiProposeBody }, preHandler: userOnly },
         async (req) => {
           const c = ctx(req);
-          const llm = opts.llm ?? D.makeLlm(D.getSettings(c), process.env);
+          const s = D.getSettings(c);
+          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
           return D.proposeWithAi(c, req.body.scope, req.body.period, llm);
         },
       );
