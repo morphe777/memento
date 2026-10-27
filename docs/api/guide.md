@@ -76,8 +76,10 @@ Pour un écosystème (santé, sommeil, activité…), lis en lecture seule :
 ## 7. « Proposer avec l'IA » (l'inverse du MCP)
 
 Avec le MCP, c'est l'IA qui vient vers Mémento. Le bouton « Proposer avec l'IA » de Planifier fait l'inverse :
-Mémento appelle le fournisseur choisi dans Configuration › IA, avec la clé lue dans une variable d'environnement du
-conteneur (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` ou `MEMENTO_AI_API_KEY`).
+Mémento appelle le fournisseur choisi dans Configuration › IA (URL, clé d'API et modèle saisis dans la page ;
+à défaut de clé saisie, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `GEMINI_API_KEY` ou
+`MEMENTO_AI_API_KEY` du conteneur). `PUT /ai/key` enregistre la clé (jamais relue), `POST /ai/check` teste la
+connexion et liste les modèles ; réservés à l'interface.
 La proposition s'affiche avec une raison par changement ; rien n'est appliqué sans ton clic. Les prompts se
 modifient dans la même page. Les données de la page de planification (titres, durées, budgets, contexte, rapports
 récents) partent chez ce fournisseur : choisis Ollama si rien ne doit sortir de chez toi.

@@ -25,6 +25,7 @@ export type Change = ReturnType<typeof D.listChanges>[number];
 export type SearchResult = ReturnType<typeof D.search>;
 export type Settings = D.Settings;
 export type AiStatus = D.AiStatusView;
+export type AiCheck = Awaited<ReturnType<typeof D.checkAi>>;
 export interface Me {
   kind: 'user' | 'token';
   actor: string;

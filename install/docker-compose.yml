@@ -24,8 +24,8 @@ services:
       MEMENTO_API_PORT: "4500"
       # true derrière NGINX Proxy Manager en HTTPS (cookie de session « Secure »)
       MEMENTO_COOKIE_SECURE: "false"
-      # « Proposer avec l'IA » (Configuration › IA) : clé du fournisseur choisi, en variable d'environnement de
-      # la stack (Portainer › Environment variables). Jamais dans le dépôt ni dans la base.
+      # « Proposer avec l'IA » : la clé se saisit dans Configuration › IA. Facultatif : ces variables servent
+      # de clé par défaut si aucune n'est saisie (Portainer › Environment variables). Jamais dans le dépôt.
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}

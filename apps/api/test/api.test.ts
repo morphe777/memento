@@ -260,6 +260,32 @@ describe('API — Proposer avec l’IA (D-58)', () => {
       payload: { scope: 'quarter', period: '2026-Q4' },
     });
     expect(denied.statusCode).toBe(403);
+    // D-66: the key is written through the interface, never read back, refused to tokens.
+    const put = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/ai/key',
+      headers: h,
+      payload: { provider: 'openrouter', key: 'sk-or-v1-secret-1234' },
+    });
+    expect(put.statusCode).toBe(200);
+    await app.inject({
+      method: 'PATCH',
+      url: '/api/v1/settings',
+      headers: h,
+      payload: { 'ai.provider': 'openrouter', 'ai.model': 'openai/gpt-5.2' },
+    });
+    const st2 = await app.inject({ url: '/api/v1/ai/status', headers: h });
+    expect(st2.json()).toMatchObject({ configured: true, keySource: 'saisie', keyHint: '…1234' });
+    expect(st2.body).not.toContain('secret-1234');
+    const settings = await app.inject({ url: '/api/v1/settings', headers: h });
+    expect(settings.body).not.toContain('secret-1234');
+    const tokenPut = await app.inject({
+      method: 'PUT',
+      url: '/api/v1/ai/key',
+      headers: { authorization: `Bearer ${t.token}` },
+      payload: { provider: 'openrouter', key: 'x' },
+    });
+    expect(tokenPut.statusCode).toBe(403);
   });
 });
 
