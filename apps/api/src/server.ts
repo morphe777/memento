@@ -17,9 +17,17 @@ try {
     );
   }
 }
+// Says at each start whether the database already existed: « new » after an update means /data is not the bind.
+const dbFile = resolveDbFile();
+const existed = existsSync(dbFile);
 const { db, sqlite } = openDb();
 runMigrations(db); // migrations applied at startup (dossier §12)
 seed({ db, sqlite, actor: 'me' }); // idempotent
+const count = (t: string) => (sqlite.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n;
+console.log(
+  `Mémento: database ${dbFile} (${existed ? 'existing' : 'NEW, created now'}): ` +
+    `${count('project')} projects, ${count('setting')} settings`,
+);
 const app = await buildApp({
   db,
   sqlite,
