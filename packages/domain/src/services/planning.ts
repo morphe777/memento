@@ -3,6 +3,7 @@ import { and, asc, eq, gte, inArray, isNull, lt, or, schema } from '@memento/db'
 import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { availableTaskIds, blockedProjectIds } from '../rules/availability.ts';
+import { deadlineUrgency } from '../rules/daily.ts';
 import {
   buildPlanningPage,
   type EngineInput,
@@ -17,6 +18,7 @@ import { budgetMinutes, budgetStatus } from '../rules/tasks.ts';
 import { getSettings } from '../settings.ts';
 import {
   addDays,
+  daysBetween,
   frWeekRange,
   isValidIsoWeek,
   monthOf,
@@ -494,12 +496,14 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
   );
   const projectById = new Map(projects.map((p) => [p.id, p]));
   const domains = ctx.db.select().from(domain).orderBy(asc(domain.priorityRank)).all();
+  const today = parisDate(ctxNow(ctx));
 
   const rows = items
     .map((i) => {
       const t = taskRows.find((x) => x.id === i.taskId);
       if (!t || t.status === 'cancelled') return null;
       const p = t.projectId ? projectById.get(t.projectId) : undefined;
+      const deadline = t.dueDate ?? p?.dueDate ?? null; // same deadline as the engine's U
       return {
         taskId: t.id,
         title: t.title,
@@ -515,6 +519,9 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
         projectId: t.projectId,
         projectTitle: p?.title ?? 'Inbox',
         position: i.position,
+        deadline,
+        urgency: t.status === 'done' ? null : deadlineUrgency(deadline, today), // D-76
+        daysLeft: deadline ? daysBetween(today, deadline) : null,
       };
     })
     .filter((r): r is NonNullable<typeof r> => !!r);
@@ -532,7 +539,6 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
       .filter((r) => r.done)
       .map((r) => ({ durationMin: r.actualMin ?? r.durationMin, isExperience: r.isExperience })),
   );
-  const today = parisDate(ctxNow(ctx));
   const monday = weekMonday(isoWeek);
   const window = s['experience.window_weeks'];
   const experiences = doneStats(ctx, addDays(monday, -7 * (window - 1)), addDays(monday, 7)).experiences;

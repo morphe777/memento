@@ -14,6 +14,7 @@ import {
   shiftWeek,
   TZ,
 } from '../time.ts';
+import { notifyStatus, sendDailyRecap } from './daily.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
 import { generateReport } from './reports.ts';
@@ -96,4 +97,50 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
     ); // WF-03
   }
   return out;
+}
+
+/**
+ * D-77: evening recap « Ta journée » on Telegram, once per day from the configured time until midnight (no
+ * catch-up the next day). Waits, without recording anything, while Telegram is not set up.
+ */
+export async function runDailyRecapJob(
+  ctx: Ctx,
+  env: Record<string, string | undefined>,
+): Promise<'done' | 'empty' | 'skipped' | 'failed'> {
+  const r = getSettings(ctx)['notify.daily_recap'];
+  const { date, time } = parisClock(ctxNow(ctx));
+  if (!r.enabled || time < r.time || !notifyStatus(ctx, env).configured) return 'skipped';
+  const { jobRun } = schema;
+  if (
+    ctx.db
+      .select()
+      .from(jobRun)
+      .where(and(eq(jobRun.job, 'daily_recap'), eq(jobRun.periodKey, date)))
+      .get()
+  )
+    return 'skipped';
+  // Claimed before the (slow) sending so that two ticks never send it twice.
+  const id = newId();
+  ctx.db
+    .insert(jobRun)
+    .values({
+      id,
+      job: 'daily_recap',
+      periodKey: date,
+      ranAt: ctxNow(ctx).toISOString(),
+      ok: true,
+      error: null,
+    })
+    .run();
+  try {
+    const out = await sendDailyRecap(ctx, { env, date });
+    return out.sent ? 'done' : 'empty';
+  } catch (e) {
+    ctx.db
+      .update(jobRun)
+      .set({ ok: false, error: (e as Error).message })
+      .where(eq(jobRun.id, id))
+      .run();
+    return 'failed';
+  }
 }

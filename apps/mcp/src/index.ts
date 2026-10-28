@@ -317,6 +317,12 @@ export function buildServer(call: Call) {
       a.id ? call('GET', `/reports/${a.id}`) : call('GET', `/reports/by-period/${a.kind}/${a.periodKey}`),
   );
   tool(
+    'get_daily_recap',
+    'Bilan du jour (D-77) : faits du jour (ou date = AAAA-MM-JJ), 7 derniers jours, semaine, projets, et le rapport simple.',
+    { date: z.string().optional() },
+    (a) => call('GET', `/daily-recap${qs(a)}`),
+  );
+  tool(
     'list_changes',
     'Ce qui a changé (F-25) : since = 24h | 7d | ISO, actor = all | me | ai.',
     S.changesQuery.shape,

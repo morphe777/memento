@@ -27,7 +27,7 @@ Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires s
 ## Décisions déjà listées dans le dossier de dev §14, toujours ouvertes
 
 12. Délai de purge des idées : 12 mois ? (réglable dans Configuration › Alertes)
-13. Canal des rapports et alertes (Q-16) : dans l'outil seulement pour l'instant.
+13. Canal des rapports et alertes (Q-16) : récap du soir sur Telegram (D-77) ; les rapports hebdo / mensuels et les alertes restent dans l'outil. Les envoyer aussi sur Telegram ?
 14. Lecture du calendrier (Q-07) : v2 ou jamais.
 15. « Interactions entre objectifs » de la vue d'ensemble (Q-09) : non implémenté en v0.1 (la page Objectifs regroupe par méta-objectif, avec domaines et avancement).
 16. Rattachement des groupes « Outils perso » (Santé) et « Travaux » (Maison) : repris tels quels.
