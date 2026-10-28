@@ -1,14 +1,15 @@
 // Worker: runs the scheduled jobs of @memento/domain every minute (no business logic here).
 import { openDb, runMigrations } from '@memento/db';
-import { runDueJobs, seed } from '@memento/domain';
+import { runDailyRecapJob, runDueJobs, seed } from '@memento/domain';
 
 const { db, sqlite } = openDb();
 runMigrations(db);
 seed({ db, sqlite, actor: 'me' });
 
-function tick() {
+async function tick() {
   try {
-    const r = runDueJobs({ db, sqlite, actor: 'me' });
+    const r: Record<string, string> = runDueJobs({ db, sqlite, actor: 'me' });
+    r.daily_recap = await runDailyRecapJob({ db, sqlite, actor: 'me' }, process.env); // D-77
     const ran = Object.entries(r).filter(([, v]) => v !== 'skipped');
     if (ran.length)
       console.log(
@@ -20,8 +21,8 @@ function tick() {
     );
   }
 }
-tick();
-const timer = setInterval(tick, 60_000);
+void tick();
+const timer = setInterval(() => void tick(), 60_000);
 const stop = () => {
   clearInterval(timer);
   sqlite.close();

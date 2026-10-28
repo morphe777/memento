@@ -51,6 +51,13 @@ export const settingsSchema = z.object({
   'ai.prompt.describe': z.string().trim().min(1).max(8000),
   'ai.prompt.breakdown': z.string().trim().min(1).max(8000),
   'ai.prompt.path': z.string().trim().min(1).max(8000),
+  'ai.prompt.daily': z.string().trim().min(1).max(8000),
+  // D-77: evening recap « Ta journée » on Telegram. The bot token is a secret row, never here.
+  'notify.daily_recap': z.object({ enabled: z.boolean(), time: hhmm, ai: z.boolean() }),
+  'notify.telegram_chat_id': z
+    .string()
+    .trim()
+    .regex(/^(-?\d{1,20}|@\w{3,64})?$/),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -96,6 +103,9 @@ export const DEFAULT_SETTINGS: Settings = {
   'ai.prompt.describe': DEFAULT_AI_PROMPTS.describe, // D-68: « Rédiger avec l'IA »
   'ai.prompt.breakdown': DEFAULT_AI_PROMPTS.breakdown, // D-70: « Découper avec l'IA »
   'ai.prompt.path': DEFAULT_AI_PROMPTS.path, // D-75: « Proposer un chemin avec l'IA »
+  'ai.prompt.daily': DEFAULT_AI_PROMPTS.daily, // D-77: opening words of « Ta journée »
+  'notify.daily_recap': { enabled: true, time: '19:30', ai: true }, // sent only once Telegram is set up
+  'notify.telegram_chat_id': '',
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

@@ -664,6 +664,49 @@ export async function buildApp(opts: AppOptions) {
       r.get('/reports', { schema: { ...tag('Rapports'), querystring: D.reportListQuery } }, async (req) =>
         D.listReports(ctx(req), req.query),
       );
+      // D-77: the evening report: the plain version and the facts it is made from (the AI one is built on sending).
+      r.get(
+        '/daily-recap',
+        { schema: { ...tag('Rapports'), querystring: z.object({ date: z.string().optional() }) } },
+        async (req) => D.getDailyRecap(ctx(req), req.query.date),
+      );
+      r.get('/notify/status', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+        D.notifyStatus(ctx(req), process.env),
+      );
+      // The bot token is written here and never read back (like the AI keys, D-66).
+      r.put(
+        '/notify/telegram-token',
+        { schema: { ...tag('Réglages'), body: D.telegramTokenBody }, preHandler: userOnly },
+        async (req) => D.setTelegramToken(ctx(req), req.body.token),
+      );
+      r.post('/notify/telegram-detect', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+        D.detectTelegramChat(ctx(req), process.env),
+      );
+      // Preview: the message as it would be sent now (AI included), without sending it.
+      r.post(
+        '/notify/daily-recap/preview',
+        {
+          schema: { ...tag('Réglages'), body: z.object({ date: z.string().optional() }).default({}) },
+          preHandler: userOnly,
+        },
+        async (req) =>
+          D.buildDailyMessage(ctx(req), { env: process.env, llm: opts.llm, date: req.body.date }),
+      );
+      r.post(
+        '/notify/daily-recap/send',
+        {
+          schema: { ...tag('Réglages'), body: z.object({ date: z.string().optional() }).default({}) },
+          preHandler: userOnly,
+        },
+        async (req) => {
+          const out = await D.sendDailyRecap(ctx(req), {
+            env: process.env,
+            llm: opts.llm,
+            date: req.body.date,
+          });
+          return { sent: out.sent, ai: out.ai, aiError: out.aiError };
+        },
+      );
       r.get('/reports/:id', { schema: { ...tag('Rapports'), params: D.idParam } }, async (req) =>
         D.getReport(ctx(req), req.params.id),
       );

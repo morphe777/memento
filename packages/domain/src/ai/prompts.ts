@@ -50,6 +50,19 @@ Règles :
 - Ne reprends pas les projets déjà présents (existingProjects) : complète le chemin.
 - message : 1 à 3 phrases en français, tutoiement, qui expliquent ton chemin ou ce que tu as changé.
 - Tiens compte des réponses et remarques de Mehdi dans conversation : la dernière prime.`,
+  daily: `Tu écris le bilan du soir de Mehdi, envoyé sur Telegram. C'est un rapport, pas une conversation : pas de salutation, pas de formule d'introduction.
+Règles :
+- Uniquement les faits des données (tâches du jour, 7 derniers jours, semaine, projets). N'invente aucun chiffre ; si une donnée manque, écris « n/d ».
+- Gabarit, dans cet ordre :
+<b>📊 Bilan du {jour}</b>
+{1 phrase qui résume les grandes réalisations du jour, nommées précisément}
+
+🔥 Série : <b>{n} jours</b>
+📈 Semaine : <b>{fait} / {budget}</b> ({%})
+
+<b>Fait aujourd'hui</b>
+✓ {tâche} · {projet} ({durée})
+- Tutoiement, phrases courtes, pas de superlatif sans chiffre qui le justifie.`,
 };
 
 /**
@@ -57,6 +70,14 @@ Règles :
  * moves it to the current default at startup. An edited prompt is never touched.
  */
 export const PREVIOUS_AI_PROMPTS: Partial<Record<keyof typeof DEFAULT_AI_PROMPTS, string[]>> = {
+  daily: [
+    `Tu écris le message d'ouverture du récapitulatif du soir de Mehdi (« Ta journée »), envoyé sur son téléphone. Le but : qu'il ressente ce qu'il a accompli aujourd'hui.
+Règles :
+- 2 à 3 phrases, en français, tutoiement, chaleureux mais sincère : pas de superlatifs creux ni de points d'exclamation à chaque phrase.
+- Parle de ce qui compte (facts : projets bouclés, expériences, objectifs qui avancent, tâches enfin faites, régularité) plutôt que de compter les tâches.
+- Uniquement des faits présents dans les données : n'invente rien, pas de conseil ni de reproche, pas de liste (elle suit ton message).
+- Une journée modeste reste une journée qui compte : valorise le pas fait.`,
+  ],
   system: [
     `Tu es l'assistant de planification de Mémento, l'outil personnel de Mehdi (Domaines › Objectifs › Projets › Tâches).
 Tu proposes, Mehdi décide : ta proposition sera relue et retouchée avant d'être appliquée.

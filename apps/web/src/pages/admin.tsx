@@ -271,7 +271,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'month.max_projects',
       'quarter.max_objectives',
     ],
-    planning: ['schedule.week_plan', 'schedule.reports'],
+    planning: ['schedule.week_plan', 'schedule.reports', 'notify.daily_recap', 'notify.telegram_chat_id'],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
     ia: [
       'ai.provider',
@@ -285,11 +285,24 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.describe',
       'ai.prompt.breakdown',
       'ai.prompt.path',
+      'ai.prompt.daily',
     ],
   };
   // D-66: on the IA tab, a typed key is saved with the rest (its own endpoint, never read back).
   const [aiKey, setAiKey] = useState('');
+  const [botToken, setBotToken] = useState(''); // D-77, same pattern as the AI key
+  const qc = useQueryClient();
   const submit = async () => {
+    if (tab === 'planning' && botToken.trim()) {
+      try {
+        await put('/notify/telegram-token', { token: botToken });
+        setBotToken('');
+        await qc.invalidateQueries({ queryKey: ['notify-status'] });
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : 'Jeton non enregistré', 'error');
+        return;
+      }
+    }
     if (tab === 'ia' && aiKey.trim()) {
       try {
         await put('/ai/key', { provider: s['ai.provider'], key: aiKey });
@@ -535,9 +548,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               onChange={(e) => setS({ ...s, 'schedule.reports': { time: e.target.value } })}
             />
           </Field>
-          <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            Canal de notification : dans l'outil seulement (question ouverte Q-16).
-          </div>
+          <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
         </>
       )}
       {tab === 'templates' && (
@@ -1071,7 +1082,250 @@ const AI_PROMPTS = [
     'Prompt Chemin',
     "« Proposer un chemin avec l'IA » sur un objectif : nombre et taille des projets, quand poser des questions.",
   ],
+  [
+    'ai.prompt.daily',
+    'Prompt Bilan du jour',
+    'Le rapport du soir sur Telegram, en entier : gabarit, ton, ce qu’il met en avant. Il reçoit les faits du jour, des 7 derniers jours, de la semaine et des projets. HTML Telegram : <b>, <i>, <u>, <s>, <code>, <blockquote>.',
+  ],
 ] as const;
+
+type NotifyStatus = {
+  tokenSource: 'saisie' | 'env' | null;
+  tokenHint: string | null;
+  tokenEnv: string;
+  configured: boolean;
+};
+
+/** D-77: « Bilan du jour » on Telegram — time, bot token (written, never read back), chat, preview, test sending. */
+function NotifyConfig({
+  s,
+  setS,
+  botToken,
+  setBotToken,
+}: {
+  s: Settings;
+  setS: (s: Settings) => void;
+  botToken: string;
+  setBotToken: (t: string) => void;
+}) {
+  const qc = useQueryClient();
+  const status = useQuery({
+    queryKey: ['notify-status'],
+    queryFn: () => get<NotifyStatus>('/notify/status'),
+  });
+  const st = status.data;
+  const r = s['notify.daily_recap'];
+  const setR = (patchR: Partial<typeof r>) => setS({ ...s, 'notify.daily_recap': { ...r, ...patchR } });
+  const [busy, setBusy] = useState<'detect' | 'send' | 'preview' | null>(null);
+  const [preview, setPreview] = useState<DailyMessage | null>(null);
+  const saved = useSettings().data;
+  const detect = async () => {
+    setBusy('detect');
+    try {
+      const c = await post<{ chatId: string; name: string }>('/notify/telegram-detect');
+      setS({ ...s, 'notify.telegram_chat_id': c.chatId });
+      toast(`Chat trouvé${c.name ? ` : ${c.name}` : ''}. Pense à enregistrer.`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const showPreview = async () => {
+    setBusy('preview');
+    try {
+      setPreview(await post<DailyMessage>('/notify/daily-recap/preview', {}));
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const send = async () => {
+    setBusy('send');
+    try {
+      const out = await post<{ sent: boolean; ai: boolean; aiError: string | null }>(
+        '/notify/daily-recap/send',
+        {},
+      );
+      if (out.aiError) toast(`IA indisponible, rapport simple envoyé : ${out.aiError}`, 'error');
+      else
+        toast(
+          out.sent
+            ? `Bilan envoyé${out.ai ? ' (rédigé par l’IA)' : ''}.`
+            : 'Rien de fait aujourd’hui pour l’instant : pas de bilan envoyé.',
+        );
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+  const clearToken = async () => {
+    try {
+      await put('/notify/telegram-token', { token: '' });
+      toast('Jeton effacé.');
+      await qc.invalidateQueries({ queryKey: ['notify-status'] });
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    }
+  };
+  const ready = st?.configured && saved?.['notify.telegram_chat_id'];
+  return (
+    <div className="flex flex-col gap-4 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+      <h3 className="h2 m-0">Bilan du jour (Telegram)</h3>
+      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        Chaque soir, un rapport : une phrase qui résume les grandes réalisations, la série de jours et
+        l'avancée de la semaine, puis les tâches faites. Avec l'IA, c'est le prompt « Bilan du jour » (onglet
+        IA) qui écrit tout le message. Rien n'est envoyé un jour sans tâche faite.
+      </p>
+      <label className="flex items-center gap-2 text-[14px]">
+        <input type="checkbox" checked={r.enabled} onChange={(e) => setR({ enabled: e.target.checked })} />
+        Envoyer le bilan chaque soir
+      </label>
+      <Field label="Heure d'envoi" hint="Heure de Paris">
+        <input type="time" value={r.time} onChange={(e) => setR({ time: e.target.value })} />
+      </Field>
+      <label className="flex items-center gap-2 text-[14px]">
+        <input type="checkbox" checked={r.ai} onChange={(e) => setR({ ai: e.target.checked })} />
+        Rapport rédigé par l'IA
+        <InfoTip>
+          Si l'IA est configurée (onglet IA), elle écrit tout le message à partir des faits calculés par
+          Mémento, selon le prompt « Bilan du jour ». Sinon, ou en cas d'erreur, le rapport simple est envoyé.
+        </InfoTip>
+      </label>
+      <Field
+        label="Jeton du bot"
+        info="Dans Telegram, écris à @BotFather, commande /newbot : il te donne un jeton du type 123456789:ABC… Gardé dans la base de Mémento, jamais réaffiché ni exporté."
+      >
+        <div className="flex gap-2 items-center flex-wrap">
+          <input
+            type="password"
+            autoComplete="off"
+            value={botToken}
+            onChange={(e) => setBotToken(e.target.value)}
+            placeholder={
+              st?.tokenSource === 'saisie'
+                ? `Enregistré (${st.tokenHint}) — saisir pour remplacer`
+                : st?.tokenSource === 'env'
+                  ? `Variable ${st.tokenEnv} (${st.tokenHint})`
+                  : '123456789:ABC…'
+            }
+            style={{ flex: '1 1 260px' }}
+          />
+          {st?.tokenSource === 'saisie' && !botToken && (
+            <button type="button" className="btn btn-sm" onClick={clearToken}>
+              Effacer le jeton
+            </button>
+          )}
+        </div>
+      </Field>
+      <Field
+        label="Chat"
+        info="Ouvre ton bot dans Telegram et envoie-lui /start, enregistre le jeton, puis clique « Trouver mon chat »."
+      >
+        <div className="flex gap-2 items-center flex-wrap">
+          <input
+            value={s['notify.telegram_chat_id']}
+            onChange={(e) => setS({ ...s, 'notify.telegram_chat_id': e.target.value.trim() })}
+            placeholder="ex. 123456789"
+            style={{ flex: '1 1 200px' }}
+          />
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={detect}
+            disabled={!st?.tokenSource || busy !== null}
+          >
+            {busy === 'detect' ? 'Recherche…' : 'Trouver mon chat'}
+          </button>
+        </div>
+      </Field>
+      <div className="flex items-center gap-3 flex-wrap">
+        <button type="button" className="btn self-start" onClick={showPreview} disabled={busy !== null}>
+          {busy === 'preview' ? 'Préparation…' : 'Aperçu'}
+        </button>
+        <button type="button" className="btn self-start" onClick={send} disabled={!ready || busy !== null}>
+          {busy === 'send' ? 'Envoi…' : 'Envoyer le bilan du jour maintenant'}
+        </button>
+        <span className="text-[13px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
+          {ready ? '✓ Telegram prêt' : 'Jeton et chat à enregistrer'}
+        </span>
+      </div>
+      {preview && (
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+            {preview.empty
+              ? 'Aperçu : rien de fait aujourd’hui, aucun bilan ne serait envoyé.'
+              : preview.ai
+                ? 'Aperçu rédigé par l’IA (prompt enregistré)'
+                : preview.aiError
+                  ? `Aperçu : rapport simple (IA indisponible : ${preview.aiError})`
+                  : 'Aperçu : rapport simple'}
+          </span>
+          {!preview.empty && <TelegramText html={preview.text} />}
+        </div>
+      )}
+    </div>
+  );
+}
+
+type DailyMessage = { empty: boolean; ai: boolean; text: string; aiError: string | null };
+
+const TG_TAGS: Record<string, React.CSSProperties> = {
+  b: { fontWeight: 700 },
+  strong: { fontWeight: 700 },
+  i: { fontStyle: 'italic' },
+  em: { fontStyle: 'italic' },
+  u: { textDecoration: 'underline' },
+  ins: { textDecoration: 'underline' },
+  s: { textDecoration: 'line-through' },
+  strike: { textDecoration: 'line-through' },
+  del: { textDecoration: 'line-through' },
+  code: { fontFamily: 'var(--font-mono)' },
+  pre: { fontFamily: 'var(--font-mono)' },
+  blockquote: { borderLeft: '3px solid var(--border)', paddingLeft: 8, display: 'inline-block' },
+};
+const unescapeTg = (t: string) =>
+  t
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&');
+
+/** The Telegram message as it will look (its few HTML tags rendered as React, no innerHTML). */
+function TelegramText({ html }: { html: string }) {
+  const out: React.ReactNode[] = [];
+  const stack: string[] = [];
+  html.split(/(<\/?[a-z]+>)/).forEach((part, i) => {
+    const m = /^<(\/?)([a-z]+)>$/.exec(part);
+    if (m && TG_TAGS[m[2]]) {
+      if (m[1]) stack.splice(stack.lastIndexOf(m[2]), 1);
+      else stack.push(m[2]);
+      return;
+    }
+    if (part)
+      out.push(
+        <span key={i} style={Object.assign({}, ...stack.map((t) => TG_TAGS[t]))}>
+          {unescapeTg(part)}
+        </span>,
+      );
+  });
+  return (
+    <div
+      className="text-[14px] whitespace-pre-wrap"
+      style={{
+        background: 'var(--surface-2)',
+        border: '1px solid var(--border)',
+        borderRadius: 10,
+        padding: '12px 14px',
+        maxWidth: 520,
+      }}
+    >
+      {out}
+    </div>
+  );
+}
 
 /** D-58 / D-66: Configuration › IA. Provider, URL, API key and model; the key is written, never read back. */
 function AiConfig({

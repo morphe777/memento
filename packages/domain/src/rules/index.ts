@@ -1,4 +1,5 @@
 export * from './availability.ts';
+export * from './daily.ts';
 export * from './delay.ts';
 export * from './engine.ts';
 export * from './graph.ts';

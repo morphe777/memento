@@ -20,7 +20,7 @@ import {
   useDomainRows,
 } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
-import { fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
+import { fmtDateShort, fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import type { Execution } from '../lib/types.ts';
 
@@ -84,16 +84,46 @@ function eyebrow(ex: Execution) {
   return <WeekNav ex={ex} />;
 }
 
+type Sort = 'domain' | 'deadline';
+
 /** Compact view by default: done tasks and the detail line under each task are hidden until asked for. */
 function useWeekView() {
   const [showDone, setShowDone] = useState(false);
   const [showDetail, setShowDetail] = useState(false);
-  return { showDone, setShowDone, showDetail, setShowDetail };
+  const [sort, setSort] = useState<Sort>('domain'); // user request 28/10/2026: by domain by default
+  return { showDone, setShowDone, showDetail, setShowDetail, sort, setSort };
+}
+
+/** Visible tasks in the chosen order; done tasks stay at the bottom, ties keep the plan order. */
+function useSortedTasks(ex: Execution, view: ReturnType<typeof useWeekView>) {
+  const dl = useDomainLookup();
+  const rank = new Map(dl.domains.map((d, i) => [d.id, i]));
+  const key = (t: Row): [number, string] =>
+    view.sort === 'domain'
+      ? [t.domainId ? (rank.get(t.domainId) ?? 998) : 999, '']
+      : [t.deadline ? 0 : 1, t.deadline ?? ''];
+  const tasks = view.showDone ? ex.tasks : ex.tasks.filter((t) => !t.done);
+  return tasks
+    .map((t, i) => ({ t, i, k: key(t) }))
+    .sort(
+      (a, b) =>
+        Number(a.t.done) - Number(b.t.done) || a.k[0] - b.k[0] || a.k[1].localeCompare(b.k[1]) || a.i - b.i,
+    )
+    .map((x) => x.t);
 }
 
 function ViewToggles({ view }: { view: ReturnType<typeof useWeekView> }) {
   return (
     <span className="flex items-center gap-4 flex-wrap text-[13px]" style={{ color: 'var(--text-muted)' }}>
+      <button
+        type="button"
+        className="border-0 bg-transparent p-0 cursor-pointer underline underline-offset-2"
+        style={{ color: 'inherit', font: 'inherit' }}
+        title="Changer le tri"
+        onClick={() => view.setSort(view.sort === 'domain' ? 'deadline' : 'domain')}
+      >
+        {view.sort === 'domain' ? 'Tri par domaine' : 'Tri par deadline'}
+      </button>
       <label className="flex items-center gap-1.5 cursor-pointer">
         <input type="checkbox" checked={view.showDone} onChange={(e) => view.setShowDone(e.target.checked)} />
         Tâches terminées
@@ -125,7 +155,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
   const [showBonus, setShowBonus] = useState(false); // V-13: always folded by default, state not remembered
   const [replanOpen, setReplanOpen] = useState(false);
   const view = useWeekView();
-  const tasks = view.showDone ? ex.tasks : ex.tasks.filter((t) => !t.done);
+  const tasks = useSortedTasks(ex, view);
   const mixRows = useDomainRows(ex.domainMix);
   return (
     <div className="flex flex-col gap-6">
@@ -351,8 +381,49 @@ function WeekRow({
         )}
         {t.done && <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />}
       </div>
+      <UrgencyTag t={t} />
       <Duration min={t.durationMin} />
     </div>
+  );
+}
+
+const URGENCY_LABEL = { late: 'En retard', today: "Aujourd'hui" } as const;
+
+/** D-76: discreet tag next to the duration — warning when due within 2 days, stop when due today or late. */
+function UrgencyTag({ t, small }: { t: Row; small?: boolean }) {
+  if (!t.urgency || !t.deadline) return null;
+  const stop = t.urgency !== 'soon';
+  const label =
+    t.urgency === 'soon' ? (t.daysLeft === 1 ? 'Demain' : `J-${t.daysLeft}`) : URGENCY_LABEL[t.urgency];
+  return (
+    <span
+      className="flex-none inline-flex items-center gap-1 whitespace-nowrap"
+      title={`Deadline ${fmtDateShort(t.deadline)}`}
+      style={{
+        fontSize: small ? 11 : 12,
+        fontWeight: 500,
+        padding: small ? '2px 7px' : '3px 8px',
+        borderRadius: 999,
+        border: '1px solid var(--border)',
+        color: stop ? 'var(--late-text)' : 'var(--text-muted)',
+      }}
+    >
+      <svg aria-hidden="true" width="11" height="11" viewBox="0 0 12 12">
+        {stop ? (
+          <>
+            <path d="M4 .8h4L11.2 4v4L8 11.2H4L.8 8V4z" fill="var(--status-red)" opacity="0.85" />
+            <rect x="3.2" y="5.3" width="5.6" height="1.4" rx="0.5" fill="var(--surface)" />
+          </>
+        ) : (
+          <>
+            <path d="M6 1 11.3 10.5H.7z" fill="var(--warn)" opacity="0.85" strokeLinejoin="round" />
+            <rect x="5.35" y="4.2" width="1.3" height="3.4" rx="0.5" fill="var(--surface)" />
+            <rect x="5.35" y="8.3" width="1.3" height="1.3" rx="0.6" fill="var(--surface)" />
+          </>
+        )}
+      </svg>
+      {label}
+    </span>
   );
 }
 
@@ -423,7 +494,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false);
   const view = useWeekView();
-  const tasks = view.showDone ? ex.tasks : ex.tasks.filter((t) => !t.done);
+  const tasks = useSortedTasks(ex, view);
   return (
     <div className="flex flex-col" style={{ gap: 12 }}>
       <div className="flex flex-col gap-1" style={{ padding: '16px 8px 0' }}>
@@ -501,6 +572,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
                   <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />
                 )}
               </div>
+              <UrgencyTag t={t} small />
               <Duration min={t.durationMin} small />
             </div>
           );

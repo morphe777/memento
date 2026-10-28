@@ -12,6 +12,7 @@ export * from './seed.ts';
 export * from './seed-data.ts';
 export * from './services/board.ts';
 export * from './services/changes.ts';
+export * from './services/daily.ts';
 export * from './services/deletion.ts';
 export * from './services/experiences.ts';
 export * from './services/export.ts';
