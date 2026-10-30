@@ -6,6 +6,11 @@ import { audit, type Ctx, tx } from './context.ts';
 import { DomainError } from './errors.ts';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
+const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Date invalide (AAAA-MM-JJ).' });
+/** D-78: a holiday period, both days included. */
+export const vacationSchema = z
+  .object({ from: ymd, to: ymd })
+  .refine((v) => v.from <= v.to, { message: 'La fin des vacances précède leur début.' });
 
 export const settingsSchema = z.object({
   'budget.weekly_min': z.number().int().min(0).max(10_080),
@@ -58,6 +63,8 @@ export const settingsSchema = z.object({
     .string()
     .trim()
     .regex(/^(-?\d{1,20}|@\w{3,64})?$/),
+  // D-78: no evening report during these periods; the weeks they touch never break the week streak.
+  'notify.vacations': z.array(vacationSchema).max(100),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -106,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   'ai.prompt.daily': DEFAULT_AI_PROMPTS.daily, // D-77: opening words of « Ta journée »
   'notify.daily_recap': { enabled: true, time: '19:30', ai: true }, // sent only once Telegram is set up
   'notify.telegram_chat_id': '',
+  'notify.vacations': [],
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

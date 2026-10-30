@@ -482,7 +482,7 @@ function ObjectivePanel({
                   value={f.description}
                   onChange={(e) => set('description', e.target.value)}
                   className="mono"
-                  style={{ minHeight: 260, fontSize: 14 }}
+                  style={{ minHeight: 260 }}
                 />
               </Field>
             </div>
@@ -683,7 +683,7 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             className="mono"
-            style={{ minHeight: 220, fontSize: 14 }}
+            style={{ minHeight: 220 }}
           />
         </Field>
       )}

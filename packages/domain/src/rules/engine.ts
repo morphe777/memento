@@ -4,6 +4,7 @@ import {
   daysBetween,
   fmtMin,
   frDay,
+  frMonth,
   frShort,
   monthEnd,
   monthOf,
@@ -140,7 +141,11 @@ interface Prepared {
   monday: string;
   sunday: string;
   month: string;
+  /** D-79: the month(s) of the week: two when it straddles a month end (both count as month projects). */
+  months: string[];
 }
+
+const isMonthProject = (P: Prepared, p: EngineProject) => !!p.monthFlag && P.months.includes(p.monthFlag);
 
 function prepare(input: EngineInput): Prepared {
   const tasksByProject = new Map<string, EngineTask[]>();
@@ -159,6 +164,7 @@ function prepare(input: EngineInput): Prepared {
     monday,
     sunday: weekSunday(input.isoWeek),
     month: monthOf(monday),
+    months: [...new Set([monthOf(monday), monthOf(weekSunday(input.isoWeek))])],
   };
 }
 
@@ -184,7 +190,7 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   // R delay: month projects only, (planned − done) ÷ project hours, [0, 1].
   let R = 0;
   let lateMin = 0;
-  if (project && project.monthFlag === P.month) {
+  if (project && isMonthProject(P, project)) {
     const ptasks = P.tasksByProject.get(project.id) ?? [];
     const { totalMin } = projectMinutes(ptasks);
     lateMin = Math.max(0, -projectDelayMin(project, ptasks, P.input.today));
@@ -330,6 +336,8 @@ export interface Alert {
 
 export interface PlanningPage {
   groups: PageGroup[];
+  /** D-79: the other eligible projects (not shown in a group), for « + Tâche d'un autre projet ». */
+  more: PageCard[];
   budget: { budgetMin: number; plannedMin: number; overMin: number; remainingMin: number };
   counts: { week: number; experiences: number; bonus: number };
   alerts: Alert[];
@@ -337,9 +345,15 @@ export interface PlanningPage {
 }
 
 /** Step 5 (V-16): number of visible tasks for a month project, from its weekly share of remaining work. */
-function monthVisibleCount(P: Prepared, ptasks: EngineTask[], ordered: EngineTask[]): number {
+function monthVisibleCount(
+  P: Prepared,
+  p: EngineProject,
+  ptasks: EngineTask[],
+  ordered: EngineTask[],
+): number {
   const remaining = ptasks.filter((t) => t.status === 'todo').reduce((s, t) => s + (t.durationMin ?? 0), 0);
-  const weeksLeft = Math.max(1, Math.ceil((daysBetween(P.monday, monthEnd(P.month)) + 1) / 7));
+  const end = monthEnd(p.monthFlag ?? P.month);
+  const weeksLeft = Math.max(1, Math.ceil((daysBetween(P.monday, end) + 1) / 7));
   const perWeek = remaining / weeksLeft;
   let k = 0;
   let cum = 0;
@@ -429,11 +443,11 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     (p) => eligibleProject(p) && (P.tasksByProject.get(p.id) ?? []).some((t) => t.status === 'todo'),
   );
   const monthCards = eligible
-    .filter((p) => p.monthFlag === P.month)
+    .filter((p) => isMonthProject(P, p))
     .map((p) => {
       const ptasks = P.tasksByProject.get(p.id) ?? [];
       const ordered = ptasks.filter((t) => t.status === 'todo').sort((a, b) => a.position - b.position);
-      return card(p, monthVisibleCount(P, ptasks, ordered));
+      return card(p, monthVisibleCount(P, p, ptasks, ordered));
     })
     .sort((a, b) => b.best - a.best || a.card.title.localeCompare(b.card.title));
 
@@ -448,7 +462,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       .map((d) => d.id),
   );
   const others = eligible
-    .filter((p) => p.monthFlag !== P.month)
+    .filter((p) => !isMonthProject(P, p))
     .map((p) => ({ p, ...card(p, 1), guard: p.domainIds.some((id) => guarded.has(id)) }))
     .filter((x) => x.card.tasks.some((t) => !t.locked || t.selection));
   others.sort(
@@ -458,6 +472,12 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
   const considered = others.filter(
     (x, i) => i < input.considerAlsoCount || x.guard || x.card.tasks.some((t) => t.selection),
   );
+  // D-79: « + Tâche d'un autre projet »: every other eligible project, all its pending tasks, by title.
+  const consideredIds = new Set(considered.map((x) => x.p.id));
+  const more = others
+    .filter((x) => !consideredIds.has(x.p.id))
+    .map((x) => card(x.p, Number.POSITIVE_INFINITY).card)
+    .sort((a, b) => a.title.localeCompare(b.title));
 
   const groups: PageGroup[] = [
     {
@@ -491,7 +511,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     {
       key: 'month',
       name: 'Projets du mois',
-      hint: '',
+      hint: P.months.length > 1 ? `semaine à cheval : ${P.months.map(frMonth).join(' et ')}` : '',
       countLabel: `${monthCards.length} projet${monthCards.length > 1 ? 's' : ''}`,
       cards: monthCards.map((c) => c.card),
     },
@@ -504,11 +524,14 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     },
   ];
 
-  return { groups, ...summarize(input, chosen) };
+  return { groups, more, ...summarize(input, chosen) };
 }
 
 /** Live summary of a selection: budget (RB-09, RB-14), counts, alerts (§6), planned mix by primary domain. */
-export function summarize(input: EngineInput, chosen: Map<string, Selection>): Omit<PlanningPage, 'groups'> {
+export function summarize(
+  input: EngineInput,
+  chosen: Map<string, Selection>,
+): Omit<PlanningPage, 'groups' | 'more'> {
   const P = prepare(input);
   const taskById = new Map(input.tasks.map((t) => [t.id, t]));
   const weekTasks = [...chosen]

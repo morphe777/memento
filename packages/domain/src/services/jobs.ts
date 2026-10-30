@@ -2,6 +2,7 @@
 // Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time.
 import { and, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, newId } from '../context.ts';
+import { isOnVacation } from '../rules/daily.ts';
 import { getSettings } from '../settings.ts';
 import {
   isoDay,
@@ -102,14 +103,17 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
 /**
  * D-77: evening recap « Ta journée » on Telegram, once per day from the configured time until midnight (no
  * catch-up the next day). Waits, without recording anything, while Telegram is not set up.
+ * D-78: never on Saturday (Sunday's report covers the weekend) nor on a holiday.
  */
 export async function runDailyRecapJob(
   ctx: Ctx,
   env: Record<string, string | undefined>,
-): Promise<'done' | 'empty' | 'skipped' | 'failed'> {
-  const r = getSettings(ctx)['notify.daily_recap'];
+): Promise<'done' | 'skipped' | 'failed'> {
+  const s = getSettings(ctx);
+  const r = s['notify.daily_recap'];
   const { date, time } = parisClock(ctxNow(ctx));
   if (!r.enabled || time < r.time || !notifyStatus(ctx, env).configured) return 'skipped';
+  if (isoDay(date) === 6 || isOnVacation(date, s['notify.vacations'])) return 'skipped';
   const { jobRun } = schema;
   if (
     ctx.db
@@ -133,8 +137,8 @@ export async function runDailyRecapJob(
     })
     .run();
   try {
-    const out = await sendDailyRecap(ctx, { env, date });
-    return out.sent ? 'done' : 'empty';
+    await sendDailyRecap(ctx, { env, date });
+    return 'done';
   } catch (e) {
     ctx.db
       .update(jobRun)

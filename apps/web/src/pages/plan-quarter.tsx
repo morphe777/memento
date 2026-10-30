@@ -236,7 +236,7 @@ function ObjectiveRow({ o, note, action }: { o: Row; note?: string; action: Reac
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
       }}
     >
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="min-w-0 flex flex-col gap-0.5" style={{ flex: '1 1 220px' }}>
         <Link to="/objectifs/$id" params={{ id: o.id }} className="text-[15px] font-semibold">
           {o.title}
         </Link>

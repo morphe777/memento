@@ -1,42 +1,46 @@
 // D-77: the evening report on Telegram (19:30 by default). Mémento computes the day's facts (today, last 7 days,
 // week, projects). With the AI on, the « Bilan du jour » prompt writes the whole message from those facts
 // (Telegram HTML, cleaned up before sending); otherwise a plain report: achievements sentence, KPIs, done tasks.
+// D-78: no day streak but a week streak and the 4-week volume; encouragement and leads when nothing was done;
+// on Sunday the weekend; nothing on Saturday nor during holidays (jobs.ts).
 import { eq, gte, inArray, schema } from '@memento/db';
 import { z } from 'zod';
 import { parseJsonObject } from '../ai/propose.ts';
 import { getAiKey, type Llm, makeLlm, SECRET_SETTING_PREFIX } from '../ai/providers.ts';
 import { audit, type Ctx, ctxNow, tx } from '../context.ts';
-import { DomainError } from '../errors.ts';
+import { DomainError, NotFoundError } from '../errors.ts';
 import {
   composeDailyRecap,
+  type FocusItem,
+  isOnVacation,
   type Recap,
   type RecapFacts,
   type RecapTask,
   recapToTelegramHtml,
   sanitizeTelegramHtml,
   stripTelegramHtml,
+  type WeekVolume,
+  weekStreak,
 } from '../rules/daily.ts';
-import { getSettings } from '../settings.ts';
-import { addDays, frDay, isoDay, isoWeekOf, isValidDate, monthOf, parisDate } from '../time.ts';
-import { getExecution } from './planning.ts';
+import { type EngineTask, scoreCandidates } from '../rules/engine.ts';
+import { getSettings, patchSettings, vacationSchema } from '../settings.ts';
+import {
+  addDays,
+  frDay,
+  frMonth,
+  isoDay,
+  isoWeekOf,
+  isValidDate,
+  monthOf,
+  parisDate,
+  shiftWeek,
+  weekMonday,
+} from '../time.ts';
+import { buildEngineInput, getExecution } from './planning.ts';
 import { serializeProjects } from './projects.ts';
 
 type Env = Record<string, string | undefined>;
 const doneDate = (iso: string | null) => (iso ? parisDate(new Date(iso)) : null);
-const FR_MONTHS_LONG = [
-  'janvier',
-  'février',
-  'mars',
-  'avril',
-  'mai',
-  'juin',
-  'juillet',
-  'août',
-  'septembre',
-  'octobre',
-  'novembre',
-  'décembre',
-];
 // RB-09: experiences are out of the time; actual time when entered (D-61).
 const workMin = (t: { isExperience: boolean; actualMin: number | null; durationMin: number | null }) =>
   t.isExperience ? 0 : (t.actualMin ?? t.durationMin ?? 0);
@@ -47,26 +51,48 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   if (!isValidDate(day)) throw new DomainError('VALIDATION', 'Date invalide (AAAA-MM-JJ).');
   const s = schema;
   const settings = getSettings(ctx);
-  // Done tasks of the last 60 days: today's ones, the last 7 days and the streak.
-  const since = new Date(Date.parse(`${addDays(day, -60)}T00:00:00Z`)).toISOString();
+  // D-78: on Sunday the report covers the weekend (no report on Saturday).
+  const mode = isoDay(day) === 7 ? ('weekend' as const) : ('day' as const);
+  const from = mode === 'weekend' ? addDays(day, -1) : day;
+  // Done tasks of the last year: the period, the last 7 days and the weekly volumes of the week streak.
+  const since = new Date(Date.parse(`${addDays(day, -7 * STREAK_WEEKS)}T00:00:00Z`)).toISOString();
   const recent = ctx.db
     .select()
     .from(s.task)
     .where(gte(s.task.doneAt, since))
     .all()
-    .filter((t) => t.status === 'done');
+    .filter((t) => t.status === 'done' && (doneDate(t.doneAt) as string) <= day);
   const byDay = new Map<string, typeof recent>();
   for (const t of recent) {
     const d = doneDate(t.doneAt) as string;
     byDay.set(d, [...(byDay.get(d) ?? []), t]);
   }
-  const done = byDay.get(day) ?? [];
-  let streakDays = 0;
-  while (byDay.has(addDays(day, -streakDays))) streakDays++;
+  const done = recent.filter((t) => (doneDate(t.doneAt) as string) >= from);
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(day, i - 7);
     const ts = byDay.get(d) ?? [];
     return { date: d, doneTasks: ts.length, doneMin: ts.reduce((a, t) => a + workMin(t), 0) };
+  });
+
+  // D-78: weekly volumes, newest first (current week at 0), budget of the week's plan else the default one.
+  const budgets = new Map(
+    ctx.db
+      .select({ isoWeek: s.weekPlan.isoWeek, budgetMin: s.weekPlan.budgetMin })
+      .from(s.weekPlan)
+      .all()
+      .map((w) => [w.isoWeek, w.budgetMin]),
+  );
+  const vacations = settings['notify.vacations'];
+  const thisWeek = isoWeekOf(day);
+  const volumes: WeekVolume[] = Array.from({ length: STREAK_WEEKS }, (_, i) => {
+    const isoWeek = shiftWeek(thisWeek, -i);
+    const days = Array.from({ length: 7 }, (_, k) => addDays(weekMonday(isoWeek), k));
+    return {
+      isoWeek,
+      doneMin: days.reduce((a, d) => a + (byDay.get(d) ?? []).reduce((b, t) => b + workMin(t), 0), 0),
+      budgetMin: budgets.get(isoWeek) ?? settings['budget.weekly_min'],
+      vacation: days.some((d) => isOnVacation(d, vacations)),
+    };
   });
 
   const projectIds = [...new Set(done.map((t) => t.projectId).filter((x): x is string => !!x))];
@@ -107,16 +133,23 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
     });
   const allProjects = ctx.db.select().from(s.project).all();
   const completedProjects = allProjects
-    .filter((p) => p.status === 'done' && doneDate(p.completedAt) === day)
+    .filter((p) => {
+      const d = p.status === 'done' ? doneDate(p.completedAt) : null;
+      return !!d && d >= from && d <= day;
+    })
     .map((p) => p.title);
+  const nothingDone = done.length === 0 && completedProjects.length === 0;
 
-  const ex = getExecution(ctx, isoWeekOf(day));
+  const ex = getExecution(ctx, thisWeek);
   const round1 = (n: number) => Math.round(n * 10) / 10;
   const d = Number(day.slice(8, 10));
   return {
     date: day,
-    dayLabel: `${frDay(day)} ${d === 1 ? '1er' : d} ${FR_MONTHS_LONG[Number(day.slice(5, 7)) - 1]}`,
-    today: {
+    dayLabel: `${frDay(day)} ${d === 1 ? '1er' : d} ${frMonth(day)}`,
+    mode,
+    period: { from, to: day },
+    nothingDone,
+    done: {
       tasks,
       doneTasks: done.length,
       doneMin: done.reduce((a, t) => a + workMin(t), 0),
@@ -127,15 +160,17 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
       doneTasks: round1(last7Days.reduce((a, x) => a + x.doneTasks, 0) / 7),
       doneMin: Math.round(last7Days.reduce((a, x) => a + x.doneMin, 0) / 7),
     },
-    streakDays,
+    weekStreak: weekStreak(volumes, settings['report.rhythm_low_pct']),
+    weeks: volumes.slice(0, 4).reverse(),
     week: {
       plannedTasks: ex.tasks.filter((t) => t.kind === 'week').length,
       doneTasks: ex.tasks.filter((t) => t.done).length,
       remainingTasks: ex.remaining,
-      doneMin: ex.doneMin,
+      doneMin: volumes[0].doneMin, // every task done this week, like the weekly report (R-05)
       budgetMin: ex.budget.budgetMin,
       daysLeftAfterToday: 7 - isoDay(day),
     },
+    focus: nothingDone ? focusLeads(ctx, mode, thisWeek, ex) : [],
     projects: {
       active: allProjects.filter((p) => p.status === 'active').length,
       month: ex.monthProjects.filter((p) => p.status === 'active').length,
@@ -145,10 +180,62 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   };
 }
 
+const STREAK_WEEKS = 52;
+const FOCUS_COUNT = 3;
+
+/**
+ * D-78: up to 3 leads for the coming days, from the engine's ranking. Weekday: the open tasks of this week's
+ * plan, those due within a week first (none when the plan is all done); without a plan, the best candidates.
+ * Sunday: the best candidates for next week (its plan comes on Monday).
+ */
+function focusLeads(
+  ctx: Ctx,
+  mode: 'day' | 'weekend',
+  isoWeek: string,
+  ex: ReturnType<typeof getExecution>,
+): FocusItem[] {
+  const week = mode === 'weekend' ? shiftWeek(isoWeek, 1) : isoWeek;
+  const input = buildEngineInput(ctx, week);
+  const scored = scoreCandidates(input);
+  const open = ex.tasks.filter((t) => !t.done && t.kind === 'week');
+  if (mode === 'day' && ex.plan && ex.tasks.some((t) => t.kind === 'week')) {
+    const score = new Map(scored.map((x) => [x.taskId, x.score]));
+    const soon = addDays(input.today, 7);
+    const dueSoon = (t: (typeof open)[number]) => !!t.deadline && t.deadline <= soon;
+    return open
+      .sort(
+        (a, b) =>
+          Number(dueSoon(b)) - Number(dueSoon(a)) ||
+          (dueSoon(a) ? (a.deadline as string).localeCompare(b.deadline as string) : 0) ||
+          (score.get(b.taskId) ?? -1) - (score.get(a.taskId) ?? -1) ||
+          a.position - b.position,
+      )
+      .slice(0, FOCUS_COUNT)
+      .map((t) => ({
+        title: t.title,
+        projectTitle: t.isInbox ? null : t.projectTitle,
+        deadline: t.deadline,
+        durationMin: t.durationMin,
+      }));
+  }
+  const tasks = new Map(input.tasks.map((t) => [t.id, t]));
+  const projects = new Map(input.projects.map((p) => [p.id, p]));
+  return scored.slice(0, FOCUS_COUNT).map((x) => {
+    const t = tasks.get(x.taskId) as EngineTask;
+    const p = t.projectId ? projects.get(t.projectId) : undefined;
+    return {
+      title: t.title,
+      projectTitle: p?.title ?? null,
+      deadline: t.dueDate ?? p?.dueDate ?? null,
+      durationMin: t.durationMin,
+    };
+  });
+}
+
 /** GET /daily-recap?date=: the plain report of a day and the facts it is made from. */
 export function getDailyRecap(ctx: Ctx, date?: string): Recap & { facts: RecapFacts } {
   const facts = getDailyFacts(ctx, date);
-  return { ...composeDailyRecap(facts), facts };
+  return { ...composeDailyRecap(facts, getSettings(ctx)['report.rhythm_low_pct']), facts };
 }
 
 const AI_OUTPUT = z.object({ message: z.string() });
@@ -266,28 +353,16 @@ export interface SendRecapOptions {
 export async function buildDailyMessage(ctx: Ctx, opts: SendRecapOptions) {
   const s = getSettings(ctx);
   const facts = getDailyFacts(ctx, opts.date);
-  const recap = composeDailyRecap(facts);
-  if (recap.empty) return { empty: true as const, ai: false, text: '', aiError: null };
-  if (s['notify.daily_recap'].ai && opts.llm !== null) {
-    try {
-      const llm = opts.llm ?? makeLlm(s, opts.env, getAiKey(ctx, s['ai.provider']));
-      return {
-        empty: false as const,
-        ai: true,
-        text: await writeDailyReportWithAi(ctx, facts, llm),
-        aiError: null,
-      };
-    } catch (e) {
-      // AI off, unreachable or off-format: the plain report is sent.
-      return {
-        empty: false as const,
-        ai: false,
-        text: recapToTelegramHtml(recap),
-        aiError: (e as Error).message,
-      };
-    }
+  const recap = composeDailyRecap(facts, s['report.rhythm_low_pct']);
+  const plain = { ai: false, text: recapToTelegramHtml(recap), aiError: null as string | null };
+  if (!s['notify.daily_recap'].ai || opts.llm === null) return plain;
+  try {
+    const llm = opts.llm ?? makeLlm(s, opts.env, getAiKey(ctx, s['ai.provider']));
+    return { ai: true, text: await writeDailyReportWithAi(ctx, facts, llm), aiError: null };
+  } catch (e) {
+    // AI off, unreachable or off-format: the plain report is sent.
+    return { ...plain, aiError: (e as Error).message };
   }
-  return { empty: false as const, ai: false, text: recapToTelegramHtml(recap), aiError: null };
 }
 
 /** Builds the message of the day and sends it on Telegram (plain text if Telegram refuses the HTML). */
@@ -298,7 +373,6 @@ export async function sendDailyRecap(ctx: Ctx, opts: SendRecapOptions) {
   if (!token || !chatId)
     throw new DomainError('NOTIFY_NOT_CONFIGURED', 'Telegram non configuré (jeton du bot et chat).');
   const msg = await buildDailyMessage(ctx, opts);
-  if (msg.empty) return { sent: false as const, ...msg };
   const base = { chat_id: chatId, link_preview_options: { is_disabled: true } };
   try {
     await telegram(token, 'sendMessage', { ...base, text: msg.text, parse_mode: 'HTML' });
@@ -306,5 +380,35 @@ export async function sendDailyRecap(ctx: Ctx, opts: SendRecapOptions) {
     if (!/parse entities|can't parse|message is too long/i.test((e as Error).message)) throw e;
     await telegram(token, 'sendMessage', { ...base, text: stripTelegramHtml(msg.text).slice(0, 4096) });
   }
-  return { sent: true as const, ...msg };
+  return { sent: true, ...msg };
+}
+
+// ---------- Holidays (D-78) ----------
+
+export const vacationBody = vacationSchema;
+
+/** The holiday periods, sorted, and whether today is one of them. */
+export function listVacations(ctx: Ctx) {
+  const today = parisDate(ctxNow(ctx));
+  const periods = [...getSettings(ctx)['notify.vacations']].sort((a, b) => a.from.localeCompare(b.from));
+  return { onVacation: isOnVacation(today, periods), periods };
+}
+
+/** Adds a holiday period (no evening report from `from` to `to`, both included). */
+export function addVacation(ctx: Ctx, period: { from: string; to: string }) {
+  const parsed = vacationSchema.safeParse(period);
+  if (!parsed.success || !isValidDate(parsed.data.from) || !isValidDate(parsed.data.to))
+    throw new DomainError('VALIDATION', parsed.error?.issues[0]?.message ?? 'Date invalide (AAAA-MM-JJ).');
+  const p = parsed.data;
+  const periods = getSettings(ctx)['notify.vacations'].filter((x) => x.from !== p.from || x.to !== p.to);
+  patchSettings(ctx, { 'notify.vacations': [...periods, p] });
+  return listVacations(ctx);
+}
+
+/** Removes the holiday period starting on `from`. */
+export function removeVacation(ctx: Ctx, from: string) {
+  const periods = getSettings(ctx)['notify.vacations'];
+  if (!periods.some((x) => x.from === from)) throw new NotFoundError('vacation', from);
+  patchSettings(ctx, { 'notify.vacations': periods.filter((x) => x.from !== from) });
+  return listVacations(ctx);
 }

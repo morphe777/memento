@@ -81,6 +81,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
   const dl = useDomainLookup();
   const w = page.isoWeek;
   const [budgetOpen, setBudgetOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const setItems = useAction((items: { taskId: string; kind: 'week' | 'bonus' }[]) =>
     put<PlanningPage>(`/week-plans/${w}/items`, { items }),
   );
@@ -109,19 +110,21 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         />
         <PageHeader
           eyebrow={
-            <span className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-2">
               <button
                 type="button"
-                className="btn btn-sm btn-ghost px-1"
+                className="btn btn-sm btn-ghost px-1 flex-none"
                 aria-label="Semaine précédente"
                 onClick={() => navigate({ to: '/planifier', search: { semaine: shiftIsoWeek(w, -1) } })}
               >
                 ‹
               </button>
-              Planification · semaine {weekNumber(w)} · {page.label}
+              <span className="min-w-0">
+                Planification · semaine {weekNumber(w)} · {page.label}
+              </span>
               <button
                 type="button"
-                className="btn btn-sm btn-ghost px-1"
+                className="btn btn-sm btn-ghost px-1 flex-none"
                 aria-label="Semaine suivante"
                 onClick={() => navigate({ to: '/planifier', search: { semaine: shiftIsoWeek(w, 1) } })}
               >
@@ -187,6 +190,11 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
                   busy={setItems.isPending}
                 />
               ))}
+              {g.key === 'consider' && page.more.length > 0 && (
+                <button type="button" className="btn btn-sm self-start" onClick={() => setMoreOpen(true)}>
+                  + Tâche d'un autre projet
+                </button>
+              )}
             </section>
           ))}
         </div>
@@ -265,6 +273,14 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         </aside>
       </div>
       {budgetOpen && <BudgetPanel open onClose={() => setBudgetOpen(false)} page={page} />}
+      {moreOpen && (
+        <MorePanel
+          page={page}
+          onClose={() => setMoreOpen(false)}
+          onToggle={toggle}
+          busy={setItems.isPending}
+        />
+      )}
     </div>
   );
 }
@@ -455,6 +471,79 @@ function PlanTaskRow({
         {bonus ? '✓ Bonus' : 'Bonus'}
       </button>
     </div>
+  );
+}
+
+const fold = (t: string) =>
+  t
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+/**
+ * D-79: any task of another active or ready project (not a month project, not in « À considérer aussi »). A
+ * chosen task then shows under « À considérer aussi »; its project stays in the panel until it closes.
+ */
+function MorePanel({
+  page,
+  onClose,
+  onToggle,
+  busy,
+}: {
+  page: PlanningPage;
+  onClose: () => void;
+  onToggle: (taskId: string, kind: 'week' | 'bonus') => void;
+  busy: boolean;
+}) {
+  const dl = useDomainLookup();
+  const [q, setQ] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const considered = page.groups.find((g) => g.key === 'consider')?.cards ?? [];
+  const cards = [...page.more, ...considered.filter((c) => c.projectId && picked.includes(c.projectId))].sort(
+    (a, b) => a.title.localeCompare(b.title),
+  );
+  const needle = fold(q.trim());
+  const shown = needle
+    ? cards
+        .map((c) =>
+          fold(c.title).includes(needle)
+            ? c
+            : { ...c, tasks: c.tasks.filter((t) => fold(t.title).includes(needle)) },
+        )
+        .filter((c) => c.tasks.length)
+    : cards;
+  return (
+    <Panel open onClose={onClose} title="Tâche d'un autre projet">
+      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        Projets actifs ou prêts hors projets du mois, par exemple un projet que tu démarres en fin de mois.
+        Une tâche choisie rejoint « À considérer aussi ».
+      </p>
+      <input
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Chercher un projet ou une tâche"
+        aria-label="Chercher un projet ou une tâche"
+      />
+      {shown.length === 0 && (
+        <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
+          Aucun projet ne correspond.
+        </div>
+      )}
+      {shown.map((c) => (
+        <ProjectCard
+          key={c.projectId}
+          card={c}
+          color={dl.color(c.domainId)}
+          domainName={dl.name(c.domainId)}
+          onToggle={(taskId, kind) => {
+            if (c.projectId && !picked.includes(c.projectId)) setPicked([...picked, c.projectId]);
+            onToggle(taskId, kind);
+          }}
+          busy={busy}
+        />
+      ))}
+    </Panel>
   );
 }
 
