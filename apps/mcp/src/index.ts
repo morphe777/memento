@@ -318,9 +318,27 @@ export function buildServer(call: Call) {
   );
   tool(
     'get_daily_recap',
-    'Bilan du jour (D-77) : faits du jour (ou date = AAAA-MM-JJ), 7 derniers jours, semaine, projets, et le rapport simple.',
+    'Bilan du jour (D-77, D-78) : faits du jour (le dimanche : le week-end ; ou date = AAAA-MM-JJ), 7 derniers jours, semaines d’affilée et volume des 4 semaines, semaine, pistes si rien n’est fait, et le rapport simple.',
     { date: z.string().optional() },
     (a) => call('GET', `/daily-recap${qs(a)}`),
+  );
+  tool(
+    'list_vacations',
+    'Périodes de vacances (D-78) : aucun bilan du soir pendant ces jours. onVacation = vacances aujourd’hui.',
+    {},
+    () => call('GET', '/vacations'),
+  );
+  tool(
+    'add_vacation',
+    'Déclare des vacances du from au to (AAAA-MM-JJ, inclus) : aucun bilan du soir, la série de semaines ne casse pas.',
+    { from: z.string(), to: z.string() },
+    (a) => call('POST', '/vacations', a),
+  );
+  tool(
+    'remove_vacation',
+    'Supprime la période de vacances qui commence le from (AAAA-MM-JJ).',
+    { from: z.string() },
+    (a) => call('DELETE', `/vacations/${a.from}`),
   );
   tool(
     'list_changes',

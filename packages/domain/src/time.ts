@@ -101,6 +101,22 @@ const FR_MONTHS = [
   'nov.',
   'déc.',
 ];
+const FR_MONTHS_LONG = [
+  'janvier',
+  'février',
+  'mars',
+  'avril',
+  'mai',
+  'juin',
+  'juillet',
+  'août',
+  'septembre',
+  'octobre',
+  'novembre',
+  'décembre',
+];
+/** "octobre" for "2026-10" (or a date). */
+export const frMonth = (m: string): string => FR_MONTHS_LONG[Number(m.slice(5, 7)) - 1];
 const FR_DAYS = ['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'];
 export const frDay = (d: string): string => FR_DAYS[isoDay(d) - 1];
 export const frShort = (d: string): string =>

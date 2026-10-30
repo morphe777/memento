@@ -670,6 +670,16 @@ export async function buildApp(opts: AppOptions) {
         { schema: { ...tag('Rapports'), querystring: z.object({ date: z.string().optional() }) } },
         async (req) => D.getDailyRecap(ctx(req), req.query.date),
       );
+      // D-78: holidays, also open to the AI token (« je suis en vacances du… au… »).
+      r.get('/vacations', { schema: tag('Réglages') }, async (req) => D.listVacations(ctx(req)));
+      r.post('/vacations', { schema: { ...tag('Réglages'), body: D.vacationBody } }, async (req) =>
+        D.addVacation(ctx(req), req.body),
+      );
+      r.delete(
+        '/vacations/:from',
+        { schema: { ...tag('Réglages'), params: z.object({ from: z.string() }) } },
+        async (req) => D.removeVacation(ctx(req), req.params.from),
+      );
       r.get('/notify/status', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
         D.notifyStatus(ctx(req), process.env),
       );

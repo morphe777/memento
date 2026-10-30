@@ -655,6 +655,35 @@ describe('D-43 Planifier le mois', () => {
   });
 });
 
+describe('D-79 tâche hors projets du mois', () => {
+  it('a week across two months shows both months’ projects; every other project is in « more »', () => {
+    const ctx = makeCtx(); // Friday 23 Oct 2026
+    const { project: oct } = activeProject(ctx, 'Octobre', 'Travaux', 2); // month of Oct
+    const { project: nov } = activeProject(ctx, 'Novembre', 'Travaux', 2);
+    setProjectMonth(ctx, nov.id, '2026-11'); // ready until November
+    for (const t of ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Écho'])
+      setProjectMonth(ctx, activeProject(ctx, t, 'Travaux', 3).project.id, null); // backlog
+    // W44 (26 Oct – 1 Nov) straddles October and November.
+    const page = getPlanningPage(ctx, '2026-W44');
+    const month = page.groups.find((g) => g.key === 'month')!;
+    expect(month.cards.map((c) => c.projectId).sort()).toEqual([oct.id, nov.id].sort());
+    expect(month.hint).toBe('semaine à cheval : octobre et novembre');
+    const considered = page.groups.find((g) => g.key === 'consider')!.cards;
+    expect(considered).toHaveLength(3);
+    expect(page.more).toHaveLength(2);
+    expect(page.more.every((c) => c.tasks.length === 3 && c.hidden.length === 0)).toBe(true);
+    // A task picked from « more » is accepted and then shows under « À considérer aussi ».
+    const pick = page.more[0];
+    const after = setWeekItems(ctx, '2026-W44', [{ taskId: pick.tasks[0].taskId, kind: 'week' }]);
+    expect(after.groups.find((g) => g.key === 'consider')!.cards.map((c) => c.projectId)).toContain(
+      pick.projectId,
+    );
+    expect(after.more.map((c) => c.projectId)).not.toContain(pick.projectId);
+    // A week inside one month: only that month.
+    expect(getPlanningPage(ctx, '2026-W45').groups.find((g) => g.key === 'month')!.hint).toBe('');
+  });
+});
+
 describe('D-48 Planifier le trimestre', () => {
   it('quarter objectives with remaining work, pull-in of other objectives, alerts', () => {
     const ctx = makeCtx(); // 23 Oct 2026, Q4

@@ -111,6 +111,8 @@ body {
   color: var(--text);
   font-family: "IBM Plex Sans", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 /* G-12: everything is a link, nothing shouts: inherited colour, underline on hover only. */
@@ -160,6 +162,21 @@ select {
   input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="file"]),
   select {
     height: 44px;
+  }
+  /* iPhone Safari zooms on any field under 16 px and the page then stays wider than the screen. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+}
+/* Drawers: children keep their height (the body scrolls), the save hint leaves the title room on phones. */
+.panel-body > * {
+  flex-shrink: 0;
+}
+@media (max-width: 640px) {
+  .panel-hint {
+    display: none;
   }
 }
 /* Own chevron, kept clear of the right edge. */

@@ -19,7 +19,7 @@ import {
   Tabs,
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
-import { ACTION_LABEL, ENTITY_LABEL, fmtDateTime } from '../lib/format.ts';
+import { ACTION_LABEL, ENTITY_LABEL, fmtDate, fmtDateTime } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
 import type { AiCheck, AiStatus, Change, Domain, Settings } from '../lib/types.ts';
 
@@ -549,6 +549,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             />
           </Field>
           <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
+          <VacationsConfig />
         </>
       )}
       {tab === 'templates' && (
@@ -1149,12 +1150,7 @@ function NotifyConfig({
         {},
       );
       if (out.aiError) toast(`IA indisponible, rapport simple envoyé : ${out.aiError}`, 'error');
-      else
-        toast(
-          out.sent
-            ? `Bilan envoyé${out.ai ? ' (rédigé par l’IA)' : ''}.`
-            : 'Rien de fait aujourd’hui pour l’instant : pas de bilan envoyé.',
-        );
+      else toast(`Bilan envoyé${out.ai ? ' (rédigé par l’IA)' : ''}.`);
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
     } finally {
@@ -1175,9 +1171,10 @@ function NotifyConfig({
     <div className="flex flex-col gap-4 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
       <h3 className="h2 m-0">Bilan du jour (Telegram)</h3>
       <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-        Chaque soir, un rapport : une phrase qui résume les grandes réalisations, la série de jours et
-        l'avancée de la semaine, puis les tâches faites. Avec l'IA, c'est le prompt « Bilan du jour » (onglet
-        IA) qui écrit tout le message. Rien n'est envoyé un jour sans tâche faite.
+        Chaque soir, un rapport : une phrase qui résume les grandes réalisations, l'avancée de la semaine, les
+        semaines d'affilée et le volume des 4 dernières, puis les tâches faites. Un jour sans tâche faite : un
+        encouragement et ce qui compte ces prochains jours. Rien le samedi ; le dimanche, le bilan du
+        week-end. Avec l'IA, c'est le prompt « Bilan du jour » (onglet IA) qui écrit tout le message.
       </p>
       <label className="flex items-center gap-2 text-[14px]">
         <input type="checkbox" checked={r.enabled} onChange={(e) => setR({ enabled: e.target.checked })} />
@@ -1255,22 +1252,84 @@ function NotifyConfig({
       {preview && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-            {preview.empty
-              ? 'Aperçu : rien de fait aujourd’hui, aucun bilan ne serait envoyé.'
-              : preview.ai
-                ? 'Aperçu rédigé par l’IA (prompt enregistré)'
-                : preview.aiError
-                  ? `Aperçu : rapport simple (IA indisponible : ${preview.aiError})`
-                  : 'Aperçu : rapport simple'}
+            {preview.ai
+              ? 'Aperçu rédigé par l’IA (prompt enregistré)'
+              : preview.aiError
+                ? `Aperçu : rapport simple (IA indisponible : ${preview.aiError})`
+                : 'Aperçu : rapport simple'}
           </span>
-          {!preview.empty && <TelegramText html={preview.text} />}
+          <TelegramText html={preview.text} />
         </div>
       )}
     </div>
   );
 }
 
-type DailyMessage = { empty: boolean; ai: boolean; text: string; aiError: string | null };
+type DailyMessage = { ai: boolean; text: string; aiError: string | null };
+
+type Vacations = { onVacation: boolean; periods: { from: string; to: string }[] };
+
+/** D-78: holiday periods, saved at once (own endpoint, also open to the AI through the MCP). */
+function VacationsConfig() {
+  const qc = useQueryClient();
+  const q = useQuery({ queryKey: ['vacations'], queryFn: () => get<Vacations>('/vacations') });
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const run = async (fn: () => Promise<unknown>, done: string) => {
+    try {
+      await fn();
+      await qc.invalidateQueries({ queryKey: ['vacations'] });
+      toast(done);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    }
+  };
+  const add = () =>
+    run(async () => {
+      await post('/vacations', { from, to: to || from });
+      setFrom('');
+      setTo('');
+    }, 'Vacances enregistrées.');
+  return (
+    <div className="flex flex-col gap-3 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+      <h3 className="h2 m-0">Vacances</h3>
+      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        Pendant ces jours, aucun bilan n'est envoyé, et une semaine de vacances ne casse pas les semaines
+        d'affilée. Le plan du lundi et les rapports figés ne changent pas. Tu peux aussi le dire à l'IA (MCP).
+        {q.data?.onVacation && <strong> Tu es en vacances en ce moment.</strong>}
+      </p>
+      {!!q.data?.periods.length && (
+        <ul className="m-0 p-0 flex flex-col gap-1.5" style={{ listStyle: 'none' }}>
+          {q.data.periods.map((p) => (
+            <li key={p.from} className="flex items-center gap-2 text-[14px] flex-wrap">
+              <span>
+                {p.from === p.to ? `Le ${fmtDate(p.from)}` : `Du ${fmtDate(p.from)} au ${fmtDate(p.to)}`}
+              </span>
+              <button
+                type="button"
+                className="btn btn-sm"
+                onClick={() => run(() => del(`/vacations/${p.from}`), 'Période supprimée.')}
+              >
+                Supprimer
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="flex items-end gap-2 flex-wrap">
+        <Field label="Du">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </Field>
+        <Field label="Au (inclus)">
+          <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+        </Field>
+        <button type="button" className="btn" onClick={add} disabled={!from}>
+          Ajouter
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const TG_TAGS: Record<string, React.CSSProperties> = {
   b: { fontWeight: 700 },

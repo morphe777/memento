@@ -254,7 +254,7 @@ function ProjectRow({
       }}
     >
       <span className="dot" style={{ background: dl.color(r.domainId) }} />
-      <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+      <div className="min-w-0 flex flex-col gap-0.5" style={{ flex: '1 1 220px' }}>
         <Link to="/projets/$id" params={{ id: r.id }} className="text-[15px] font-semibold">
           {r.title}
         </Link>

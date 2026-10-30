@@ -375,7 +375,7 @@ export function Panel({
           <div className="h2 min-w-0 truncate">{title}</div>
           <span className="flex items-center gap-3 flex-none">
             {hint && (
-              <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+              <span className="panel-hint text-[12px]" style={{ color: 'var(--text-ghost)' }}>
                 {hint}
               </span>
             )}
@@ -384,7 +384,7 @@ export function Panel({
             </button>
           </span>
         </div>
-        <div className="overflow-y-auto p-5 flex flex-col gap-4">{children}</div>
+        <div className="panel-body overflow-y-auto p-5 flex flex-col gap-4">{children}</div>
       </div>
     </div>
   );
