@@ -280,6 +280,22 @@ function Sidebar({
   const path = useRouterState({ select: (s) => s.location.pathname });
   const vue = useRouterState({ select: (s) => vueOf(s.location.search) });
   const me = useMe();
+  // D-102 / D-105: the month projects under « Projets » fold from the chevron on its line (remembered).
+  const [projectsOpen, setProjectsOpenState] = useState(() => {
+    try {
+      return localStorage.getItem('memento.sidebar.projects') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setProjectsOpen = (v: boolean) => {
+    setProjectsOpenState(v);
+    try {
+      localStorage.setItem('memento.sidebar.projects', v ? '1' : '0');
+    } catch {
+      // private mode: not remembered
+    }
+  };
   const logout = useAction(() => post('/auth/logout'), {
     onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
   });
@@ -334,28 +350,62 @@ function Sidebar({
             const active = isActive(i, path, vue);
             return (
               <Fragment key={i.label}>
-                <Link
-                  to={i.to}
-                  search={i.search as never}
-                  className="flex items-center justify-between px-2 rounded-md text-[14px] hover:no-underline"
-                  style={{
-                    minHeight: 36,
-                    fontWeight: active ? 600 : 400,
-                    background: active ? 'var(--bin)' : undefined,
-                    color: active ? 'var(--text)' : 'var(--text-2)',
-                  }}
-                >
-                  {i.label}
-                  {i.to === '/journal' && (me.data?.unreviewed ?? 0) > 0 && (
-                    <span
-                      className="mono text-[11px] rounded-full px-2"
-                      style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
+                <span className="flex items-center gap-0.5">
+                  <Link
+                    to={i.to}
+                    search={i.search as never}
+                    className="flex-1 min-w-0 flex items-center justify-between px-2 rounded-md text-[14px] hover:no-underline"
+                    style={{
+                      minHeight: 36,
+                      fontWeight: active ? 600 : 400,
+                      background: active ? 'var(--bin)' : undefined,
+                      color: active ? 'var(--text)' : 'var(--text-2)',
+                    }}
+                  >
+                    {i.label}
+                    {i.to === '/journal' && (me.data?.unreviewed ?? 0) > 0 && (
+                      <span
+                        className="mono text-[11px] rounded-full px-2"
+                        style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
+                      >
+                        {me.data!.unreviewed}
+                      </span>
+                    )}
+                  </Link>
+                  {i.to === '/projets' && (
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      style={{ width: 28, height: 28 }}
+                      aria-expanded={projectsOpen}
+                      aria-label={
+                        projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'
+                      }
+                      title={projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'}
+                      onClick={() => setProjectsOpen(!projectsOpen)}
                     >
-                      {me.data!.unreviewed}
-                    </span>
+                      <svg
+                        aria-hidden="true"
+                        width={12}
+                        height={12}
+                        viewBox="0 0 14 14"
+                        style={{
+                          transform: `rotate(${projectsOpen ? 90 : 0}deg)`,
+                          transition: 'transform 0.15s',
+                        }}
+                      >
+                        <path
+                          d="M5 3l4 4-4 4"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                        />
+                      </svg>
+                    </button>
                   )}
-                </Link>
-                {i.to === '/projets' && <SidebarProjects />}
+                </span>
+                {i.to === '/projets' && projectsOpen && <SidebarProjects />}
               </Fragment>
             );
           })}
@@ -391,25 +441,10 @@ function SidebarProjects() {
   const dl = useDomainLookup();
   const month = me.data?.today.slice(0, 7);
   const next = month ? nextMonthOf(month) : undefined;
-  const [open, setOpenState] = useState(() => {
-    try {
-      return localStorage.getItem('memento.sidebar.projects') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const setOpen = (v: boolean) => {
-    setOpenState(v);
-    try {
-      localStorage.setItem('memento.sidebar.projects', v ? '1' : '0');
-    } catch {
-      // private mode: not remembered
-    }
-  };
   const query = (m?: string) => ({
     queryKey: ['projects', 'sidebar', m],
     queryFn: () => get<Project[]>(`/projects?month=${m}&status=active,paused,ready`),
-    enabled: !!m && open,
+    enabled: !!m,
   });
   const now = useQuery(query(month));
   const later = useQuery(query(next));
@@ -434,44 +469,21 @@ function SidebarProjects() {
       </>
     ) : null;
   return (
-    <div className="flex flex-col pl-3 py-1">
-      <button
-        type="button"
-        className="flex items-center gap-1.5 text-left text-[12px] px-2 border-0 bg-transparent cursor-pointer"
-        style={{ color: 'var(--text-ghost)', minHeight: 24 }}
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        title={open ? 'Masquer les projets du mois' : 'Afficher les projets du mois'}
-      >
-        <svg
-          aria-hidden="true"
-          width={10}
-          height={10}
-          viewBox="0 0 14 14"
-          style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform 0.15s' }}
-        >
-          <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-        {open ? 'Projets du mois' : 'Afficher les projets du mois'}
-      </button>
-      {open && (
-        <>
-          {list('Ce mois', now.data)}
-          {list('Mois prochain', later.data)}
-          {now.data?.length === 0 && later.data?.length === 0 && (
-            <span className="px-2 text-[12px]" style={{ color: 'var(--text-ghost)' }}>
-              Aucun projet du mois.
-            </span>
-          )}
-          <Link
-            to="/projets"
-            className="px-2 text-[12px]"
-            style={{ color: 'var(--text-ghost)', minHeight: 26, display: 'flex', alignItems: 'center' }}
-          >
-            Tous
-          </Link>
-        </>
+    <div className="flex flex-col pl-3 pb-1">
+      {list('Ce mois', now.data)}
+      {list('Mois prochain', later.data)}
+      {now.data?.length === 0 && later.data?.length === 0 && (
+        <span className="px-2 text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+          Aucun projet du mois.
+        </span>
       )}
+      <Link
+        to="/projets"
+        className="px-2 text-[12px]"
+        style={{ color: 'var(--text-ghost)', minHeight: 26, display: 'flex', alignItems: 'center' }}
+      >
+        Tous
+      </Link>
     </div>
   );
 }

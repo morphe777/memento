@@ -717,3 +717,14 @@ input[type="checkbox"] {
     color: var(--text-muted);
   }
 }
+
+/* D-105: the AI wand at the end of a field. */
+.ai-wand {
+  color: var(--primary);
+  opacity: 0.75;
+}
+.ai-wand:hover:not(:disabled) {
+  opacity: 1;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+}

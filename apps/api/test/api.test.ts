@@ -267,6 +267,22 @@ describe('API — Compléter avec l’IA (D-97)', () => {
     });
     expect(r.json().fields.successCriterion).toBeUndefined();
     expect(asked).toMatch(/smartIndicator/);
+    // D-105: the wand of one field asks and returns that field only.
+    const one = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/fill',
+      headers: h,
+      payload: { kind: 'objective', values: { title: 'Sommeil' }, only: 'smartTarget' },
+    });
+    expect(one.json().fields).toEqual({ smartTarget: '20' });
+    expect(asked).toMatch(/seulement une nouvelle valeur du champ smartTarget/);
+    const wrong = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/fill',
+      headers: h,
+      payload: { kind: 'meta_objective', values: { title: 'Sommeil' }, only: 'smartTarget' },
+    });
+    expect(wrong.statusCode).toBe(422);
     const empty = await app.inject({
       method: 'POST',
       url: '/api/v1/ai/fill',

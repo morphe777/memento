@@ -1237,6 +1237,16 @@ describe('D-100 Cap', () => {
     expect(cap.reminders.map((r) => r.type)).toEqual(['project', 'objective', 'meta']);
     expect(cap.missing).toEqual({ metas: 0, objectives: 0, projects: 0 });
   });
+  it('D-105: sorts meta-objectives and month projects by domain priority', () => {
+    const ctx = makeCtx('2026-10-27T08:00:00.000Z');
+    const ds = listDomains(ctx).sort((a, b) => a.priorityRank - b.priorityRank);
+    const low = createMetaObjective(ctx, { title: 'Bas', primaryDomainId: ds[ds.length - 1].id });
+    const high = createMetaObjective(ctx, { title: 'Haut', primaryDomainId: ds[0].id });
+    for (const m of [low, high])
+      createObjective(ctx, { title: `O ${m.title}`, metaObjectiveId: m.id, deadline: '2026-12-31' });
+    const cap = getCap(ctx);
+    expect(cap.groups.map((g) => g.meta?.title)).toEqual(['Haut', 'Bas']);
+  });
 });
 
 describe('D-65 occurrences à venir sur la carte', () => {
