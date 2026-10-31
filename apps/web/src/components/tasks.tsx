@@ -195,9 +195,12 @@ export function TaskList({
   color,
   onOpen,
   showDone = true,
+  sequential = false,
 }: {
   tasks: Task[];
   projectId: string | null;
+  /** D-101: show the chains (a free task starts a new one). */
+  sequential?: boolean;
   color: (t: Task) => string;
   onOpen: (id: string) => void;
   showDone?: boolean;
@@ -237,14 +240,16 @@ export function TaskList({
                   padding: '12px 16px 12px 6px',
                   opacity: t.status === 'done' ? 0.5 : t.locked ? 0.55 : 1,
                   background: 'var(--surface)',
+                  // D-101: a free task opens a new chain: a visible break above it.
+                  borderTop: sequential && t.isFree && i > 0 ? '2px dashed var(--divider)' : undefined,
                 }}
               >
                 {handle}
                 <span
-                  className="mono text-[12px] flex-none pt-1"
+                  className="mono text-[12px] flex-none pt-1 flex items-center"
                   style={{ width: 18, color: 'var(--text-ghost)' }}
                 >
-                  {i + 1}
+                  {sequential && t.isFree ? <ChainStartIcon /> : i + 1}
                 </span>
                 <TaskCheck
                   done={t.status === 'done'}
@@ -272,7 +277,17 @@ export function TaskList({
                     )}
                   </span>
                   <span className="text-[12px] flex flex-wrap gap-2" style={{ color: 'var(--text-faint)' }}>
-                    {t.isFree && <span>Libre</span>}
+                    {t.isFree && (
+                      <span
+                        title={
+                          sequential
+                            ? "N'attend aucune tâche ; les tâches placées dessous (non libres) la suivent."
+                            : undefined
+                        }
+                      >
+                        {sequential ? 'Libre · nouvelle suite' : 'Libre'}
+                      </span>
+                    )}
                     {t.dueDate && (
                       <span style={{ color: 'var(--late-text)' }}>Deadline {fmtDateShort(t.dueDate)}</span>
                     )}
@@ -289,6 +304,26 @@ export function TaskList({
         ))}
       </SortableContext>
     </DndContext>
+  );
+}
+
+/** D-101: branch icon of a free task (it starts its own chain). */
+function ChainStartIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      aria-label="Libre : nouvelle suite"
+    >
+      <title>Libre : démarre une nouvelle suite</title>
+      <circle cx="4" cy="3" r="1.6" />
+      <circle cx="12" cy="5" r="1.6" />
+      <path d="M4 4.6V14M12 6.6c0 3-8 2.5-8 6" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -542,7 +577,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
       {!inbox && (
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={f.isFree} onChange={(e) => set('isFree', e.target.checked)} /> Libre
-          : faisable n'importe quand (sort de la séquence)
+          : faisable n'importe quand, et les tâches placées dessous la suivent (nouvelle suite)
         </label>
       )}
       {inbox && (

@@ -471,13 +471,33 @@ export function layoutObjective(d: Draft, objectiveId: string) {
   for (const p of main) of(p.id);
   const byCol = new Map<number, typeof main>();
   for (const p of main) byCol.set(col.get(p.id)!, [...(byCol.get(col.get(p.id)!) ?? []), p]);
+  // D-104: a project goes on the row of its highest prerequisite when it is free (else the next free one below),
+  // so a chain reads on one line and fewer arrows cross. The first column keeps positionInObjective.
   const laid: LaidProject[] = [];
-  for (const [c, list] of byCol)
-    list
-      .sort((a, b) => a.positionInObjective - b.positionInObjective || a.title.localeCompare(b.title))
-      .forEach((p, r) => {
+  const rowOf = new Map<string, number>();
+  for (const c of [...byCol.keys()].sort((a, b) => a - b)) {
+    const used = new Set<number>();
+    const wanted = (p: (typeof main)[number]) => {
+      const pre = d.projects[p.id].dependsOn.filter((x) => rowOf.has(x));
+      return pre.length ? Math.min(...pre.map((x) => rowOf.get(x)!)) : -1;
+    };
+    byCol
+      .get(c)!
+      .map((p) => ({ p, w: wanted(p) }))
+      .sort(
+        (a, b) =>
+          a.w - b.w ||
+          a.p.positionInObjective - b.p.positionInObjective ||
+          a.p.title.localeCompare(b.p.title),
+      )
+      .forEach(({ p, w }) => {
+        let r = Math.max(0, w);
+        while (used.has(r)) r += 1;
+        used.add(r);
+        rowOf.set(p.id, r);
         laid.push({ id: p.id, status: p.status, col: c, row: r });
       });
+  }
   const cols = Math.max(1, ...laid.map((p) => p.col + 1));
   const rows = Math.max(laid.length ? 1 : 0, ...laid.map((p) => p.row + 1));
   const freePerRow = Math.max(1, cols);

@@ -557,6 +557,10 @@ export async function buildApp(opts: AppOptions) {
       r.get('/tasks', { schema: { ...tag('Tâches'), querystring: D.taskListQuery } }, async (req) =>
         D.listTasks(ctx(req), req.query),
       );
+      // D-100: Cap, the « why » of the quarter and the month.
+      r.get('/cap', { schema: { ...tag('Objectifs'), querystring: D.capQuery } }, async (req) =>
+        D.getCap(ctx(req), req.query),
+      );
       r.get('/inbox', { schema: tag('Tâches') }, async (req) => D.listInbox(ctx(req)));
       r.get('/experiences', { schema: tag('Expériences') }, async (req) => D.getExperiencesPage(ctx(req)));
       r.post('/experiences', { schema: { ...tag('Expériences'), body: D.experienceIdea } }, async (req) =>
@@ -576,6 +580,10 @@ export async function buildApp(opts: AppOptions) {
       });
       r.post('/tasks', { schema: { ...tag('Tâches'), body: D.taskCreate } }, async (req) =>
         D.createTask(ctx(req), req.body),
+      );
+      // D-99: « Fait hors plan » (Ma semaine): a task created already done, traced as unplanned.
+      r.post('/tasks/done', { schema: { ...tag('Tâches'), body: D.taskCreate } }, async (req) =>
+        D.logDoneTask(ctx(req), req.body),
       );
       r.post('/tasks/batch', { schema: { ...tag('Tâches'), body: D.taskBatchCreate } }, async (req) =>
         D.createTasks(ctx(req), req.body.projectId ?? null, req.body.tasks),

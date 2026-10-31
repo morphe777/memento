@@ -15,6 +15,7 @@ import { Loading } from './components/ui.tsx';
 import { ApiError } from './lib/api.ts';
 import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
+import { CapPage } from './pages/cap.tsx';
 import { ExperiencesPage } from './pages/experiences.tsx';
 import {
   DomainPage,
@@ -88,6 +89,7 @@ const inboxRoute = createRoute({
     return <InboxPage tache={inboxRoute.useSearch().tache} />;
   },
 });
+const capRoute = route('/cap', CapPage); // D-100
 const objectivesRoute = route('/objectifs', ObjectivesPage);
 const objectiveRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -186,6 +188,7 @@ const configRoute = createRoute({
 const routeTree = rootRoute.addChildren([
   indexRoute,
   weekRoute,
+  capRoute,
   planRoute,
   inboxRoute,
   objectivesRoute,

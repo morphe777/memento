@@ -6,13 +6,14 @@ import { post } from '../lib/api.ts';
 import { StarIcon } from './ai.tsx';
 import { AiWait, ErrorBox } from './ui.tsx';
 
-export type FillField = 'description' | 'smartIndicator' | 'smartTarget' | 'successCriterion';
+export type FillField = 'description' | 'smartIndicator' | 'smartTarget' | 'successCriterion' | 'motive';
 export interface FillValues {
   title: string;
   description?: string;
   smartIndicator?: string;
   smartTarget?: string;
   successCriterion?: string;
+  motive?: string;
 }
 interface FillAnswer {
   titles: string[];
@@ -25,6 +26,7 @@ const LABEL: Record<FillField, string> = {
   smartIndicator: 'Indicateur (SMART)',
   smartTarget: 'Cible',
   successCriterion: 'Critère de succès',
+  motive: 'Pourquoi (Cap)',
 };
 
 export function AiFill({
@@ -62,6 +64,7 @@ export function AiFill({
           smartIndicator: values.smartIndicator ?? '',
           smartTarget: values.smartTarget ?? '',
           successCriterion: values.successCriterion ?? '',
+          motive: values.motive ?? '',
         },
         remark: withRemark || undefined,
       });

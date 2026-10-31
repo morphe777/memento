@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { AiFill } from '../components/ai-fill.tsx';
 import { BreakdownButton } from '../components/breakdown.tsx';
+import { MotiveField } from '../components/cap.tsx';
 import { AiDescribe, DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { pathDefaultGroups, rememberGroups } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
@@ -539,12 +540,15 @@ export function NewProjectPanel({
   onClose,
   defaultGroup,
   objective,
+  stay = false,
 }: {
   open: boolean;
   onClose: () => void;
   defaultGroup?: string;
   /** Created from an objective page: appended at the end of its path, and we stay there. */
   objective?: { id: string; title: string };
+  /** Vue Plan (D-104): never leave the page, even without objective (the idea goes to the reserve). */
+  stay?: boolean;
 }) {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
@@ -566,6 +570,7 @@ export function NewProjectPanel({
         onClose();
         setTitle('');
         if (objective) toast(`« ${p.title} » ajouté au chemin.`);
+        else if (stay) toast(`Idée « ${p.title} » créée, dans la réserve.`);
         else navigate({ to: '/projets/$id', params: { id: p.id } });
       },
     },
@@ -714,12 +719,18 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
               }}
             >
               {p.sequenceMode === 'sequential'
-                ? 'Séquentiel : glisser pour réordonner'
+                ? 'Séquentiel : glisser pour réordonner · une tâche libre démarre une nouvelle suite'
                 : 'Parallèle : toutes disponibles'}
             </div>
           )}
           {!vue && tasks.data && (
-            <TaskList tasks={tasks.data} projectId={p.id} color={() => color} onOpen={openTask} />
+            <TaskList
+              tasks={tasks.data}
+              projectId={p.id}
+              color={() => color}
+              onOpen={openTask}
+              sequential={p.sequenceMode === 'sequential'}
+            />
           )}
           {vue && board.data && (
             <div style={{ padding: vue === 'kanban' ? 12 : 0 }}>
@@ -1152,6 +1163,7 @@ export function ProjectEditPanel({
     title: p.title,
     description: p.description,
     successCriterion: p.successCriterion,
+    motive: p.motive,
     startDate: p.startDate ?? '',
     dueDate: p.dueDate ?? '',
     objectiveId: p.objectiveId ?? '',
@@ -1183,6 +1195,7 @@ export function ProjectEditPanel({
         title: f.title,
         description: f.description,
         successCriterion: f.successCriterion,
+        motive: f.motive,
         startDate: f.startDate || null,
         dueDate: f.dueDate || null,
         objectiveId: f.objectiveId || null,
@@ -1232,6 +1245,7 @@ export function ProjectEditPanel({
           placeholder="ex. Contrat d'installation signé"
         />
       </Field>
+      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} />
 
       <FormSection title="Calendrier">
         <div className="grid gap-3" style={three}>

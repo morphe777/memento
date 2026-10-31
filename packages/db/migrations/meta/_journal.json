@@ -50,6 +50,13 @@
       "when": 1793434619331,
       "tag": "0006_vue_plan",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793450230708,
+      "tag": "0007_cap_unplanned",
+      "breakpoints": true
     }
   ]
 }

@@ -7,14 +7,16 @@ import { ApiError, get } from '../lib/api.ts';
 import { toast } from '../lib/hooks.ts';
 import type { MetaObjective, Objective, ProjectDetail, Resource } from '../lib/types.ts';
 import { MetaPanel, ObjectivePanel } from './objectives.tsx';
-import { ProjectEditPanel } from './projects.tsx';
+import { NewProjectPanel, ProjectEditPanel } from './projects.tsx';
 
 export type Editing =
   | { kind: 'meta'; id: string }
   | { kind: 'objective'; id: string }
   | { kind: 'project'; id: string }
   | { kind: 'newMeta' }
-  | { kind: 'newObjective'; quarter?: string; metaObjectiveId?: string | null };
+  | { kind: 'newObjective'; quarter?: string; metaObjectiveId?: string | null }
+  /** D-104: from the toolbar (to the reserve) or from an objective frame (pre-filled, end of its path). */
+  | { kind: 'newProject'; objectiveId?: string; objectiveTitle?: string };
 
 /** One panel at a time, fetched fresh: saving it refetches the plan, the draft in progress is kept (D-91). */
 export function PlanEditors({
@@ -91,6 +93,17 @@ export function PlanEditors({
           onCreated={(o) => toast(`Objectif « ${o.title} » créé.`)}
         />
       ) : null;
+    case 'newProject':
+      return (
+        <NewProjectPanel
+          open
+          onClose={onClose}
+          stay
+          objective={
+            editing.objectiveId ? { id: editing.objectiveId, title: editing.objectiveTitle ?? '' } : undefined
+          }
+        />
+      );
   }
 }
 

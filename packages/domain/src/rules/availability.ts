@@ -1,6 +1,8 @@
-// RB-06 (DM-51): order = implicit prerequisite in sequential projects; "libre" tasks escape the sequence.
-// A task is available when every non-free live task placed before it is done or chosen in the current plan,
-// and all its explicit prerequisites (RB-07) are done or chosen. Parallel projects: all tasks available.
+// RB-06 (DM-51, D-101): order = implicit prerequisite in sequential projects. A « libre » task starts a new
+// chain: it waits for nothing, and the non-free tasks under it follow it (they wait for the previous task, up to
+// that free task), not the tasks above it. A task is available when the previous task of its chain is done or
+// chosen in the current plan, and all its explicit prerequisites (RB-07) are done or chosen.
+// Parallel projects: all tasks available.
 
 export interface AvailTask {
   id: string;
@@ -26,10 +28,11 @@ export function availableTaskIds(
   const out = new Set<string>();
   let chainOpen = true;
   for (const t of ordered) {
+    if (t.isFree) chainOpen = true; // D-101: a free task starts its own chain, done or not
     if (t.status !== 'todo') continue;
     const orderOk = mode === 'parallel' || t.isFree || chainOpen;
     if (orderOk && depsOk(t.id)) out.add(t.id);
-    if (mode === 'sequential' && !t.isFree && !chosen.has(t.id)) chainOpen = false;
+    if (mode === 'sequential' && !chosen.has(t.id)) chainOpen = false;
   }
   return out;
 }

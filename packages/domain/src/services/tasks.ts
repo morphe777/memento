@@ -10,6 +10,7 @@ import type { TaskCreate, TaskPatch } from '../schemas.ts';
 import { getSettings, withTemplate } from '../settings.ts';
 import { addDays, currentWeek, parisDate } from '../time.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
+import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
 
 const { task, taskDependency, project, weekPlan, weekPlanItem, domain } = schema;
 export type TaskRow = typeof task.$inferSelect;
@@ -176,6 +177,7 @@ export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | 
       .run();
     touchProject(ctx, before.projectId);
     audit(ctx, 'task', id, 'complete', before, getTaskRow(ctx, id));
+    traceUnplanned(ctx, id); // D-99
     let next = null;
     if (!before.projectId && before.recurrenceRule) {
       const ref = before.dueDate ?? parisDate(ctxNow(ctx));
@@ -198,6 +200,18 @@ export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | 
   });
 }
 
+/**
+ * D-99: « Fait hors plan » from Ma semaine: creates a task already done (in a project or the Inbox), traced as
+ * unplanned in the current week by completeTask.
+ */
+export function logDoneTask(ctx: Ctx, input: TaskCreate) {
+  return tx(ctx, () => {
+    const { actualMin, ...rest } = input;
+    const created = createTask(ctx, rest);
+    return completeTask(ctx, created.id, { actualMin: actualMin ?? null }).task;
+  });
+}
+
 export function uncompleteTask(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
@@ -208,6 +222,7 @@ export function uncompleteTask(ctx: Ctx, id: string) {
       .where(eq(task.id, id))
       .run();
     audit(ctx, 'task', id, 'uncomplete', before, getTaskRow(ctx, id));
+    untraceUnplanned(ctx, id); // D-99
     return getTask(ctx, id);
   });
 }

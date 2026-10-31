@@ -10,9 +10,9 @@ import { parseJsonObject } from './propose.ts';
 import type { Llm } from './providers.ts';
 
 export const FILL_FIELDS = {
-  meta_objective: ['description'],
-  objective: ['description', 'smartIndicator', 'smartTarget'],
-  project: ['description', 'successCriterion'],
+  meta_objective: ['description', 'motive'],
+  objective: ['description', 'smartIndicator', 'smartTarget', 'motive'],
+  project: ['description', 'successCriterion', 'motive'],
 } as const;
 type FillKind = keyof typeof FILL_FIELDS;
 const LABEL: Record<FillKind, string> = {
@@ -34,6 +34,7 @@ export const aiFillBody = z.object({
     smartIndicator: z.string().max(500).default(''),
     smartTarget: z.string().max(200).default(''),
     successCriterion: z.string().max(500).default(''),
+    motive: z.string().max(120).default(''), // D-100
   }),
   remark: z.string().trim().max(2000).optional(),
 });
@@ -46,6 +47,7 @@ const OUTPUT = z.object({
     smartIndicator: z.string().optional(),
     smartTarget: z.string().optional(),
     successCriterion: z.string().optional(),
+    motive: z.string().optional(),
   }),
   comment: z.string().optional(),
 });
@@ -66,6 +68,11 @@ export async function fillWithAi(ctx: Ctx, raw: AiFillInput, llm: Llm) {
     wanted,
     current,
     template: template || null,
+    // D-100: the motive is read in a glance (Cap, Ma semaine), not a sentence to explain.
+    fieldHints: {
+      motive:
+        'le pourquoi, pas le quoi : 3 à 8 mots, sans point final, le mot-clé qui déclenche entre **…** (ex. « Vieillir **debout** »)',
+    },
     remark: input.remark || null,
     userContext: settings['ai.instructions'].trim() || null,
   };
@@ -85,7 +92,9 @@ export async function fillWithAi(ctx: Ctx, raw: AiFillInput, llm: Llm) {
   const fields: Partial<Record<(typeof wanted)[number], string>> = {};
   for (const k of wanted) {
     const value = parsed.data.fields[k]?.trim();
-    if (value) fields[k] = k === 'description' ? value : value.slice(0, k === 'smartTarget' ? 200 : 500);
+    if (value)
+      fields[k] =
+        k === 'description' ? value : value.slice(0, k === 'motive' ? 120 : k === 'smartTarget' ? 200 : 500);
   }
   return {
     model,

@@ -6,7 +6,6 @@ import { get, post } from '../lib/api.ts';
 import {
   useAction,
   useDomainLookup,
-  useGroups,
   useIsPhone,
   useMe,
   useResolvedTheme,
@@ -14,23 +13,47 @@ import {
   useSettings,
   useToasts,
 } from '../lib/hooks.ts';
-import type { SearchResult } from '../lib/types.ts';
+import type { Project, SearchResult } from '../lib/types.ts';
 import { CaptureSheet, PlusIcon } from './capture.tsx';
 import { DomainDot } from './ui.tsx';
 
-const NAV: { section: string; items: { to: string; label: string }[] }[] = [
+interface NavItem {
+  to: string;
+  label: string;
+  search?: Record<string, string>;
+  /** Folded-rail icon (defaults to `to`). */
+  icon?: string;
+  active?: (path: string, vue?: string) => boolean;
+}
+const under = (path: string, to: string) => path === to || path.startsWith(`${to}/`);
+const NAV: { section: string; items: NavItem[] }[] = [
   {
     section: 'Exécuter',
     items: [
       { to: '/semaine', label: 'Ma semaine' },
-      { to: '/planifier', label: 'Planifier' },
+      { to: '/cap', label: 'Cap' }, // D-100
+      {
+        to: '/planifier',
+        label: 'Planifier',
+        active: (path, vue) => path === '/planifier' && vue !== 'trimestre',
+      },
       { to: '/inbox', label: 'Inbox' },
     ],
   },
   {
     section: 'Piloter',
     items: [
-      { to: '/objectifs', label: 'Objectifs' },
+      // D-104: « Objectifs » opens the Vue Plan; the list stays reachable from it (and /objectifs).
+      {
+        to: '/planifier',
+        search: { vue: 'trimestre' },
+        label: 'Objectifs',
+        icon: '/objectifs',
+        active: (path, vue) =>
+          under(path, '/objectifs') ||
+          under(path, '/meta-objectifs') ||
+          (path === '/planifier' && vue === 'trimestre'),
+      },
       { to: '/projets', label: 'Projets' },
       { to: '/taches', label: 'Tâches' },
       { to: '/domaines', label: 'Domaines' },
@@ -53,6 +76,10 @@ const TABS = [
   { to: '/idees', label: 'Idées' },
   { to: '/rapports', label: 'Rapports' },
 ];
+
+const vueOf = (search: unknown) => (search as { vue?: string } | undefined)?.vue;
+const isActive = (i: NavItem, path: string, vue?: string) =>
+  i.active ? i.active(path, vue) : under(path, i.to);
 
 export function AppShell({ children }: { children: ReactNode }) {
   const phone = useIsPhone();
@@ -101,9 +128,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
   };
   const location = useRouterState({ select: (s) => s.location });
-  // D-95: the Planifier tabs (Semaine, Mois, Plan) all use the whole width; every other page keeps 1 408 px.
-  // Folding the menu only gives its width back, it never changes this rule.
-  const wide = location.pathname === '/planifier';
+  // D-104 (replaces D-95): every page, Planifier included, keeps 1 408 px at most; the Vue Plan has its own
+  // « Plein écran ». Folding the menu only gives its width back.
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
       {!phone &&
@@ -156,11 +182,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                   style={{ height: 1, width: 24, background: 'var(--border)', margin: '4px 0' }}
                 />
                 {s.items.map((i) => {
-                  const active = location.pathname === i.to || location.pathname.startsWith(`${i.to}/`);
+                  const active = isActive(i, location.pathname, vueOf(location.search));
                   return (
                     <Link
-                      key={i.to}
+                      key={i.label}
                       to={i.to}
+                      search={i.search as never}
                       aria-label={i.label}
                       data-label={i.label}
                       className="icon-btn rail-item hover:no-underline"
@@ -170,7 +197,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                           : { color: 'var(--text-2)' }
                       }
                     >
-                      <NavIcon name={i.to} />
+                      <NavIcon name={i.icon ?? i.to} />
                     </Link>
                   );
                 })}
@@ -207,7 +234,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="flex-1 box-border"
           style={{
             padding: phone ? '12px 12px 96px' : '32px 24px',
-            maxWidth: phone || wide ? undefined : 1408,
+            maxWidth: phone ? undefined : 1408,
             width: '100%',
             margin: '0 auto',
           }}
@@ -251,11 +278,8 @@ function Sidebar({
   onFold: () => void;
 }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const vue = useRouterState({ select: (s) => vueOf(s.location.search) });
   const me = useMe();
-  const groups = useGroups();
-  const dl = useDomainLookup();
-  const [allGroups, setAllGroups] = useState(false);
-  const shown = (groups.data ?? []).filter((g) => allGroups || g.activeProjectCount > 0);
   const logout = useAction(() => post('/auth/logout'), {
     onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
   });
@@ -307,11 +331,12 @@ function Sidebar({
             <span aria-hidden className="flex-1" style={{ height: 1, background: 'var(--border)' }} />
           </div>
           {s.items.map((i) => {
-            const active = path === i.to || path.startsWith(`${i.to}/`);
+            const active = isActive(i, path, vue);
             return (
-              <Fragment key={i.to}>
+              <Fragment key={i.label}>
                 <Link
                   to={i.to}
+                  search={i.search as never}
                   className="flex items-center justify-between px-2 rounded-md text-[14px] hover:no-underline"
                   style={{
                     minHeight: 36,
@@ -330,30 +355,7 @@ function Sidebar({
                     </span>
                   )}
                 </Link>
-                {i.to === '/projets' && shown.length > 0 && (
-                  <div className="flex flex-col pl-3 py-1">
-                    {shown.map((g) => (
-                      <Link
-                        key={g.id}
-                        to="/projets"
-                        search={{ groupe: g.id }}
-                        className="flex items-center gap-2 px-2 rounded-md text-[13px]"
-                        style={{ minHeight: 28, color: 'var(--text-muted)' }}
-                      >
-                        <DomainDot color={dl.color(g.domainId)} size={6} />
-                        <span className="truncate">{g.name}</span>
-                      </Link>
-                    ))}
-                    <button
-                      type="button"
-                      className="text-left text-[12px] px-2 border-0 bg-transparent cursor-pointer"
-                      style={{ color: 'var(--text-ghost)', minHeight: 26 }}
-                      onClick={() => setAllGroups((v) => !v)}
-                    >
-                      {allGroups ? 'Groupes actifs' : 'Tous'}
-                    </button>
-                  </div>
-                )}
+                {i.to === '/projets' && <SidebarProjects />}
               </Fragment>
             );
           })}
@@ -379,6 +381,105 @@ function Sidebar({
     </nav>
   );
 }
+
+/**
+ * D-102: under « Projets », the shortcuts that matter: the projects of this month and of next month, then
+ * « Tous ». The list folds (remembered on this device).
+ */
+function SidebarProjects() {
+  const me = useMe();
+  const dl = useDomainLookup();
+  const month = me.data?.today.slice(0, 7);
+  const next = month ? nextMonthOf(month) : undefined;
+  const [open, setOpenState] = useState(() => {
+    try {
+      return localStorage.getItem('memento.sidebar.projects') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const setOpen = (v: boolean) => {
+    setOpenState(v);
+    try {
+      localStorage.setItem('memento.sidebar.projects', v ? '1' : '0');
+    } catch {
+      // private mode: not remembered
+    }
+  };
+  const query = (m?: string) => ({
+    queryKey: ['projects', 'sidebar', m],
+    queryFn: () => get<Project[]>(`/projects?month=${m}&status=active,paused,ready`),
+    enabled: !!m && open,
+  });
+  const now = useQuery(query(month));
+  const later = useQuery(query(next));
+  const list = (title: string, rows: Project[] | undefined) =>
+    rows && rows.length > 0 ? (
+      <>
+        <span className="px-2 pt-1 text-[11px]" style={{ color: 'var(--text-ghost)' }}>
+          {title}
+        </span>
+        {rows.map((p) => (
+          <Link
+            key={p.id}
+            to="/projets/$id"
+            params={{ id: p.id }}
+            className="flex items-center gap-2 px-2 rounded-md text-[13px]"
+            style={{ minHeight: 28, color: 'var(--text-muted)' }}
+          >
+            <DomainDot color={dl.color(p.domainIds[0])} size={6} />
+            <span className="truncate">{p.title}</span>
+          </Link>
+        ))}
+      </>
+    ) : null;
+  return (
+    <div className="flex flex-col pl-3 py-1">
+      <button
+        type="button"
+        className="flex items-center gap-1.5 text-left text-[12px] px-2 border-0 bg-transparent cursor-pointer"
+        style={{ color: 'var(--text-ghost)', minHeight: 24 }}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        title={open ? 'Masquer les projets du mois' : 'Afficher les projets du mois'}
+      >
+        <svg
+          aria-hidden="true"
+          width={10}
+          height={10}
+          viewBox="0 0 14 14"
+          style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform 0.15s' }}
+        >
+          <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+        {open ? 'Projets du mois' : 'Afficher les projets du mois'}
+      </button>
+      {open && (
+        <>
+          {list('Ce mois', now.data)}
+          {list('Mois prochain', later.data)}
+          {now.data?.length === 0 && later.data?.length === 0 && (
+            <span className="px-2 text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+              Aucun projet du mois.
+            </span>
+          )}
+          <Link
+            to="/projets"
+            className="px-2 text-[12px]"
+            style={{ color: 'var(--text-ghost)', minHeight: 26, display: 'flex', alignItems: 'center' }}
+          >
+            Tous
+          </Link>
+        </>
+      )}
+    </div>
+  );
+}
+
+const nextMonthOf = (m: string) => {
+  const [y, mo] = m.split('-').map(Number);
+  return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`;
+};
 
 /** Version of the running server (root package.json), shown under the account. */
 function AppVersion() {
@@ -773,6 +874,12 @@ const ICON_PATHS: Record<string, ReactNode> = {
     <>
       <path d="M2 4h7M2 8h5M2 12h8" />
       <path d="m11 3 1.5 1.5L15 2" />
+    </>
+  ),
+  '/cap': (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <path d="m10.5 5.5-1.6 3.4-3.4 1.6 1.6-3.4z" />
     </>
   ),
   '/inbox': (

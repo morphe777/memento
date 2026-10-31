@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { CapLine } from '../components/cap.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { ActualTime } from '../components/tasks.tsx';
 import {
@@ -19,6 +20,7 @@ import {
   TaskCheck,
   useDomainRows,
 } from '../components/ui.tsx';
+import { UnplannedPanel } from '../components/unplanned.tsx';
 import { get, post } from '../lib/api.ts';
 import { fmtDateShort, fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
@@ -154,14 +156,18 @@ function WeekDesktop({ ex }: { ex: Execution }) {
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false); // V-13: always folded by default, state not remembered
   const [replanOpen, setReplanOpen] = useState(false);
+  const [unplannedOpen, setUnplannedOpen] = useState(false);
   const view = useWeekView();
   const tasks = useSortedTasks(ex, view);
   const mixRows = useDomainRows(ex.domainMix);
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Breadcrumb items={[{ label: 'Ma semaine' }]} />
-        <PageHeader eyebrow={eyebrow(ex)} title="Ma semaine" />
+      <div className="flex flex-col gap-3">
+        <div>
+          <Breadcrumb items={[{ label: 'Ma semaine' }]} />
+          <PageHeader eyebrow={eyebrow(ex)} title="Ma semaine" />
+        </div>
+        <CapLine />
       </div>
 
       <div className="flex flex-wrap gap-6 items-start">
@@ -173,7 +179,10 @@ function WeekDesktop({ ex }: { ex: Execution }) {
             <h2 className="h2">
               À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
             </h2>
-            <ViewToggles view={view} />
+            <span className="flex items-center gap-4 flex-wrap">
+              <ViewToggles view={view} />
+              <UnplannedButton ex={ex} onClick={() => setUnplannedOpen(true)} />
+            </span>
           </div>
           {!ex.plan || ex.tasks.length === 0 ? (
             <Empty>
@@ -257,16 +266,19 @@ function WeekDesktop({ ex }: { ex: Execution }) {
               label="Fait"
               minWidth={0}
               foot={
-                <div className="track" style={{ height: 6, background: 'var(--track)' }}>
-                  <div
-                    style={{
-                      height: 6,
-                      width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
-                      background: 'var(--text)',
-                      borderRadius: 999,
-                    }}
-                  />
-                </div>
+                <>
+                  <div className="track" style={{ height: 6, background: 'var(--track)' }}>
+                    <div
+                      style={{
+                        height: 6,
+                        width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
+                        background: 'var(--text)',
+                        borderRadius: 999,
+                      }}
+                    />
+                  </div>
+                  <DriftLine ex={ex} />
+                </>
               }
             >
               {fmtMin(ex.doneMin)}
@@ -318,7 +330,57 @@ function WeekDesktop({ ex }: { ex: Execution }) {
         </aside>
       </div>
       <ReplanPanel open={replanOpen} onClose={() => setReplanOpen(false)} projects={ex.monthProjects} />
+      <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
     </div>
+  );
+}
+
+/** D-99: « + Fait hors plan », only on the current week (the trace goes to the week of today). */
+function UnplannedButton({ ex, onClick, small }: { ex: Execution; onClick: () => void; small?: boolean }) {
+  const me = useMe();
+  if (me.data?.canWrite === false || ex.isoWeek !== me.data?.currentWeek) return null;
+  return (
+    <button
+      type="button"
+      className="btn btn-sm btn-soft-primary"
+      onClick={onClick}
+      title="Tracer une tâche faite sans être prévue"
+      style={small ? { minHeight: 36 } : undefined}
+    >
+      + Fait hors plan
+    </button>
+  );
+}
+
+/** D-99: what was done outside the plan this week, under « Fait ». */
+function DriftLine({ ex }: { ex: Execution }) {
+  const d = ex.drift;
+  if (!d.unplannedCount) return null;
+  return (
+    <div
+      className="text-[12px]"
+      style={{ color: 'var(--text-muted)' }}
+      title="Tâches faites sans avoir été prévues"
+    >
+      dont {fmtMin(d.unplannedMin)} hors plan ({d.unplannedCount})
+    </div>
+  );
+}
+
+export function UnplannedBadge() {
+  return (
+    <span
+      className="text-[11px] font-medium whitespace-nowrap"
+      title="Faite sans avoir été prévue cette semaine"
+      style={{
+        padding: '1px 7px',
+        borderRadius: 999,
+        border: '1px dashed var(--btn-border)',
+        color: 'var(--text-muted)',
+      }}
+    >
+      Hors plan
+    </span>
   );
 }
 
@@ -361,6 +423,7 @@ function WeekRow({
           </span>
           {t.isExperience && <ExperienceBadge />}
           {t.kind === 'bonus' && <BonusBadge />}
+          {t.unplanned && <UnplannedBadge />}
         </div>
         {detail && (
           <>
@@ -493,6 +556,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false);
+  const [unplannedOpen, setUnplannedOpen] = useState(false);
   const view = useWeekView();
   const tasks = useSortedTasks(ex, view);
   return (
@@ -504,6 +568,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
         <h1 className="m-0 font-bold" style={{ fontSize: 28 }}>
           Ma semaine
         </h1>
+        <CapLine compact />
       </div>
       <div
         className="grid gap-2"
@@ -528,10 +593,14 @@ function WeekPhone({ ex }: { ex: Execution }) {
           className="flex flex-col gap-2"
           style={{ padding: '12px 16px', borderBottom: '1px solid var(--divider-2)' }}
         >
-          <span className="text-[15px] font-semibold">
-            À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
+          <span className="flex items-center justify-between gap-2">
+            <span className="text-[15px] font-semibold">
+              À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
+            </span>
+            <UnplannedButton ex={ex} small onClick={() => setUnplannedOpen(true)} />
           </span>
           <ViewToggles view={view} />
+          <DriftLine ex={ex} />
         </div>
         {(!ex.plan || ex.tasks.length === 0) && <Empty>Pas encore de plan pour cette semaine.</Empty>}
         {ex.tasks.length > 0 && tasks.length === 0 && <AllDone ex={ex} />}
@@ -557,7 +626,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
                   className="text-[15px] font-semibold"
                   style={{ textDecoration: t.done ? 'line-through' : 'none' }}
                 >
-                  {t.title}
+                  {t.title} {t.unplanned && <UnplannedBadge />}
                 </span>
                 {view.showDetail && (
                   <span
@@ -625,6 +694,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
             </div>
           ))}
       </div>
+      <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
     </div>
   );
 }

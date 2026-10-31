@@ -101,11 +101,14 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
     objectiveId: p.objectiveId,
     objectiveTitle: p.objectiveTitle,
     inQuarterObjective: quarterObjectives.some((o) => o.id === p.objectiveId),
+    // D-103: deadline of the project, else of its objective (sort « Deadline » and box « du trimestre »).
+    deadline: p.dueDate ?? objectives.find((o) => o.id === p.objectiveId)?.deadline ?? null,
     remainingMin: p.taskStats.totalMin - p.taskStats.doneMin,
     doneMin: p.taskStats.doneMin,
     todo: p.taskStats.todo,
     gaps: p.gaps,
     carriedOver: p.previousMonthFlag === shiftMonth(month, -1),
+    motive: p.motive, // D-100
   });
 
   const chosen = serializeProjects(

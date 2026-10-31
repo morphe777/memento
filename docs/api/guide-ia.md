@@ -115,7 +115,16 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 - **Trimestre** : `GET /quarter-plans/{trimestre}` : capacité, objectifs et reste à faire de leurs chemins,
   objectifs ouverts d'autres trimestres, méta-objectifs couverts. Déplacer : `POST /objectives/{id}/quarter`
   `{ quarter }` (la deadline est ramenée dans le trimestre si besoin).
-- Exécution : `GET /weeks/{semaine}/execution` (ce que voit « Ma semaine »).
+- Exécution : `GET /weeks/{semaine}/execution` (ce que voit « Ma semaine » ; `drift` = tâches prévues faites et
+  travail **hors planification**, D-99).
+- **Hors planification** (D-99) : une tâche cochée alors qu'elle n'était prévue ni cette semaine ni la précédente est
+  tracée `kind: 'unplanned'` dans la semaine. `POST /tasks/done { title, projectId, durationMin, actualMin? }` crée
+  une tâche déjà faite (« Fait hors plan »). Les rapports (semaine, mois, trimestre) ont un bloc `drift`.
+- **Cap** (D-100) : `GET /cap?month=AAAA-MM` : objectifs du trimestre par méta-objectif et projets du mois avec leur
+  **pourquoi** (`motive`, quelques mots, mot-clé entre `**…**`). Champ `motive` sur méta-objectifs, objectifs et
+  projets (≤ 120 caractères). Écris le pourquoi, pas le quoi.
+- **Suites de tâches** (RB-06, D-101) : dans un projet séquentiel, une tâche `isFree` n'attend rien et **démarre une
+  nouvelle suite** : les tâches non libres placées dessous la suivent, pas celles du dessus.
 - Expériences : `GET /experiences` (cible, souvenirs, prévues, réserve) ; `POST /experiences` ajoute une envie.
 
 ## 5. Recettes

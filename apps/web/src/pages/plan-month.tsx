@@ -93,22 +93,7 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
               ))}
             </div>
           </section>
-          <section className="bin flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <h2 className="h2-bin">Prêts (backlog)</h2>
-              <InfoTip>
-                Projets « prêts », classés : non terminés le mois dernier, puis ceux d'un objectif du
-                trimestre, puis complets, puis par priorité de domaine. Un projet incomplet ne peut pas être
-                choisi : complète-le d'abord.
-              </InfoTip>
-            </div>
-            <div className="card overflow-hidden">
-              {page.candidates.length === 0 && <Empty>Aucun projet prêt.</Empty>}
-              {page.candidates.map((r) => (
-                <ProjectRow key={r.id} r={r} chosen={false} disabled={page.isPast} onToggle={toggle} />
-              ))}
-            </div>
-          </section>
+          <Backlog page={page} onToggle={toggle} />
         </div>
         <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
           <Section
@@ -230,6 +215,95 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
   );
 }
 
+type Sort = 'domain' | 'deadline';
+
+/**
+ * D-103: the ready projects in two boxes — those of the quarter (in a quarter objective, or due within the
+ * quarter) and the others — sorted by domain or by deadline, like Ma semaine.
+ */
+function Backlog({ page, onToggle }: { page: MonthPlanningPage; onToggle: (r: Row, on: boolean) => void }) {
+  const dl = useDomainLookup();
+  const [sort, setSort] = useState<Sort>(() => {
+    try {
+      return localStorage.getItem('memento.month.sort') === 'deadline' ? 'deadline' : 'domain';
+    } catch {
+      return 'domain';
+    }
+  });
+  const choose = (v: Sort) => {
+    setSort(v);
+    try {
+      localStorage.setItem('memento.month.sort', v);
+    } catch {
+      // private mode: not remembered
+    }
+  };
+  const rank = new Map(dl.domains.map((d, i) => [d.id, i]));
+  const sorted = page.candidates
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) =>
+      sort === 'domain'
+        ? (rank.get(a.r.domainId ?? '') ?? 999) - (rank.get(b.r.domainId ?? '') ?? 999) || a.i - b.i
+        : Number(!a.r.deadline) - Number(!b.r.deadline) ||
+          (a.r.deadline ?? '').localeCompare(b.r.deadline ?? '') ||
+          a.i - b.i,
+    )
+    .map((x) => x.r);
+  const ofQuarter = (r: Row) =>
+    r.inQuarterObjective || (!!r.deadline && quarterOfDate(r.deadline) === page.quarter);
+  const boxes = [
+    {
+      key: 'quarter',
+      title: 'Projets du trimestre',
+      info: `Projets prêts rattachés à un objectif de ${page.quarter.replace('-', ' ')}, ou dont la deadline tombe dans ce trimestre.`,
+      rows: sorted.filter(ofQuarter),
+      empty: 'Aucun projet prêt pour ce trimestre.',
+    },
+    {
+      key: 'other',
+      title: 'Autres projets prêts',
+      info: "Le reste du backlog : projets prêts sans objectif du trimestre. Un projet incomplet ne peut pas être choisi : complète-le d'abord.",
+      rows: sorted.filter((r) => !ofQuarter(r)),
+      empty: 'Aucun autre projet prêt.',
+    },
+  ];
+  return (
+    <>
+      {boxes.map((b) => (
+        <section key={b.key} className="bin flex flex-col gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h2 className="h2-bin">{b.title}</h2>
+            <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+              {b.rows.length}
+            </span>
+            <InfoTip>{b.info}</InfoTip>
+            <span className="flex-1" />
+            {b.key === 'quarter' && (
+              <button
+                type="button"
+                className="border-0 bg-transparent p-0 cursor-pointer underline underline-offset-2 text-[13px]"
+                style={{ color: 'var(--text-muted)' }}
+                title="Changer le tri (les deux listes)"
+                onClick={() => choose(sort === 'domain' ? 'deadline' : 'domain')}
+              >
+                {sort === 'domain' ? 'Tri par domaine' : 'Tri par deadline'}
+              </button>
+            )}
+          </div>
+          <div className="card overflow-hidden">
+            {b.rows.length === 0 && <Empty>{b.empty}</Empty>}
+            {b.rows.map((r) => (
+              <ProjectRow key={r.id} r={r} chosen={false} disabled={page.isPast} onToggle={onToggle} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </>
+  );
+}
+
+const quarterOfDate = (d: string) => `${d.slice(0, 4)}-Q${Math.floor((Number(d.slice(5, 7)) - 1) / 3) + 1}`;
+
 function ProjectRow({
   r,
   chosen,
@@ -265,6 +339,7 @@ function ProjectRow({
               · Objectif : {r.objectiveTitle}
             </span>
           )}
+          {r.deadline && !chosen && <span>· deadline {fmtDate(r.deadline)}</span>}
           {r.carriedOver && <span style={{ color: 'var(--late-text)' }}>· non terminé le mois dernier</span>}
           {incomplete && !chosen && (
             <Link to="/projets/$id" params={{ id: r.id }} style={{ color: 'var(--status-red)' }}>

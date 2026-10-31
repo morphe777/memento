@@ -129,7 +129,7 @@ Toutes codées dans `packages/domain`, testées unitairement, appliquées par l'
 | RB-03 | Tâche : durée ∈ {5, 15, 30, 60, 120} min (D-67) | > 120 refusé : message « à découper » (DM-32) |
 | RB-04 | Domaines d'un projet = domaines de ses groupes, 3 max ; principal ∈ cette liste, défaut = le plus prioritaire | Recalculé à chaque changement de groupes (DM-84, DM-91) |
 | RB-05 | Objectif : deadline obligatoire, ≤ fin du trimestre de l'objectif | DM-12 |
-| RB-06 | Disponibilité en mode séquentiel : une tâche est disponible si toutes les tâches non « libres » placées avant sont faites ou choisies dans le plan en cours | DM-51 ; mode parallel : toutes disponibles |
+| RB-06 | Disponibilité en mode séquentiel : une tâche « libre » démarre une nouvelle suite (elle n'attend rien) ; une tâche non libre est disponible si la tâche précédente de sa suite (jusqu'à la tâche libre la plus proche au-dessus) est faite ou choisie dans le plan en cours | DM-51, D-101 ; mode parallel : toutes disponibles |
 | RB-07 | Prérequis explicites : pas de cycle | 422 `DEPENDENCY_CYCLE` |
 | RB-08 | Case « projet du mois » : seulement si le projet a des tâches, toutes avec durée | DM-93 |
 | RB-09 | Tâche Expérience : ne compte ni dans le budget ni dans « Fait » | CH-12 |

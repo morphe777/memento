@@ -36,12 +36,15 @@ export const groupPatch = groupCreate.partial();
 export const metaObjectiveStatus = z.enum(['active', 'paused', 'achieved', 'abandoned']);
 /** DM-113: title rephrased as a result (Vue Plan), written by the AI or by hand. Empty = the title is shown. */
 const outcomeTitle = z.string().trim().max(80, '80 caractères au plus').nullable().optional();
+/** D-100: the « why » in a few words, read in a glance (Cap, Ma semaine); the keyword between **…**. */
+const motive = z.string().trim().max(120, '120 caractères au plus').optional();
 export const metaObjectiveCreate = z.object({
   title,
   description: text.optional(),
   horizonDate: date.nullable().optional(),
   status: metaObjectiveStatus.optional(),
   outcomeTitle,
+  motive,
   /** DM-114: domain of the meta-objective (Vue Plan filter); absent = deduced from its projects. */
   primaryDomainId: uuid.nullable().optional(),
 });
@@ -65,6 +68,7 @@ export const objectiveCreate = z.object({
   /** D-62: renewed for the next quarter / year when closed. */
   recurrence: z.enum(['quarterly', 'yearly']).nullable().optional(),
   outcomeTitle,
+  motive,
 });
 export const objectivePatch = objectiveCreate.partial();
 
@@ -82,6 +86,7 @@ const projectFields = {
   importance: z.enum(['low', 'normal', 'high']).optional(),
   /** D-62: renewed (copy with its tasks) for the next period when completed. */
   recurrence: z.enum(['monthly', 'quarterly', 'yearly']).nullable().optional(),
+  motive,
 };
 export const quarterKey = z.string().regex(/^\d{4}-Q[1-4]$/);
 export const objectiveQuarterBody = z.object({ quarter: quarterKey });
@@ -204,6 +209,8 @@ export const reportGenerateBody = z.object({
   kind: z.enum(['week', 'month', 'quarter']),
   periodKey: z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/),
 });
+
+export const capQuery = z.object({ month: monthKey.optional() });
 
 export const changesQuery = z.object({
   since: z.string().optional(), // ISO timestamp, or "last-visit", "24h", "7d"
