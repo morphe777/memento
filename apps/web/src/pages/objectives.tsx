@@ -5,7 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { AiFill } from '../components/ai-fill.tsx';
+import { AiFill, type AiRequest, WithWand } from '../components/ai-fill.tsx';
 import { MotiveField } from '../components/cap.tsx';
 import { AiDescribe, DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { PathAiButton, PathQuickAdd } from '../components/path.tsx';
@@ -321,6 +321,12 @@ export function ObjectivePanel({
     toast: 'Objectif supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const ai: AiRequest = {
+    kind: 'objective',
+    id: objective?.id,
+    parentId: f.metaObjectiveId || undefined,
+    values: f,
+  };
   /** D-40: an edit is saved when the drawer closes (outside click, ✕); Escape discards. A creation needs « Créer ». */
   const close = () => {
     if (objective && JSON.stringify(f) !== initial.current) {
@@ -338,15 +344,17 @@ export function ObjectivePanel({
       title={objective ? 'Modifier l’objectif' : 'Nouvel objectif trimestriel'}
     >
       <Field label="Titre">
-        <input
-          autoFocus={!objective}
-          value={f.title}
-          onChange={(e) => set('title', e.target.value)}
-          onKeyDown={(e) => {
-            if (!objective && e.key === 'Enter' && f.title.trim() && f.deadline && !save.isPending)
-              save.mutate(undefined);
-          }}
-        />
+        <WithWand ai={ai} field="title" value={f.title} onUse={(v) => set('title', v)}>
+          <input
+            autoFocus={!objective}
+            value={f.title}
+            onChange={(e) => set('title', e.target.value)}
+            onKeyDown={(e) => {
+              if (!objective && e.key === 'Enter' && f.title.trim() && f.deadline && !save.isPending)
+                save.mutate(undefined);
+            }}
+          />
+        </WithWand>
       </Field>
       <AiFill
         kind="objective"
@@ -356,7 +364,7 @@ export function ObjectivePanel({
         template={settings.data?.['templates.objective']}
         onUse={(k, v) => set(k as 'title', v)}
       />
-      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} />
+      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} ai={ai} />
       {!objective && (
         <>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -395,18 +403,32 @@ export function ObjectivePanel({
                 style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}
               >
                 <Field label="Indicateur (SMART)">
-                  <input
+                  <WithWand
+                    ai={ai}
+                    field="smartIndicator"
                     value={f.smartIndicator}
-                    onChange={(e) => set('smartIndicator', e.target.value)}
-                    placeholder="ex. POC publiés"
-                  />
+                    onUse={(v) => set('smartIndicator', v)}
+                  >
+                    <input
+                      value={f.smartIndicator}
+                      onChange={(e) => set('smartIndicator', e.target.value)}
+                      placeholder="ex. POC publiés"
+                    />
+                  </WithWand>
                 </Field>
                 <Field label="Cible">
-                  <input
+                  <WithWand
+                    ai={ai}
+                    field="smartTarget"
                     value={f.smartTarget}
-                    onChange={(e) => set('smartTarget', e.target.value)}
-                    placeholder="2"
-                  />
+                    onUse={(v) => set('smartTarget', v)}
+                  >
+                    <input
+                      value={f.smartTarget}
+                      onChange={(e) => set('smartTarget', e.target.value)}
+                      placeholder="2"
+                    />
+                  </WithWand>
                 </Field>
                 <Field label="Actuel">
                   <input
@@ -470,18 +492,32 @@ export function ObjectivePanel({
             style={{ gridTemplateColumns: 'minmax(0, 2fr) repeat(2, minmax(0, 1fr))' }}
           >
             <Field label="Indicateur (SMART)">
-              <input
+              <WithWand
+                ai={ai}
+                field="smartIndicator"
                 value={f.smartIndicator}
-                onChange={(e) => set('smartIndicator', e.target.value)}
-                placeholder="ex. POC publiés"
-              />
+                onUse={(v) => set('smartIndicator', v)}
+              >
+                <input
+                  value={f.smartIndicator}
+                  onChange={(e) => set('smartIndicator', e.target.value)}
+                  placeholder="ex. POC publiés"
+                />
+              </WithWand>
             </Field>
             <Field label="Cible">
-              <input
+              <WithWand
+                ai={ai}
+                field="smartTarget"
                 value={f.smartTarget}
-                onChange={(e) => set('smartTarget', e.target.value)}
-                placeholder="2"
-              />
+                onUse={(v) => set('smartTarget', v)}
+              >
+                <input
+                  value={f.smartTarget}
+                  onChange={(e) => set('smartTarget', e.target.value)}
+                  placeholder="2"
+                />
+              </WithWand>
             </Field>
             <Field label="Actuel">
               <input
@@ -630,6 +666,7 @@ export function MetaPanel({
     JSON.stringify({ title, horizonDate, status, primaryDomainId, description, motive }),
   );
   const extra = { primaryDomainId: primaryDomainId || null, description, motive };
+  const ai: AiRequest = { kind: 'meta_objective', id: meta?.id, values: { title, description, motive } };
   const save = useAction(
     () =>
       meta
@@ -664,7 +701,9 @@ export function MetaPanel({
       title={meta ? 'Modifier le méta-objectif' : 'Nouveau méta-objectif (~1 an et +)'}
     >
       <Field label="Titre">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        <WithWand ai={ai} field="title" value={title} onUse={setTitle}>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} />
+        </WithWand>
       </Field>
       <AiFill
         kind="meta_objective"
@@ -673,7 +712,7 @@ export function MetaPanel({
         template={settings.data?.['templates.meta_objective']}
         onUse={(k, v) => (k === 'title' ? setTitle(v) : k === 'motive' ? setMotive(v) : setDescription(v))}
       />
-      <MotiveField value={motive} onChange={setMotive} />
+      <MotiveField value={motive} onChange={setMotive} ai={ai} />
       <Field label="Domaine principal">
         <SearchSelect
           value={primaryDomainId}

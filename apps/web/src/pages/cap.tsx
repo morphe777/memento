@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
-import { MotiveText } from '../components/cap.tsx';
+import { MOTIVE_HELP, MotiveText } from '../components/cap.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { ErrorBox, InfoTip, Loading, PageHeader } from '../components/ui.tsx';
 import { get, patch } from '../lib/api.ts';
@@ -27,28 +27,15 @@ export function CapPage() {
   if (!q.data) return <Loading />;
   const cap = q.data;
   const missing = cap.missing.metas + cap.missing.objectives + cap.missing.projects;
-  const monthProjects = [
-    ...cap.groups.flatMap((g) => g.objectives.flatMap((o) => o.monthProjects)),
-    ...cap.outsideProjects,
-  ];
+  const monthProjects = cap.monthProjects; // D-105: by domain priority
   return (
     <div className="flex flex-col gap-6">
       <div>
         <Breadcrumb items={[{ label: 'Cap' }]} />
-        <PageHeader eyebrow={`${cap.quarter.replace('-', ' ')} · ${monthLabel(cap.month)}`} title="Cap" />
-        <p className="m-0 mt-1 text-[15px] flex items-center gap-1.5" style={{ color: 'var(--text-muted)' }}>
-          Ce après quoi je cours, et pourquoi — en quelques mots.
-          <InfoTip>
-            Pour chaque méta-objectif, objectif du trimestre et projet du mois : une phrase très courte, le
-            mot qui déclenche entre deux astérisques (par exemple « Vieillir **debout** »). Clique sur une
-            phrase pour la modifier. Ma semaine en affiche trois, qui tournent chaque jour.
-          </InfoTip>
-        </p>
-        {missing > 0 && (
-          <p className="m-0 mt-1 text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            {missing} pourquoi à écrire.
-          </p>
-        )}
+        <PageHeader
+          eyebrow={`${cap.quarter.replace('-', ' ')} · ${monthLabel(cap.month)}${missing ? ` · ${missing} pourquoi à écrire` : ''}`}
+          title="Cap"
+        />
       </div>
       <div className="flex flex-wrap gap-6 items-start">
         <section className="flex flex-col gap-4 min-w-0" style={{ flex: '3 1 520px' }}>
@@ -179,6 +166,7 @@ function Motive({ kind, id, value, size }: { kind: Kind; id: string; value: stri
         <button type="submit" className="btn btn-sm btn-primary" disabled={save.isPending}>
           OK
         </button>
+        <InfoTip>{MOTIVE_HELP}</InfoTip>
       </form>
     );
   if (!value.trim())

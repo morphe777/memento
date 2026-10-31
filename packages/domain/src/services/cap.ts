@@ -6,7 +6,7 @@ import { type Ctx, ctxNow } from '../context.ts';
 import { monthOf, parisDate, quarterOf, shiftMonth } from '../time.ts';
 import { serializeProjects } from './projects.ts';
 
-const { metaObjective, objective, project } = schema;
+const { metaObjective, objective, project, domain } = schema;
 
 export function getCap(ctx: Ctx, at?: { month?: string }) {
   const today = parisDate(ctxNow(ctx));
@@ -38,6 +38,29 @@ export function getCap(ctx: Ctx, at?: { month?: string }) {
       .filter((p) => ['active', 'paused', 'done'].includes(p.status)),
   );
   const nextMonth = shiftMonth(month, 1);
+  // D-105: everything is sorted by domain priority (most important domain first).
+  const rankOf = new Map(
+    ctx.db
+      .select()
+      .from(domain)
+      .all()
+      .map((d) => [d.id, d.priorityRank]),
+  );
+  const rank = (id: string | null | undefined) => (id ? (rankOf.get(id) ?? 999) : 999);
+  const objectiveIds = objectives.map((o) => o.id);
+  const attached = objectiveIds.length
+    ? ctx.db
+        .select({ objectiveId: project.objectiveId, domainId: project.primaryDomainId })
+        .from(project)
+        .where(inArray(project.objectiveId, objectiveIds))
+        .all()
+    : [];
+  /** Domain of an objective: the most important primary domain of its projects. */
+  const objectiveDomain = (id: string) =>
+    attached
+      .filter((a) => a.objectiveId === id && a.domainId)
+      .map((a) => a.domainId!)
+      .sort((a, b) => rank(a) - rank(b))[0] ?? null;
   const objectiveById = new Map(objectives.map((o) => [o.id, o]));
   const projectView = (p: (typeof monthProjects)[number]) => ({
     id: p.id,
@@ -57,23 +80,40 @@ export function getCap(ctx: Ctx, at?: { month?: string }) {
       deadline: o.deadline,
       progressPct: o.progressPct,
       smart: o.smartTarget ? `${o.smartCurrent || 0} / ${o.smartTarget}` : '',
-      domainId: mine[0]?.domainIds[0] ?? null,
+      domainId: objectiveDomain(o.id),
       monthProjects: mine.map(projectView),
     };
   };
+  const byRank = <T extends { domainId: string | null }>(list: T[]) =>
+    list
+      .map((x, i) => ({ x, i }))
+      .sort((a, b) => rank(a.x.domainId) - rank(b.x.domainId) || a.i - b.i)
+      .map((e) => e.x);
+  const metaGroups = metas.map((m) => {
+    const mine = byRank(objectives.filter((o) => o.metaObjectiveId === m.id).map(objectiveView));
+    return {
+      meta: {
+        id: m.id,
+        title: m.title,
+        motive: m.motive,
+        domainId: m.primaryDomainId ?? mine.find((o) => o.domainId)?.domainId ?? null,
+      },
+      objectives: mine,
+    };
+  });
   const groups = [
-    ...metas.map((m) => ({
-      meta: { id: m.id, title: m.title, motive: m.motive, domainId: m.primaryDomainId },
-      objectives: objectives.filter((o) => o.metaObjectiveId === m.id).map(objectiveView),
-    })),
+    ...byRank(metaGroups.map((g) => ({ ...g, domainId: g.meta.domainId }))).map(({ domainId: _, ...g }) => g),
     {
       meta: null,
-      objectives: objectives
-        .filter((o) => !o.metaObjectiveId || !metaIds.includes(o.metaObjectiveId))
-        .map(objectiveView),
+      objectives: byRank(
+        objectives
+          .filter((o) => !o.metaObjectiveId || !metaIds.includes(o.metaObjectiveId))
+          .map(objectiveView),
+      ),
     },
   ].filter((g) => g.objectives.length > 0);
   const outside = monthProjects.filter((p) => !p.objectiveId || !objectiveById.has(p.objectiveId));
+  const monthList = byRank(monthProjects.map(projectView));
   // Reminders of Ma semaine: what this month serves first, then the quarter, then the long run.
   const reminders = [
     ...monthProjects
@@ -90,6 +130,8 @@ export function getCap(ctx: Ctx, at?: { month?: string }) {
     nextMonth,
     groups,
     outsideProjects: outside.map(projectView),
+    /** Every month project, by domain priority (column « Ce mois-ci »). */
+    monthProjects: monthList,
     reminders: reminders as {
       type: 'project' | 'objective' | 'meta';
       id: string;

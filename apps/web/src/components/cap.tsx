@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { get } from '../lib/api.ts';
 import { useMe } from '../lib/hooks.ts';
 import type { Cap } from '../lib/types.ts';
+import { type AiRequest, WithWand } from './ai-fill.tsx';
 import { Field } from './ui.tsx';
 
 /** Renders « Vieillir **debout** » with the keyword in bold; nothing else is interpreted. */
@@ -25,12 +26,24 @@ export function MotiveText({ text }: { text: string }) {
   );
 }
 
+export const MOTIVE_HELP =
+  'Le pourquoi, pas le quoi : quelques mots lus en une fraction de seconde. Le mot qui déclenche entre deux astérisques s’affiche en gras : « Vieillir **debout** » → Vieillir debout (debout en gras). Affiché dans Cap et, trois à la fois, dans Ma semaine.';
+
 /** D-100: the « why » field of the meta-objective, objective and project panels, with its preview. */
-export function MotiveField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+export function MotiveField({
+  value,
+  onChange,
+  ai,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  /** D-105: the wand of the field. */
+  ai?: AiRequest;
+}) {
   return (
     <Field
       label="Pourquoi (Cap)"
-      info="Le pourquoi, pas le quoi : quelques mots lus en une fraction de seconde, le mot-clé entre deux astérisques. Affiché dans Cap et dans Ma semaine."
+      info={MOTIVE_HELP}
       hint={
         value.trim() ? (
           <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>
@@ -41,7 +54,13 @@ export function MotiveField({ value, onChange }: { value: string; onChange: (v: 
         )
       }
     >
-      <input value={value} maxLength={120} onChange={(e) => onChange(e.target.value)} />
+      {ai ? (
+        <WithWand ai={ai} field="motive" value={value} onUse={onChange}>
+          <input value={value} maxLength={120} onChange={(e) => onChange(e.target.value)} />
+        </WithWand>
+      ) : (
+        <input value={value} maxLength={120} onChange={(e) => onChange(e.target.value)} />
+      )}
     </Field>
   );
 }

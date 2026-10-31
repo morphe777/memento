@@ -3,7 +3,7 @@ import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
-import { AiFill } from '../components/ai-fill.tsx';
+import { AiFill, type AiRequest, WithWand } from '../components/ai-fill.tsx';
 import { BreakdownButton } from '../components/breakdown.tsx';
 import { MotiveField } from '../components/cap.tsx';
 import { AiDescribe, DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
@@ -1221,12 +1221,15 @@ export function ProjectEditPanel({
     toast: 'Projet supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const ai: AiRequest = { kind: 'project', id: p.id, values: f };
   const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' };
   const three = { gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))' };
   return (
     <Panel open={open} onClose={close} onCancel={onClose} title="Modifier le projet" hint={SAVE_HINT}>
       <Field label="Titre">
-        <input value={f.title} onChange={(e) => set('title', e.target.value)} />
+        <WithWand ai={ai} field="title" value={f.title} onUse={(v) => set('title', v)}>
+          <input value={f.title} onChange={(e) => set('title', e.target.value)} />
+        </WithWand>
       </Field>
       <AiFill
         kind="project"
@@ -1239,13 +1242,20 @@ export function ProjectEditPanel({
         label="Critère de succès (oui / non)"
         info="Phrase vérifiable par oui ou non à la fin du projet. Obligatoire pour promouvoir une idée."
       >
-        <input
+        <WithWand
+          ai={ai}
+          field="successCriterion"
           value={f.successCriterion}
-          onChange={(e) => set('successCriterion', e.target.value)}
-          placeholder="ex. Contrat d'installation signé"
-        />
+          onUse={(v) => set('successCriterion', v)}
+        >
+          <input
+            value={f.successCriterion}
+            onChange={(e) => set('successCriterion', e.target.value)}
+            placeholder="ex. Contrat d'installation signé"
+          />
+        </WithWand>
       </Field>
-      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} />
+      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} ai={ai} />
 
       <FormSection title="Calendrier">
         <div className="grid gap-3" style={three}>

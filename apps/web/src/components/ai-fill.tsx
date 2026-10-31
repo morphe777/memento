@@ -1,10 +1,11 @@
 // D-97: « Compléter avec l'IA » in the panel of a meta-objective, an objective or a project. The AI proposes 3
 // alternative titles and a value for each field (description, SMART measure, success criterion); the user picks
 // what replaces what in the form, which still has to be saved. Nothing is written by the AI.
-import { useState } from 'react';
-import { post } from '../lib/api.ts';
+import { type ReactNode, useState } from 'react';
+import { ApiError, post } from '../lib/api.ts';
+import { toast } from '../lib/hooks.ts';
 import { StarIcon } from './ai.tsx';
-import { AiWait, ErrorBox } from './ui.tsx';
+import { AiDots, AiWait, ErrorBox } from './ui.tsx';
 
 export type FillField = 'description' | 'smartIndicator' | 'smartTarget' | 'successCriterion' | 'motive';
 export interface FillValues {
@@ -213,5 +214,128 @@ export function AiFill({
         </div>
       )}
     </div>
+  );
+}
+
+/** What a panel sends to the AI about the item it edits (same as AiFill). */
+export interface AiRequest {
+  kind: 'meta_objective' | 'objective' | 'project';
+  id?: string;
+  parentId?: string;
+  values: FillValues;
+}
+
+const WAND_TITLE: Record<'title' | FillField, string> = {
+  title: 'Proposer un autre titre avec l’IA',
+  description: 'Réécrire la description avec l’IA',
+  smartIndicator: 'Proposer un autre indicateur avec l’IA',
+  smartTarget: 'Proposer une autre cible avec l’IA',
+  successCriterion: 'Proposer un autre critère de succès avec l’IA',
+  motive: 'Proposer un autre pourquoi avec l’IA',
+};
+
+/**
+ * D-105: the magic wand at the end of a field: the AI proposes again this field only and the value replaces the
+ * current one (↶ brings the previous one back). Nothing is saved until the panel is.
+ */
+export function AiWand({
+  ai,
+  field,
+  value,
+  onUse,
+}: {
+  ai: AiRequest;
+  field: 'title' | FillField;
+  value: string;
+  onUse: (v: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [previous, setPrevious] = useState<string | null>(null);
+  const run = async () => {
+    if (!ai.values.title.trim()) return toast('Donne d’abord un titre : l’IA en a besoin.', 'error');
+    setBusy(true);
+    try {
+      const v = ai.values;
+      const r = await post<FillAnswer>('/ai/fill', {
+        kind: ai.kind,
+        id: ai.id,
+        parentId: ai.parentId || undefined,
+        only: field,
+        values: {
+          title: v.title,
+          description: v.description ?? '',
+          smartIndicator: v.smartIndicator ?? '',
+          smartTarget: v.smartTarget ?? '',
+          successCriterion: v.successCriterion ?? '',
+          motive: v.motive ?? '',
+        },
+      });
+      const next = field === 'title' ? r.titles[0] : r.fields[field];
+      if (!next) return toast('L’IA n’a rien proposé pour ce champ.', 'error');
+      setPrevious(value);
+      onUse(next);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="flex items-center gap-0.5 flex-none">
+      {previous !== null && !busy && previous !== value && (
+        <button
+          type="button"
+          className="icon-btn ai-wand"
+          title="Revenir à la valeur précédente"
+          aria-label="Revenir à la valeur précédente"
+          onClick={() => {
+            onUse(previous);
+            setPrevious(null);
+          }}
+        >
+          ↶
+        </button>
+      )}
+      <button
+        type="button"
+        className="icon-btn ai-wand"
+        title={WAND_TITLE[field]}
+        aria-label={WAND_TITLE[field]}
+        disabled={busy}
+        onClick={run}
+      >
+        {busy ? <AiDots /> : <WandIcon />}
+      </button>
+    </span>
+  );
+}
+
+/** A field input with its wand at the end. */
+export function WithWand({ children, ...wand }: Parameters<typeof AiWand>[0] & { children: ReactNode }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="flex-1 min-w-0 flex flex-col">{children}</span>
+      <AiWand {...wand} />
+    </span>
+  );
+}
+
+export function WandIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m2.5 13.5 8-8 2 2-8 8z" />
+      <path d="m9 7 2 2" />
+      <path d="M12 1.5v2M11 2.5h2M14.5 5v1.5M13.75 5.75h1.5M6 1.5v1.5M5.25 2.25h1.5" />
+    </svg>
   );
 }
