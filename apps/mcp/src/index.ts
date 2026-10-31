@@ -368,15 +368,27 @@ export function buildServer(call: Call) {
   );
   tool(
     'complete_task',
-    'Coche une tâche (une tâche Inbox récurrente crée sa prochaine occurrence). actualMin : temps réellement passé en minutes, si différent de l’estimation.',
+    'Coche une tâche (une tâche Inbox récurrente crée sa prochaine occurrence). actualMin : temps réellement passé en minutes, si différent de l’estimation. Une tâche qui n’était prévue ni cette semaine ni la précédente est tracée « hors planification » (D-99).',
     { id: S.uuid, actualMin: z.number().int().min(1).max(6000).optional() },
     (a) => call('POST', `/tasks/${a.id}/complete`, a.actualMin ? { actualMin: a.actualMin } : undefined),
   );
   tool(
     'reorder_tasks',
-    "Réordonne les tâches d'un projet (l'ordre crée le prérequis implicite).",
+    "Réordonne les tâches d'un projet (l'ordre crée le prérequis implicite ; une tâche isFree démarre une nouvelle suite : elle n'attend rien et les tâches non libres placées dessous la suivent).",
     S.taskReorderBody.shape,
     (a) => call('POST', '/tasks/reorder', a),
+  );
+  tool(
+    'log_done_task',
+    'Trace une tâche déjà faite sans avoir été prévue (« Fait hors plan », D-99) : la crée dans le projet (projectId absent = Inbox) et la coche ; elle compte dans la dérive des rapports.',
+    S.taskCreate.shape,
+    (a) => call('POST', '/tasks/done', a),
+  );
+  tool(
+    'get_cap',
+    'Cap (D-100) : objectifs du trimestre par méta-objectif et projets du mois, chacun avec son pourquoi en quelques mots (motive, mot-clé entre **…**). month = AAAA-MM, défaut = mois en cours. Le pourquoi se modifie par update_meta_objective / update_objective / update_project (champ motive).',
+    { month: S.monthKey.optional() },
+    (a) => call('GET', `/cap${a.month ? `?month=${a.month}` : ''}`),
   );
   tool(
     'add_inbox_task',

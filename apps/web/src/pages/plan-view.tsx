@@ -2,7 +2,7 @@
 // The API computes everything that is a rule (GET /plan-graph, POST /plan/preview, POST /plan/apply); this page
 // keeps a local draft, lays it out (lib/plan-model.ts) and turns gestures into draft changes.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
+import { Link, useBlocker } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { DomainFilter, ErrorBox, InfoTip, Loading, PageHeader, Panel } from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
@@ -68,7 +68,7 @@ const useCoarse = () =>
 const hours = (m: number) => `${Math.round(m / 60)} h`;
 /**
  * SVG path through orthogonal points with wide rounded corners (radius ≤ 26): an end segment may be used up to
- * the end (the last one keeps 16 px of straight line for the arrowhead), an inner one is shared by two corners.
+ * the end (the last one keeps 16 px of straight line into the card), an inner one is shared by two corners.
  */
 function rounded(pts0: { x: number; y: number }[]) {
   const pts = pts0.filter((p, i) => i === 0 || Math.hypot(p.x - pts0[i - 1].x, p.y - pts0[i - 1].y) > 0.5);
@@ -99,12 +99,16 @@ export function PlanViewPage({ tabs }: { tabs: ReactNode }) {
     if (domainIds === null && dl.domains.length) setDomainIds([dl.domains[0].id]);
   }, [domainIds, dl.domains]);
   const ids = domainIds ?? [];
+  const dirtyRef = useRef(false);
   const q = useQuery({
     queryKey: ['plan-graph', ids.join(',')],
     queryFn: () => get<PlanGraph>(`/plan-graph?includeReserve=true&domainIds=${ids.join(',')}`),
     enabled: domainIds !== null,
   });
   const choose = (v: string[]) => {
+    // D-104: changing the filter reloads the plan: the draft would be lost.
+    if (dirtyRef.current && !window.confirm(LOSE)) return;
+    dirtyRef.current = false;
     setDomainIds(v);
     write('memento.plan.domains', v);
   };
@@ -112,17 +116,36 @@ export function PlanViewPage({ tabs }: { tabs: ReactNode }) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-3">
         {tabs}
-        <PageHeader eyebrow="Trimestres et au-delà · méta-objectifs, objectifs, projets" title="Plan" />
+        <PageHeader
+          eyebrow="Trimestres et au-delà · méta-objectifs, objectifs, projets"
+          title="Plan"
+          actions={
+            <Link to="/objectifs" className="btn btn-sm btn-ghost">
+              Liste des objectifs
+            </Link>
+          }
+        />
         <DomainFilter value={ids} onChange={choose} />
       </div>
       {q.isError && <ErrorBox error={q.error} />}
       {!q.data && !q.isError && <Loading />}
-      {q.data && <PlanEditor key={ids.join(',')} graph={q.data} domainIds={ids} />}
+      {q.data && (
+        <PlanEditor
+          key={ids.join(',')}
+          graph={q.data}
+          domainIds={ids}
+          onDirty={(v) => {
+            dirtyRef.current = v;
+          }}
+        />
+      )}
     </div>
   );
 }
 
 // ---------- Editor ----------
+
+const LOSE = 'Des changements du plan ne sont pas appliqués. Quitter et les perdre ?';
 
 type Hit =
   | { type: 'project'; id: string; half: 'left' | 'right' }
@@ -167,7 +190,15 @@ interface ObjTarget {
   w: number;
 }
 
-function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[] }) {
+function PlanEditor({
+  graph,
+  domainIds,
+  onDirty,
+}: {
+  graph: PlanGraph;
+  domainIds: string[];
+  onDirty: (dirty: boolean) => void;
+}) {
   const dl = useDomainLookup();
   const me = useMe();
   const phone = useIsPhone();
@@ -219,14 +250,21 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
   const live = opsKey && preview.data ? preview.data : graph;
   const previewError = opsKey && preview.error instanceof ApiError ? preview.error.message : null;
 
-  // Q-05: the draft is not kept on reload: warn before leaving with changes.
+  // Q-05, D-104: the draft is not kept: warn before leaving with changes (reload, another page, another tab
+  // of Planifier, another domain filter).
   const dirty = ops.length > 0 || loose.length > 0;
+  useEffect(() => onDirty(dirty), [dirty]);
+  useBlocker({ shouldBlockFn: () => !window.confirm(LOSE), enableBeforeUnload: dirty, disabled: !dirty });
+  // D-104: « Plein écran »: the plan takes the whole window, controls kept; Escape leaves it.
+  const [max, setMax] = useState(false);
   useEffect(() => {
-    if (!dirty) return;
-    const h = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', h);
-    return () => window.removeEventListener('beforeunload', h);
-  }, [dirty]);
+    if (!max) return;
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !document.querySelector('[role="dialog"]')) setMax(false);
+    };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [max]);
 
   const apply = async () => {
     setApplying(true);
@@ -566,7 +604,8 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
 
   // D-96: arrows. Each one picks, among the plain curve and paths through the free lanes (the gaps between card
   // columns, then between rows), the one that passes under no card and crosses the fewest arrows already drawn;
-  // corners are wide and the last straight part (the one with the arrowhead) stays long enough to read.
+  // corners are wide and the last straight part enters the card horizontally. No arrowheads (D-104): the plan
+  // always reads from left to right, the line alone says « waits for ».
   type Pt = { x: number; y: number };
   const boxes = [...lay.nodes];
   const bezier = (x1: number, y1: number, x2: number, y2: number): Pt[] => {
@@ -606,7 +645,7 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
   };
   // Vertical lanes: the middle of the gap left of every card column.
   const lanes = [...new Set(boxes.map(([, b]) => b.x - (L.colW - L.cardW) / 2))];
-  const ARROW = 42; // horizontal part that carries the arrowhead
+  const ARROW = 30; // horizontal part before the card
   const route = (na: Box, nb: Box, a: string, b: string) => {
     const p1 = { x: na.x + na.w, y: na.y + na.h / 2 };
     const p2 = { x: nb.x, y: nb.y + nb.h / 2 };
@@ -619,10 +658,14 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
       const pts = [p1, { x, y: p1.y }, { x, y: p2.y }, p2];
       options.push({ line: pts, d: () => rounded(pts), bonus: 0 });
     }
-    for (const hy of [nb.y - rowGap, nb.y + nb.h + rowGap]) {
+    // D-104: the lane under the target row first (there is less below a card than above it).
+    for (const [hy, bonus] of [
+      [nb.y + nb.h + rowGap, 1],
+      [nb.y - rowGap, 1.5],
+    ]) {
       const gx = lanes.filter((x) => x >= p1.x + 24).sort((u, v) => u - v)[0] ?? p1.x + 36;
       const pts = [p1, { x: gx, y: p1.y }, { x: gx, y: hy }, { x: last, y: hy }, { x: last, y: p2.y }, p2];
-      options.push({ line: pts, d: () => rounded(pts), bonus: 1 });
+      options.push({ line: pts, d: () => rounded(pts), bonus });
     }
     const scored = options.map((o) => {
       const line = o.line.length > 6 ? o.line : sample(o.line);
@@ -670,10 +713,19 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
   pairs.sort(
     (u, v) => Math.hypot(u.nb.x - u.na.x, u.nb.y - u.na.y) - Math.hypot(v.nb.x - v.na.x, v.nb.y - v.na.y),
   );
+  // D-104: a dependency line takes the colour of the domain of its meta-objective (of the waiting project).
+  const metaDomain = new Map(graph.metas.map((m) => [m.id, m.domainId]));
+  const lineColor = (pid: string) => {
+    const p = draft.projects[pid];
+    const o = p?.objectiveId ? draft.objectives[p.objectiveId] : undefined;
+    const dom =
+      (o?.metaObjectiveId && metaDomain.get(o.metaObjectiveId)) || o?.domainId || p?.primaryDomainId;
+    return dom ? dl.color(dom) : 'var(--text-muted)';
+  };
   const edges = pairs.map(({ a, b, na, nb }) => {
     const qa = objQuarter(a);
     const qb = objQuarter(b);
-    return { a, b, d: route(na, nb, a, b), bad: !!qa && !!qb && qa > qb };
+    return { a, b, d: route(na, nb, a, b), bad: !!qa && !!qb && qa > qb, color: lineColor(b) };
   });
   const dragLine =
     drag?.kind === 'port'
@@ -711,15 +763,37 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
   const levelColor = (l: string) =>
     l === 'error' ? 'var(--status-red)' : l === 'warn' ? 'var(--status-orange)' : 'var(--text-ghost)';
 
+  const canvasH = phone ? '58vh' : max ? 'calc(100vh - 84px)' : 'calc(100vh - 330px)';
   return (
-    <div className="flex flex-col gap-3">
+    <div
+      className="flex flex-col gap-3"
+      style={
+        max
+          ? {
+              position: 'fixed',
+              inset: 0,
+              zIndex: 35,
+              background: 'var(--bg)',
+              padding: '12px 16px',
+              overflow: 'auto',
+            }
+          : undefined
+      }
+    >
       {/* D-94: one toolbar line, grouped in discreet frames: what is shown, the view, creation. */}
-      <div className="flex flex-wrap items-center gap-2.5 text-[14px]">
+      <div className="flex flex-wrap items-center gap-2.5 text-[14px] flex-none">
         <ToolGroup label="Affichage">
           <label className="flex items-center gap-1.5 cursor-pointer">
             <input type="checkbox" checked={showDone} onChange={(e) => setShowDone(e.target.checked)} />
             Terminés
           </label>
+          <InfoTip>
+            <strong>Couleurs des projets.</strong> Bord plein à la couleur du domaine : projet du mois (en
+            cours). Bord gris : prêt, en pause ou terminé. Pointillés : idée, ou projet libre. Liseré épais à
+            gauche : son domaine principal n'est pas celui filtré (projet connexe). Les traits de dépendance
+            prennent la couleur du domaine du méta-objectif ; rouge pointillé : l'ordre des trimestres est
+            inversé.
+          </InfoTip>
         </ToolGroup>
         {readOnly && phone && (
           <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
@@ -736,6 +810,17 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
           <button type="button" className="btn btn-sm btn-ghost" onClick={fit}>
             Tout voir
           </button>
+          {!phone && (
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost"
+              aria-pressed={max}
+              onClick={() => setMax(!max)}
+              title={max ? 'Revenir à la page (Échap)' : 'Le plan prend toute la fenêtre'}
+            >
+              {max ? '⤡ Réduire' : '⤢ Plein écran'}
+            </button>
+          )}
         </ToolGroup>
         {!readOnly && (
           <ToolGroup label="Créer">
@@ -753,11 +838,19 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
             >
               + Objectif
             </button>
+            <button
+              type="button"
+              className="btn btn-sm btn-soft-primary"
+              onClick={() => setEditing({ kind: 'newProject' })}
+              title="Nouveau projet (idée), dans la réserve"
+            >
+              + Projet
+            </button>
           </ToolGroup>
         )}
       </div>
 
-      <div className="flex gap-3 items-stretch" style={{ minHeight: 0 }}>
+      <div className="flex gap-3 items-stretch flex-none">
         {!readOnly && drawer && (
           <Reserve
             refEl={reserveRef}
@@ -766,6 +859,7 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
             loose={looseIds}
             domainIds={domainIds}
             onFold={() => setDrawer(false)}
+            height={canvasH}
             hot={
               (drag?.kind === 'project' && drag.from !== 'reserve' && drag.hit?.type === 'reserve') ||
               (drag?.kind === 'objective' && drag.from === 'canvas' && drag.overReserve)
@@ -808,7 +902,7 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
             aria-label="Graphe du plan"
             className="block w-full rounded-xl"
             style={{
-              height: phone ? '58vh' : 'calc(100vh - 330px)',
+              height: canvasH,
               minHeight: 460,
               background: 'var(--surface-2)',
               border: '1px solid var(--border)',
@@ -821,30 +915,6 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
             onPointerUp={onBgUp}
             onPointerCancel={onBgUp}
           >
-            <defs>
-              <marker
-                id="pv-ar"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto"
-              >
-                <path d="M0,0 L10,5 L0,10 z" fill="var(--text-muted)" />
-              </marker>
-              <marker
-                id="pv-ar-bad"
-                viewBox="0 0 10 10"
-                refX="9"
-                refY="5"
-                markerWidth="7"
-                markerHeight="7"
-                orient="auto"
-              >
-                <path d="M0,0 L10,5 L0,10 z" fill="var(--status-red)" />
-              </marker>
-            </defs>
             <g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
               {/* Quarter columns and their capacity (V-25). */}
               {lay.quarters.map((q) => {
@@ -1102,6 +1172,22 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
                         <text x={f.x + L.pad} y={f.freeBox.y + 18} fontSize={12} fill="var(--text-faint)">
                           Libres, sans ordre
                         </text>
+                        {!readOnly && (
+                          <foreignObject x={f.x + f.w - 104} y={f.freeBox.y + 2} width={96} height={26}>
+                            <button
+                              type="button"
+                              className="pv-add"
+                              style={{ display: 'block', marginLeft: 'auto' }}
+                              onPointerDown={(e) => e.stopPropagation()}
+                              onClick={() =>
+                                setEditing({ kind: 'newProject', objectiveId: o.id, objectiveTitle: o.title })
+                              }
+                              title={`Nouveau projet dans « ${o.title} »`}
+                            >
+                              + projet
+                            </button>
+                          </foreignObject>
+                        )}
                         {drag?.kind === 'project' &&
                           drag.hit?.type === 'free' &&
                           drag.hit.objectiveId === f.objectiveId && (
@@ -1152,10 +1238,10 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
                   <path
                     d={e.d}
                     fill="none"
-                    stroke={e.bad ? 'var(--status-red)' : 'var(--text-muted)'}
-                    strokeWidth={1.8}
+                    stroke={e.bad ? 'var(--status-red)' : e.color}
+                    strokeOpacity={e.bad ? 1 : 0.7}
+                    strokeWidth={2}
                     strokeDasharray={e.bad ? '6 4' : undefined}
-                    markerEnd={e.bad ? 'url(#pv-ar-bad)' : 'url(#pv-ar)'}
                   />
                   {!readOnly && (
                     <path
@@ -1296,7 +1382,7 @@ function PlanEditor({ graph, domainIds }: { graph: PlanGraph; domainIds: string[
       </div>
 
       <div
-        className="grid gap-3"
+        className="grid gap-3 flex-none"
         style={{ gridTemplateColumns: phone ? '1fr' : 'repeat(auto-fit, minmax(340px, 1fr))' }}
       >
         <section className="card flex flex-col gap-2" style={{ padding: '12px 16px' }}>
@@ -1579,10 +1665,12 @@ function Reserve({
   domainIds,
   hot,
   onFold,
+  height,
   onProject,
   onObjective,
 }: {
   onFold: () => void;
+  height: string;
   refEl: React.RefObject<HTMLDivElement | null>;
   draft: Draft;
   graph: PlanGraph;
@@ -1669,7 +1757,7 @@ function Reserve({
         border: '1px solid var(--border)',
         outline: hot ? '2px dashed var(--focus)' : undefined,
         outlineOffset: -2,
-        maxHeight: 'calc(100vh - 330px)',
+        maxHeight: height,
         minHeight: 460,
         overflow: 'auto',
       }}

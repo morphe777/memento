@@ -121,6 +121,66 @@ function insertReport(ctx: Ctx, kind: Kind, periodKey: string, payload: Record<s
   return row;
 }
 
+/**
+ * D-99: drift from the plan over the weeks starting in [from, to): planned tasks done, and work done outside the
+ * plan (« hors planification »), with its share of the time done.
+ */
+function driftOf(ctx: Ctx, from: string, to: string, doneMin: number) {
+  const plans = ctx.db
+    .select()
+    .from(weekPlan)
+    .all()
+    .filter((p) => isValidIsoWeek(p.isoWeek) && weekMonday(p.isoWeek) >= from && weekMonday(p.isoWeek) < to);
+  const items = plans.length
+    ? ctx.db
+        .select()
+        .from(weekPlanItem)
+        .where(
+          inArray(
+            weekPlanItem.weekPlanId,
+            plans.map((p) => p.id),
+          ),
+        )
+        .all()
+    : [];
+  const ids = [...new Set(items.map((i) => i.taskId))];
+  const rows = ids.length ? ctx.db.select().from(task).where(inArray(task.id, ids)).all() : [];
+  const byId = new Map(rows.map((t) => [t.id, t]));
+  const of = (kind: string) =>
+    items
+      .filter((i) => i.kind === kind)
+      .map((i) => byId.get(i.taskId))
+      .filter((t): t is (typeof rows)[number] => !!t && t.status !== 'cancelled');
+  const planned = of('week');
+  const unplanned = of('unplanned').filter((t) => t.status === 'done');
+  const minutes = (t: (typeof rows)[number]) => (t.isExperience ? 0 : (t.actualMin ?? t.durationMin ?? 0));
+  const unplannedMin = unplanned.reduce((a, t) => a + minutes(t), 0);
+  const pids = [...new Set(unplanned.map((t) => t.projectId).filter((x): x is string => !!x))];
+  const titles = new Map(
+    (pids.length ? ctx.db.select().from(project).where(inArray(project.id, pids)).all() : []).map((p) => [
+      p.id,
+      p.title,
+    ]),
+  );
+  // Done in time: a planned task checked after the period does not count for it.
+  const plannedDone = planned.filter(
+    (t) => t.status === 'done' && (t.doneAt ?? '') < `${to}T00:00:00`,
+  ).length;
+  return {
+    plannedCount: planned.length,
+    plannedDone,
+    plannedDonePct: planned.length ? Math.round((plannedDone / planned.length) * 100) : null,
+    unplannedCount: unplanned.length,
+    unplannedMin,
+    unplannedSharePct: doneMin ? Math.round((unplannedMin / doneMin) * 100) : 0,
+    unplannedTasks: unplanned.slice(0, 40).map((t) => ({
+      title: t.title,
+      projectTitle: t.projectId ? (titles.get(t.projectId) ?? '') : 'Inbox',
+      minutes: minutes(t),
+    })),
+  };
+}
+
 // ---------- Weekly ----------
 
 export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
@@ -273,6 +333,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     delays: monthProjects,
     hoursByDomain: hoursByDomain(ctx, done),
     estimation: estimationOf(done), // D-61
+    drift: driftOf(ctx, monday, nextMonday, doneMin), // D-99
     plan: plan ? { status: plan.status, itemCount: items.length } : null,
     objectives: objectives.map((o) => ({
       id: o.id,
@@ -360,14 +421,16 @@ function buildMonthPayload(ctx: Ctx, month: string) {
       ...domainView(domains.find((d) => d.id === p.domainIds[0])),
     }));
   const work = done.filter((t) => !t.isExperience);
+  const workMin = work.reduce((a, t) => a + t.durationMin, 0);
   return {
     period: { month, label: monthLabel(month), from, to: monthEnd(month) },
     navigation: { previous: shiftMonth(month, -1), next: shiftMonth(month, 1) },
     totals: {
       tasksDone: done.length,
-      doneMin: work.reduce((a, t) => a + t.durationMin, 0),
+      doneMin: workMin,
       experiences: done.filter((t) => t.isExperience).length,
     },
+    drift: driftOf(ctx, from, to, workMin), // D-99
     weeks,
     weeksOverBudget: weeks.filter((w) => w.doneMin > w.budgetMin * 1.1).length,
     estimation: estimationOf(done), // D-61
@@ -389,6 +452,7 @@ function buildQuarterPayload(ctx: Ctx, quarter: string) {
   const count = (st: string[]) => objectives.filter((o) => st.includes(o.status)).length;
   const hours = hoursByDomain(ctx, done);
   const total = hours.reduce((a, h) => a + h.minutes, 0);
+  const workMin = done.filter((t) => !t.isExperience).reduce((a, t) => a + t.durationMin, 0);
   const real = [...hours]
     .filter((h) => h.name !== 'Inbox')
     .sort((a, b) => b.minutes - a.minutes)
@@ -424,10 +488,8 @@ function buildQuarterPayload(ctx: Ctx, quarter: string) {
       sharePct: total ? Math.round((h.minutes / total) * 100) : 0,
     })),
     experiencesJournal: done.filter((t) => t.isExperience).map((t) => t.title),
-    totals: {
-      tasksDone: done.length,
-      doneMin: done.filter((t) => !t.isExperience).reduce((a, t) => a + t.durationMin, 0),
-    },
+    totals: { tasksDone: done.length, doneMin: workMin },
+    drift: driftOf(ctx, from, to, workMin), // D-99
   };
 }
 

@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
 import { AiFill } from '../components/ai-fill.tsx';
+import { MotiveField } from '../components/cap.tsx';
 import { AiDescribe, DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { PathAiButton, PathQuickAdd } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
@@ -263,6 +264,7 @@ export function ObjectivePanel({
     criticality: 2,
     status: 'active',
     description: '',
+    motive: '',
     recurrence: '' as '' | 'quarterly' | 'yearly',
   };
   const [f, setF] = useState(empty);
@@ -280,6 +282,7 @@ export function ObjectivePanel({
           criticality: objective.criticality,
           status: objective.status,
           description: objective.description,
+          motive: objective.motive,
           recurrence: (objective.recurrence ?? '') as '' | 'quarterly' | 'yearly',
         }
       : {
@@ -353,6 +356,7 @@ export function ObjectivePanel({
         template={settings.data?.['templates.objective']}
         onUse={(k, v) => set(k as 'title', v)}
       />
+      <MotiveField value={f.motive} onChange={(v) => set('motive', v)} />
       {!objective && (
         <>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -617,12 +621,15 @@ export function MetaPanel({
   const [primaryDomainId, setPrimary] = useState(meta?.primaryDomainId ?? defaults?.primaryDomainId ?? '');
   const dl = useDomainLookup();
   const [description, setDescription] = useState(meta?.description ?? '');
+  const [motive, setMotive] = useState(meta?.motive ?? '');
   const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     if (open && !meta) setDescription(settings.data?.['templates.meta_objective'] ?? '');
   }, [open]);
-  const initial = useRef(JSON.stringify({ title, horizonDate, status, primaryDomainId, description }));
-  const extra = { primaryDomainId: primaryDomainId || null, description };
+  const initial = useRef(
+    JSON.stringify({ title, horizonDate, status, primaryDomainId, description, motive }),
+  );
+  const extra = { primaryDomainId: primaryDomainId || null, description, motive };
   const save = useAction(
     () =>
       meta
@@ -633,7 +640,7 @@ export function MetaPanel({
   const close = () => {
     if (
       meta &&
-      JSON.stringify({ title, horizonDate, status, primaryDomainId, description }) !== initial.current
+      JSON.stringify({ title, horizonDate, status, primaryDomainId, description, motive }) !== initial.current
     ) {
       if (!title.trim()) return toast('Le titre est obligatoire.', 'error');
       save.mutate(undefined);
@@ -662,10 +669,11 @@ export function MetaPanel({
       <AiFill
         kind="meta_objective"
         id={meta?.id}
-        values={{ title, description }}
+        values={{ title, description, motive }}
         template={settings.data?.['templates.meta_objective']}
-        onUse={(k, v) => (k === 'title' ? setTitle(v) : setDescription(v))}
+        onUse={(k, v) => (k === 'title' ? setTitle(v) : k === 'motive' ? setMotive(v) : setDescription(v))}
       />
+      <MotiveField value={motive} onChange={setMotive} />
       <Field label="Domaine principal">
         <SearchSelect
           value={primaryDomainId}
@@ -838,6 +846,7 @@ function PathTasks({ p, onOpen }: { p: PathProject; onOpen: (taskId: string) => 
           projectId={p.id}
           color={() => dl.color(p.domainIds[0])}
           onOpen={onOpen}
+          sequential={p.sequenceMode === 'sequential'}
         />
       )}
       <div style={{ padding: '8px 12px', background: 'var(--surface-2)' }}>

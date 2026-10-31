@@ -45,3 +45,4 @@ export type QuarterPlanningPage = ReturnType<typeof D.getQuarterPlanningPage>;
 export type PlanGraph = ReturnType<typeof D.getPlanGraph>;
 export type PlanPreview = ReturnType<typeof D.previewPlanChanges>;
 export type ExperiencesPage = ReturnType<typeof D.getExperiencesPage>;
+export type Cap = ReturnType<typeof D.getCap>;

@@ -172,6 +172,14 @@ describe('RB-06 availability', () => {
     const tasks = [t('a', 1, { status: 'done' }), t('b', 2), t('c', 3), t('d', 4, { isFree: true })];
     expect([...availableTaskIds(tasks, 'sequential')].sort()).toEqual(['b', 'd']);
   });
+  it('D-101: a free task starts a chain; the tasks under it follow it, not the ones above', () => {
+    // 1 → 2 → 3, then 4 free (any time), 5 after 4, 6 after 5.
+    const tasks = [t('1', 1), t('2', 2), t('3', 3), t('4', 4, { isFree: true }), t('5', 5), t('6', 6)];
+    expect([...availableTaskIds(tasks, 'sequential')].sort()).toEqual(['1', '4']);
+    expect([...availableTaskIds(tasks, 'sequential', new Set(['4']))].sort()).toEqual(['1', '4', '5']);
+    const done4 = tasks.map((x) => (x.id === '4' ? { ...x, status: 'done' as const } : x));
+    expect([...availableTaskIds(done4, 'sequential')].sort()).toEqual(['1', '5']);
+  });
   it('choosing a task in the current plan unlocks the next one', () => {
     const tasks = [t('b', 2), t('c', 3), t('e', 5)];
     expect([...availableTaskIds(tasks, 'sequential', new Set(['b']))].sort()).toEqual(['b', 'c']);

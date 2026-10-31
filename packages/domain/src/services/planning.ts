@@ -29,6 +29,7 @@ import {
   weekSunday,
 } from '../time.ts';
 import { serializeProjects } from './projects.ts';
+import { getOrCreatePlan, getPlanRow } from './unplanned.ts';
 
 const {
   weekPlan,
@@ -47,21 +48,7 @@ export function assertWeek(isoWeek: string) {
   if (!isValidIsoWeek(isoWeek)) throw new DomainError('INVALID_WEEK', `Semaine invalide : ${isoWeek}`);
 }
 
-export const getPlanRow = (ctx: Ctx, isoWeek: string) =>
-  ctx.db.select().from(weekPlan).where(eq(weekPlan.isoWeek, isoWeek)).get();
-
-function getOrCreatePlan(ctx: Ctx, isoWeek: string) {
-  const existing = getPlanRow(ctx, isoWeek);
-  if (existing) return existing;
-  const id = newId();
-  ctx.db
-    .insert(weekPlan)
-    .values({ id, createdBy: ctx.actor, isoWeek, budgetMin: getSettings(ctx)['budget.weekly_min'] })
-    .run();
-  const row = getPlanRow(ctx, isoWeek)!;
-  audit(ctx, 'week_plan', id, 'create', null, row);
-  return row;
-}
+export { getPlanRow };
 
 const planItems = (ctx: Ctx, planId: string) =>
   ctx.db
@@ -192,8 +179,9 @@ export function getPlanningPage(ctx: Ctx, isoWeek: string) {
   assertWeek(isoWeek);
   const plan = getPlanRow(ctx, isoWeek);
   const input = buildEngineInput(ctx, isoWeek, plan?.budgetMin);
-  const items = plan ? planItems(ctx, plan.id) : [];
-  const chosen = new Map<string, Selection>(items.map((i) => [i.taskId, i.kind]));
+  // D-99: work done outside the plan is not part of the selection.
+  const items = plan ? planItems(ctx, plan.id).filter((i) => i.kind !== 'unplanned') : [];
+  const chosen = new Map<string, Selection>(items.map((i) => [i.taskId, i.kind as Selection]));
   const page = buildPlanningPage(input, chosen);
   return {
     isoWeek,
@@ -213,7 +201,7 @@ export function getPlanningPage(ctx: Ctx, isoWeek: string) {
     experienceTarget: input.experienceTarget,
     experienceWindowWeeks: input.experienceWindowWeeks,
     experiencesDone: input.experiencesDone,
-    items: items.map((i) => ({ taskId: i.taskId, kind: i.kind, source: i.source })),
+    items: items.map((i) => ({ taskId: i.taskId, kind: i.kind as Selection, source: i.source })),
     ...page,
   };
 }
@@ -350,7 +338,11 @@ export function proposeWeek(ctx: Ctx, isoWeek: string) {
 }
 
 /** PUT /week-plans/{week}/items: full selection. Validates RB-06 availability for newly chosen tasks. */
-export function setWeekItems(ctx: Ctx, isoWeek: string, items: { taskId: string; kind: Selection }[]) {
+export function setWeekItems(
+  ctx: Ctx,
+  isoWeek: string,
+  items: { taskId: string; kind: Selection | 'unplanned' }[], // D-99: unplanned items are kept as they are
+) {
   assertWeek(isoWeek);
   return tx(ctx, () => {
     const plan = getOrCreatePlan(ctx, isoWeek);
@@ -513,6 +505,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
         taskId: t.id,
         title: t.title,
         kind: i.kind,
+        unplanned: i.kind === 'unplanned', // D-99
         why: i.why ?? '',
         durationMin: t.durationMin,
         actualMin: t.actualMin, // D-61
@@ -544,6 +537,16 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
       .filter((r) => r.done)
       .map((r) => ({ durationMin: r.actualMin ?? r.durationMin, isExperience: r.isExperience })),
   );
+  // D-99: drift from the plan: what was planned and done vs what was done outside the plan.
+  const unplannedRows = rows.filter((r) => r.kind === 'unplanned' && r.done);
+  const drift = {
+    plannedCount: weekRows.length,
+    plannedDone: weekRows.filter((r) => r.done).length,
+    unplannedCount: unplannedRows.length,
+    unplannedMin: budgetMinutes(
+      unplannedRows.map((r) => ({ durationMin: r.actualMin ?? r.durationMin, isExperience: r.isExperience })),
+    ),
+  };
   const monday = weekMonday(isoWeek);
   const window = s['experience.window_weeks'];
   const experiences = doneStats(ctx, addDays(monday, -7 * (window - 1)), addDays(monday, 7)).experiences;
@@ -597,6 +600,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
     bonusOpen,
     budget: { budgetMin, plannedMin, ...budgetStatus(plannedMin, budgetMin) },
     doneMin,
+    drift,
     experiences: { done: experiences, target: s['experience.target'], windowWeeks: window },
     monthProjects,
     domainMix,

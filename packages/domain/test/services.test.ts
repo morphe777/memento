@@ -25,6 +25,7 @@ import {
   exportData,
   generateReport,
   getAiKey,
+  getCap,
   getExecution,
   getExperiencesPage,
   getMonthPlanningPage,
@@ -45,6 +46,7 @@ import {
   listProjectDependencies,
   listProjects,
   listTasks,
+  logDoneTask,
   markReviewed,
   parseJsonObject,
   patchSettings,
@@ -69,6 +71,7 @@ import {
   setTaskInCurrentWeek,
   setWeekItems,
   tx,
+  uncompleteTask,
   updateGroup,
   updateObjective,
   updateProject,
@@ -1166,6 +1169,73 @@ describe('D-61 temps réellement passé', () => {
       ratioPct: 250,
       overruns: [{ title: 'Garage 1', estimateMin: 60, actualMin: 240 }],
     });
+  });
+});
+
+describe('D-99 hors planification', () => {
+  it('a task done outside the plan is traced in the week, measured, and the trace goes when unchecked', () => {
+    const ctx = makeCtx('2026-10-27T08:00:00.000Z'); // Tuesday W44
+    const { tasks } = activeProject(ctx, 'Garage', 'Travaux', 3);
+    setWeekItems(ctx, '2026-W44', [{ taskId: tasks[0].id, kind: 'week' }]);
+    completeTask(ctx, tasks[0].id); // planned
+    completeTask(ctx, tasks[1].id, { actualMin: 15 }); // not planned: drift
+    const logged = logDoneTask(ctx, {
+      projectId: tasks[0].projectId,
+      title: 'Rangé l’établi',
+      durationMin: 30,
+    });
+    let ex = getExecution(ctx, '2026-W44');
+    expect(ex.drift).toEqual({ plannedCount: 1, plannedDone: 1, unplannedCount: 2, unplannedMin: 45 });
+    expect(ex.doneMin).toBe(105);
+    expect(ex.tasks.filter((t) => t.unplanned).map((t) => t.title)).toEqual(['Garage 2', 'Rangé l’établi']);
+    // The planning page does not see them as chosen.
+    expect(getPlanningPage(ctx, '2026-W44').items.map((i) => i.taskId)).toEqual([tasks[0].id]);
+    // Saving the selection keeps them.
+    setWeekItems(ctx, '2026-W44', [{ taskId: tasks[2].id, kind: 'week' }]);
+    expect(getExecution(ctx, '2026-W44').drift.unplannedCount).toBe(2);
+    uncompleteTask(ctx, logged.id);
+    ex = getExecution(ctx, '2026-W44');
+    expect(ex.drift.unplannedCount).toBe(1);
+    // A task planned last week and done late is not unplanned.
+    ctx.setNow('2026-11-03T08:00:00.000Z'); // W45, W44 not closed yet
+    completeTask(ctx, tasks[2].id);
+    expect(getExecution(ctx, '2026-W45').drift.unplannedCount).toBe(0);
+    ctx.setNow('2026-11-09T06:00:00.000Z');
+    const { report } = generateReport(ctx, 'week', '2026-W44');
+    expect((report.payload as { drift: unknown }).drift).toMatchObject({
+      plannedCount: 2,
+      plannedDone: 1,
+      unplannedCount: 1,
+      unplannedMin: 15,
+      unplannedTasks: [{ title: 'Garage 2', projectTitle: 'Garage', minutes: 15 }],
+    });
+  });
+});
+
+describe('D-100 Cap', () => {
+  it('groups the quarter objectives by meta-objective with their month projects and feeds the reminders', () => {
+    const ctx = makeCtx('2026-10-27T08:00:00.000Z');
+    const m = createMetaObjective(ctx, { title: 'Santé durable', motive: 'Vieillir **debout**' });
+    const o = createObjective(ctx, {
+      title: 'Courir 10 km',
+      metaObjectiveId: m.id,
+      deadline: '2026-12-31',
+      motive: '**Souffle** retrouvé',
+    });
+    const { project: p } = activeProject(ctx, 'Plan running', 'Sport', 1, { objectiveId: o.id });
+    updateProject(ctx, p.id, { motive: 'Premier **10 km** sans marcher' });
+    const cap = getCap(ctx);
+    expect(cap).toMatchObject({ month: '2026-10', quarter: '2026-Q4' });
+    expect(cap.groups[0].meta?.motive).toBe('Vieillir **debout**');
+    expect(cap.groups[0].objectives[0]).toMatchObject({
+      title: 'Courir 10 km',
+      motive: '**Souffle** retrouvé',
+    });
+    expect(cap.groups[0].objectives[0].monthProjects.map((x) => x.motive)).toEqual([
+      'Premier **10 km** sans marcher',
+    ]);
+    expect(cap.reminders.map((r) => r.type)).toEqual(['project', 'objective', 'meta']);
+    expect(cap.missing).toEqual({ metas: 0, objectives: 0, projects: 0 });
   });
 });
 

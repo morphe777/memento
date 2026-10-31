@@ -52,6 +52,7 @@ export const metaObjective = sqliteTable('meta_objective', {
   position: integer('position').notNull().default(0), // D-69: order of the lanes on the map
   outcomeTitle: text('outcome_title'), // DM-113: title rephrased as a result (Vue Plan), ≤ 80 chars
   primaryDomainId: text('primary_domain_id').references(() => domain.id), // DM-114: domain filter of the Vue Plan
+  motive: text('motive').notNull().default(''), // D-100: the « why » in a few words, keyword in **bold** (Cap)
 });
 
 export const objective = sqliteTable('objective', {
@@ -75,6 +76,7 @@ export const objective = sqliteTable('objective', {
   previousId: text('previous_id'), // the occurrence this one renews
   position: integer('position').notNull().default(0), // D-69: order inside a (meta-objective, quarter) cell
   outcomeTitle: text('outcome_title'), // DM-113
+  motive: text('motive').notNull().default(''), // D-100
 });
 
 export const project = sqliteTable(
@@ -110,6 +112,7 @@ export const project = sqliteTable(
     replanDoneMin: integer('replan_done_min'),
     lastTouchedAt: text('last_touched_at').notNull().default(now),
     description: text('description').notNull().default(''),
+    motive: text('motive').notNull().default(''), // D-100
   },
   (t) => [index('project_status_idx').on(t.status), index('project_objective_idx').on(t.objectiveId)],
 );
@@ -217,7 +220,8 @@ export const weekPlanItem = sqliteTable(
     taskId: text('task_id')
       .notNull()
       .references(() => task.id),
-    kind: text('kind', { enum: ['week', 'bonus'] }).notNull(),
+    // D-99: 'unplanned' = done during the week without having been planned (« hors planification »).
+    kind: text('kind', { enum: ['week', 'bonus', 'unplanned'] }).notNull(),
     source: text('source', { enum: ['engine', 'me', 'ai'] }).notNull(),
     score: real('score'),
     why: text('why'),
