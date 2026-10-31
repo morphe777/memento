@@ -3,8 +3,8 @@ import { type Db, type SqliteDatabase, schema } from '@memento/db';
 
 import { nowIso } from './time.ts';
 
-/** 'me' for a web user, 'ai:<token name>' for an API token (F-23). */
-export type Actor = 'me' | `ai:${string}`;
+/** 'me' for a web user, 'ai:<token name>' for an API token (F-23), 'system:<job>' for one-off jobs (DM-109). */
+export type Actor = 'me' | `ai:${string}` | `system:${string}`;
 
 export interface Ctx {
   db: Db;
@@ -12,6 +12,8 @@ export interface Ctx {
   actor: Actor;
   /** Injected clock for deterministic tests. */
   now?: () => Date;
+  /** API-08: set while applying a plan draft, stamped on every audit row of that draft. */
+  batchId?: string;
 }
 
 export const newId = (): string => randomUUID();
@@ -57,6 +59,7 @@ export function audit(
       entityId,
       action,
       diff: computeDiff(before, after),
+      batchId: ctx.batchId ?? null,
     })
     .run();
 }

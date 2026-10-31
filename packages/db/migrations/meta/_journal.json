@@ -43,6 +43,13 @@
       "when": 1793099320538,
       "tag": "0005_map_positions",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793434619331,
+      "tag": "0006_vue_plan",
+      "breakpoints": true
     }
   ]
 }

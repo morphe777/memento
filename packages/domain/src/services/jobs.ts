@@ -18,6 +18,7 @@ import {
 import { notifyStatus, sendDailyRecap } from './daily.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
+import { closeRecurringObjectives } from './recurrence.ts';
 import { generateReport } from './reports.ts';
 
 function parisClock(at: Date) {
@@ -93,9 +94,10 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
   }
   const quarter = quarterOf(date);
   if (date > quarterStart(quarter) || time >= reportTime) {
-    out.quarter = once(ctx, 'quarter', quarter, () =>
-      generateReport(ctx, 'quarter', shiftQuarter(quarter, -1)),
-    ); // WF-03
+    out.quarter = once(ctx, 'quarter', quarter, () => {
+      generateReport(ctx, 'quarter', shiftQuarter(quarter, -1)); // WF-03
+      closeRecurringObjectives(ctx, quarter); // DM-108, after the report froze the past quarter
+    });
   }
   return out;
 }

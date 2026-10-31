@@ -14,6 +14,7 @@ import {
   type Selection,
   scoreCandidates,
 } from '../rules/engine.ts';
+import { waitingOnIds } from '../rules/plan.ts';
 import { budgetMinutes, budgetStatus } from '../rules/tasks.ts';
 import { getSettings } from '../settings.ts';
 import {
@@ -114,7 +115,10 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     .orderBy(asc(domain.priorityRank))
     .all();
   const allProjects = ctx.db.select().from(project).all();
-  const blocked = blockedProjectIds(allProjects, ctx.db.select().from(projectDependency).all());
+  const deps = ctx.db.select().from(projectDependency).all();
+  const blocked = blockedProjectIds(allProjects, deps);
+  const titleOf = new Map(allProjects.map((p) => [p.id, p.title]));
+  const statusOf = new Map(allProjects.map((p) => [p.id, p.status]));
   const active = allProjects.filter((p) => p.status === 'active' || p.status === 'ready'); // D-42
   const serialized = serializeProjects(ctx, active);
   const objectives = ctx.db.select().from(objective).all();
@@ -135,6 +139,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
       replannedAt: p.replannedAt,
       replanDoneMin: p.replanDoneMin,
       blocked: blocked.has(p.id),
+      waitingOn: waitingOnIds(p.id, deps, statusOf).map((id) => ({ id, title: titleOf.get(id) ?? '' })),
       importance: p.importance,
     };
   });
@@ -568,7 +573,13 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
       domainId: p.domainIds[0] ?? null,
       status: p.status,
       deltaMin: projectDelayMin(
-        { ...p, objectiveTitle: null, objectiveCriticality: null, blocked: false } as EngineProject,
+        {
+          ...p,
+          objectiveTitle: null,
+          objectiveCriticality: null,
+          blocked: false,
+          waitingOn: [],
+        } as EngineProject,
         ptasks,
         today,
       ),

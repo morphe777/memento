@@ -41,6 +41,14 @@ Règles :
 - description : une ligne « déclic » (où, avec quoi, le premier geste), ou vide.
 - message : 1 à 3 phrases en français, tutoiement, qui expliquent ton découpage ou ce que tu as changé.
 - Tiens compte des réponses et remarques de Mehdi dans conversation : la dernière prime.`,
+  fill: `Tu aides Mehdi à remplir la fiche d'un élément de Mémento (méta-objectif, objectif ou projet) : le contexte que tu écris sert ensuite à toute l'IA de l'outil (plans de semaine, découpages, bilans). Mehdi choisira ce qu'il garde.
+Règles :
+- titles : 3 titres alternatifs, courts (60 caractères au plus), orientés résultat (ce qui sera vrai une fois atteint), différents entre eux et du titre actuel. Français, sans point final ni guillemets.
+- fields : une proposition pour chaque champ demandé (wanted). description : en Markdown, en suivant la structure du template s'il y en a un (garde ses titres ##), concrète, sans remplissage. smartIndicator : ce qu'on compte ; smartTarget : la valeur visée (un nombre ou un état vérifiable). successCriterion : une phrase vérifiable (« c'est fini quand… »).
+- Garde ce qui est déjà écrit (current) quand c'est bon : améliore-le plutôt que de le remplacer.
+- Appuie-toi sur le parent (méta-objectif, objectif), les éléments voisins et le contexte de Mehdi. N'invente pas de chiffres ni de contraintes absents ; s'il manque une information, écris une formulation à compléter entre crochets.
+- comment : une phrase en français, tutoiement, sur ce que tu as proposé ou ce qui manque.
+- Tiens compte de la remarque de Mehdi (remark) si elle est donnée.`,
   path: `Tu aides Mehdi à tracer le chemin d'un objectif de Mémento : la suite ordonnée des projets qui y mènent. Mehdi relira, cochera et retouchera ta liste avant de la créer.
 Règles :
 - Pars du titre de l'objectif, de sa description, de sa mesure (smart) et de son méta-objectif. N'invente pas de contraintes absentes.

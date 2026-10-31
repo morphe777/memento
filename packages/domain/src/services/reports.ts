@@ -188,7 +188,13 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
       title: p.title,
       ...domainView(domains.find((d) => d.id === p.domainIds[0])),
       deltaMin: projectDelayMin(
-        { ...p, objectiveTitle: null, objectiveCriticality: null, blocked: false } as EngineProject,
+        {
+          ...p,
+          objectiveTitle: null,
+          objectiveCriticality: null,
+          blocked: false,
+          waitingOn: [],
+        } as EngineProject,
         ptasks,
         asOf,
       ),

@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { openDb, resolveDbFile, runMigrations } from '@memento/db';
-import { seed } from '@memento/domain';
+import { fillMetaDomains, migrateDependencies, seed } from '@memento/domain';
 import { buildApp } from './app.ts';
 
 // A data folder the process cannot write (typically a Docker bind created by root) is the usual cause of a
@@ -23,6 +23,9 @@ const existed = existsSync(dbFile);
 const { db, sqlite } = openDb();
 runMigrations(db); // migrations applied at startup (dossier §12)
 seed({ db, sqlite, actor: 'me' }); // idempotent
+// DM-109 / DM-114 (Vue Plan): positions become dependencies once; meta-objectives get their domain.
+migrateDependencies({ db, sqlite, actor: 'me' });
+fillMetaDomains({ db, sqlite, actor: 'me' });
 const count = (t: string) => (sqlite.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n;
 console.log(
   `Mémento: database ${dbFile} (${existed ? 'existing' : 'NEW, created now'}): ` +

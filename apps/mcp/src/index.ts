@@ -131,7 +131,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'get_objective',
-    "Détail d'un objectif avec son chemin : projets ordonnés, prérequis, blocages.",
+    "Détail d'un objectif avec son chemin : projets ordonnés et leurs prérequis (dependsOn ; waitingOn = prérequis non terminés, informatif).",
     { id: S.uuid },
     async (a) => ({
       ...((await call('GET', `/objectives/${a.id}`)) as object),
@@ -159,7 +159,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'get_project',
-    'Détail d’un projet avec ses tâches dans l’ordre (verrous inclus) et ressources.',
+    'Détail d’un projet avec ses tâches dans l’ordre (verrous inclus : dans un projet séquentiel une tâche attend la précédente), ses prérequis (dependsOn, waitingOn, blocked : informatifs, ils ne bloquent jamais le projet) et ses ressources.',
     { id: S.uuid },
     async (a) => ({
       ...((await call('GET', `/projects/${a.id}`)) as object),
@@ -200,7 +200,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'update_project',
-    'Modifie un projet ou une idée (titre, critère, dates, objectif, statut : ready / paused / abandoned / idea). Pour le projet du mois, utiliser set_project_month.',
+    'Modifie un projet ou une idée (titre, critère, dates, objectif, projet libre isFree, statut : ready / paused / abandoned / idea). Pour le projet du mois, utiliser set_project_month.',
     { id: S.uuid, ...S.projectPatch.shape },
     ({ id, ...rest }) => call('PATCH', `/projects/${id}`, rest),
   );
@@ -245,6 +245,116 @@ export function buildServer(call: Call) {
     'Termine un projet : critère de succès atteint ? (oui/non).',
     { id: S.uuid, success: z.boolean() },
     (a) => call('POST', `/projects/${a.id}/complete`, { success: a.success }),
+  );
+
+  tool(
+    'list_meta_objectives',
+    'Liste les méta-objectifs (cap long terme ; outcomeTitle = titre formulé en résultat, primaryDomainId = domaine).',
+    {},
+    () => call('GET', '/meta-objectives'),
+  );
+  tool('get_meta_objective', "Détail d'un méta-objectif avec ses objectifs.", { id: S.uuid }, (a) =>
+    call('GET', `/meta-objectives/${a.id}`),
+  );
+  tool(
+    'create_meta_objective',
+    'Crée un méta-objectif (titre ; outcomeTitle ≤ 80 caractères ; primaryDomainId = domaine de la Vue Plan).',
+    S.metaObjectiveCreate.shape,
+    (a) => call('POST', '/meta-objectives', a),
+  );
+  tool(
+    'update_meta_objective',
+    'Modifie un méta-objectif (titre, description, horizon, statut, outcomeTitle, primaryDomainId).',
+    { id: S.uuid, ...S.metaObjectivePatch.shape },
+    ({ id, ...rest }) => call('PATCH', `/meta-objectives/${id}`, rest),
+  );
+  tool(
+    'set_objective_meta',
+    'Rattache un objectif à un méta-objectif (metaObjectiveId = null : aucun).',
+    { id: S.uuid, metaObjectiveId: S.uuid.nullable() },
+    (a) => call('PATCH', `/objectives/${a.id}`, { metaObjectiveId: a.metaObjectiveId }),
+  );
+
+  tool(
+    'set_project_dependencies',
+    "Remplace les prérequis d'un projet (dependsOn = ids des projets à terminer avant). Les prérequis ne bloquent jamais le mois ni la semaine ; refus DEPENDENCY_CYCLE / DEPENDENCY_SELF / DEPENDENCY_NOT_FOUND.",
+    { id: S.uuid, ...S.projectDependenciesBody.shape },
+    (a) => call('PUT', `/projects/${a.id}/dependencies`, { dependsOn: a.dependsOn }),
+  );
+  tool(
+    'add_project_dependency',
+    'Ajoute un prérequis à un projet (dependsOnId = projet à terminer avant).',
+    { id: S.uuid, dependsOnId: S.uuid },
+    (a) => call('POST', `/projects/${a.id}/dependencies`, { dependsOnId: a.dependsOnId }),
+  );
+  tool(
+    'remove_project_dependency',
+    "Retire un prérequis d'un projet.",
+    { id: S.uuid, dependsOnId: S.uuid },
+    (a) => call('DELETE', `/projects/${a.id}/dependencies/${a.dependsOnId}`),
+  );
+
+  const planOps = z
+    .array(
+      z.discriminatedUnion('op', [
+        z.object({ op: z.literal('setDependencies'), projectId: S.uuid, dependsOn: z.array(S.uuid) }),
+        z.object({
+          op: z.literal('attachProject'),
+          projectId: S.uuid,
+          objectiveId: S.uuid,
+          dependsOn: z.array(S.uuid).optional(),
+          free: z.boolean().optional(),
+        }),
+        z.object({ op: z.literal('detachProject'), projectId: S.uuid }),
+        z.object({ op: z.literal('setFree'), projectId: S.uuid, free: z.boolean() }),
+        z.object({ op: z.literal('setObjectiveQuarter'), objectiveId: S.uuid, quarter: S.quarterKey }),
+        z.object({
+          op: z.literal('setObjectiveMeta'),
+          objectiveId: S.uuid,
+          metaObjectiveId: S.uuid.nullable(),
+        }),
+        z.object({ op: z.literal('reorderObjectives'), quarter: S.quarterKey, ids: z.array(S.uuid).min(1) }),
+      ]),
+    )
+    .min(1);
+  const planBody = {
+    ops: planOps,
+    baseVersion: z.string().optional(),
+    domainIds: z.string().optional(),
+  };
+  tool(
+    'get_plan_graph',
+    'Vue Plan : tout le graphe (méta-objectifs, objectifs, projets, prérequis, capacité par trimestre, alertes, version, réserve). domainIds = ids séparés par des virgules (vide = tous) ; from / to = AAAA-Qn.',
+    {
+      domainIds: z.string().optional(),
+      from: S.quarterKey.optional(),
+      to: S.quarterKey.optional(),
+      includeReserve: z.boolean().optional(),
+    },
+    (a) =>
+      call(
+        'GET',
+        `/plan-graph${qs({ ...a, includeReserve: a.includeReserve === undefined ? undefined : String(a.includeReserve) })}`,
+      ),
+  );
+  tool(
+    'preview_plan_changes',
+    'Simule des modifications du plan (ops : setDependencies, attachProject, detachProject, setFree, setObjectiveQuarter, setObjectiveMeta, reorderObjectives) sans rien écrire : renvoie capacité, alertes et objectifs résultants.',
+    planBody,
+    (a) => call('POST', '/plan/preview', a),
+  );
+  tool(
+    'apply_plan_changes',
+    "Applique des modifications du plan en une seule opération atomique (mêmes ops que preview_plan_changes). Tout ou rien ; baseVersion (champ version de get_plan_graph) périmée = PLAN_APPLY_CONFLICT. À prévisualiser d'abord.",
+    planBody,
+    (a) => call('POST', '/plan/apply', a),
+  );
+  tool(
+    'reorder_objectives',
+    "Fixe l'ordre des objectifs d'un trimestre (ids dans l'ordre voulu).",
+    { quarter: S.quarterKey, ids: z.array(S.uuid).min(1) },
+    (a) =>
+      call('POST', '/plan/apply', { ops: [{ op: 'reorderObjectives', quarter: a.quarter, ids: a.ids }] }),
   );
 
   tool(

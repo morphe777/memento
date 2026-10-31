@@ -36,13 +36,19 @@ Erreurs : `{ "code": "…", "message": "…", "details": … }`.
 ```
 Domaine de vie (8, ordonnés par priorité, avec une description)
   └ Groupe (rangement ; appartient à 1 domaine)
-Méta-objectif (cap ~1 an et +)
-  └ Objectif trimestriel (deadline dans son trimestre, indicateur SMART, criticité 1-3, avancement stocké)
-      └ Chemin = projets ordonnés (l'ordre crée le prérequis, sauf projet « libre »)
+Méta-objectif (cap ~1 an et +, domaine principal `primaryDomainId`, `outcomeTitle` ≤ 80 car. = titre en résultat)
+  └ Objectif trimestriel (deadline dans son trimestre, indicateur SMART, criticité 1-3, avancement stocké, `outcomeTitle`)
+      └ Chemin = projets reliés par `dependsOn` (graphe sans cycle ; zone « Libres » = `isFree`)
 Projet (1 à 3 groupes → ses domaines ; domaine principal = couleur)
   └ Tâches ordonnées (séquentiel : une tâche attend la précédente ; parallèle : toutes disponibles)
 Inbox = tâches hors projet (deadlines, récurrences, domaine facultatif)
 ```
+
+**Prérequis entre projets** : `dependsOn` (liste d'ids de projets) est la **seule source de vérité** ; plus d'ordre
+implicite. Un projet créé dans un objectif suit par défaut le dernier projet de l'objectif, sauf `isFree: true` (projet
+sans prérequis, rangé dans la zone « Libres »). `waitingOn` = prérequis non terminés, `blocked` = a des prérequis non
+terminés : **informatifs uniquement**. Modifier : `PUT /projects/{id}/dependencies { dependsOn }` (remplace),
+`POST …/dependencies { dependsOnId }`, `DELETE …/dependencies/{dependsOnId}`.
 
 **Classer un projet dans le bon domaine** : lis d'abord `GET /domains` ; chaque domaine a une `description` qui dit
 ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /groups`) de ce domaine.
@@ -91,6 +97,18 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   - Le dépassement de budget n'est **jamais bloquant** : il est signalé (alerte `BUDGET_OVER`).
   - `PATCH /week-plans/{semaine}` `{ budgetMin, budgetReason }` : budget ponctuel + **contexte** (fatigue,
     maladie, congés…). Le contexte est journalisé et figé dans le rapport de la semaine.
+- **Vue Plan → mois → semaine** (D-07) : on dessine le plan à long terme dans la Vue Plan (`GET /plan-graph`), puis on
+  choisit les projets du mois, puis la semaine. **Les prérequis ne bloquent jamais** le mois ni la semaine : le
+  moteur de semaine propose simplement les tâches des projets prérequis d'abord.
+  - `GET /plan-graph?domainIds=a,b&from=2026-Q4&to=2027-Q4&includeReserve=true` : méta-objectifs, objectifs, projets,
+    capacité par trimestre (tous domaines confondus, **expériences exclues**), alertes, `version`, réserve.
+  - Alertes du plan : `QUARTER_OVER` (trimestre surchargé), `PATH_TOO_LONG` (chemin trop long pour le trimestre),
+    `DEP_AFTER` (prérequis placé après son dépendant), `PROJECT_INCOMPLETE`, `DEP_RELEASED` (prérequis terminé
+    récemment), `OBJECTIVE_EMPTY`.
+  - `POST /plan/preview { ops }` (sans écriture, autorisé en lecture seule) puis `POST /plan/apply { ops,
+    baseVersion? }` (atomique : 422 = rien n'est appliqué ; 409 `PLAN_APPLY_CONFLICT` si `baseVersion` est périmée).
+    Ops : `setDependencies`, `attachProject`, `detachProject`, `setFree`, `setObjectiveQuarter`, `setObjectiveMeta`,
+    `reorderObjectives`. `POST /plan/migrate-dependencies { dryRun }` convertit les anciens chemins (DM-109).
 - **Mois** : `GET /month-plans/{mois}` : capacité (budgets des semaines au prorata), projets du mois, backlog
   classé, objectifs du trimestre couverts ou non, alertes (`MONTH_OVER`, `TOO_MANY_PROJECTS`, `OBJECTIVE_EMPTY`,
   `OFF_OBJECTIVE`, `CARRIED_OVER`). Choisir : `POST /projects/{id}/month`.
@@ -114,6 +132,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 5. **Contexte d'une semaine** : `GET /reports/by-period/week/{semaine}` (rapport figé : fait, focus, rythme,
    `budgetAdjustment.reason`, réussites, évitements). Utile pour corréler avec d'autres données.
 6. **Rendre compte de tes actions** : tout ce que tu fais est dans `GET /changes?actor=ai`. Mehdi le revoit.
+
+7. **Construire un plan** : `GET /plan-graph` (garde `version`) → monte la liste d'ops → `POST /plan/preview` : lis
+   `alerts` et `capacity` → ajuste → `POST /plan/apply { ops, baseVersion }`. Résume à Mehdi ce que tu as changé.
 
 ## 6. Ce que tu ne fais pas
 
@@ -140,6 +161,10 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `TASK_NOT_TODO` / `TASK_CANCELLED` | tâche déjà faite / annulée |
 | `PROJECT_NOT_ACTIVE` | tâche d'un projet ni prêt ni du mois |
 | `DEPENDENCY_CYCLE` | la dépendance créerait une boucle |
+| `DEPENDENCY_SELF` / `DEPENDENCY_NOT_FOUND` | un projet ne dépend pas de lui-même / prérequis introuvable |
+| `PATH_NOT_LINEAR` | réordonnancement d'un chemin qui a des branches : utilise `setDependencies` |
+| `NOT_IN_QUARTER` | l'objectif n'est pas dans le trimestre indiqué |
+| `PLAN_APPLY_CONFLICT` (409) | le plan a changé depuis `baseVersion` : relis `GET /plan-graph` |
 | `RECURRENCE_INBOX_ONLY` / `INVALID_RECURRENCE` | récurrence : Inbox seulement, RRULE valide |
 | `DEADLINE_REQUIRED` / `DEADLINE_AFTER_QUARTER` | objectif : deadline obligatoire, dans son trimestre |
 | `INVALID_CRITICALITY` | criticité 1, 2 ou 3 |
@@ -154,4 +179,4 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 `create_project`, `update_project`, `promote_idea`, `set_project_month`, `complete_project`, `create_tasks`,
 `update_task`, `complete_task`, `reorder_tasks`, `add_inbox_task`, `get_week_plan`, `propose_week_plan`,
 `set_week_plan_items`, `get_experiences`, `add_experience_idea`, `list_reports`, `get_report`, `list_changes`,
-`add_resource`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.
+`add_resource`, `list_meta_objectives`, `get_meta_objective`, `create_meta_objective`, `update_meta_objective`, `set_objective_meta`, `set_project_dependencies`, `add_project_dependency`, `remove_project_dependency`, `get_plan_graph`, `preview_plan_changes`, `apply_plan_changes`, `reorder_objectives`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.

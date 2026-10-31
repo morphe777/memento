@@ -42,4 +42,6 @@ export type ObjectivesMap = ReturnType<typeof D.getObjectivesMap>;
 export type MonthPlanningPage = ReturnType<typeof D.getMonthPlanningPage>;
 export type InboxPage = ReturnType<typeof D.listInbox>;
 export type QuarterPlanningPage = ReturnType<typeof D.getQuarterPlanningPage>;
+export type PlanGraph = ReturnType<typeof D.getPlanGraph>;
+export type PlanPreview = ReturnType<typeof D.previewPlanChanges>;
 export type ExperiencesPage = ReturnType<typeof D.getExperiencesPage>;

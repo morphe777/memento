@@ -792,3 +792,24 @@ export function useTableSort<T, K extends string>(
   );
   return { sorted, th };
 }
+
+/** D-98: shown while an AI call runs (everywhere the user waits for the model): three soft dots and a shimmer. */
+export function AiWait({ label = 'L’IA réfléchit…' }: { label?: string }) {
+  return (
+    <span className="ai-wait" role="status" aria-live="polite">
+      <AiDots />
+      <span className="ai-wait-label">{label}</span>
+    </span>
+  );
+}
+
+/** The dots alone, to put inside a busy button. */
+export function AiDots() {
+  return (
+    <span className="ai-dots" aria-hidden>
+      <span />
+      <span />
+      <span />
+    </span>
+  );
+}

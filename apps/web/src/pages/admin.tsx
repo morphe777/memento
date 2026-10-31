@@ -8,6 +8,7 @@ import { Fragment, useEffect, useState } from 'react';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
 import { useSortSensors } from '../components/tasks.tsx';
 import {
+  AiDots,
   ConfirmDialog,
   Empty,
   Field,
@@ -285,6 +286,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.describe',
       'ai.prompt.breakdown',
       'ai.prompt.path',
+      'ai.prompt.fill',
       'ai.prompt.daily',
     ],
   };
@@ -1084,6 +1086,11 @@ const AI_PROMPTS = [
     "« Proposer un chemin avec l'IA » sur un objectif : nombre et taille des projets, quand poser des questions.",
   ],
   [
+    'ai.prompt.fill',
+    'Prompt Compléter',
+    "« Compléter avec l'IA » dans la fiche d'un méta-objectif, d'un objectif ou d'un projet : titres alternatifs et champs proposés (description, mesure, critère de succès).",
+  ],
+  [
     'ai.prompt.daily',
     'Prompt Bilan du jour',
     'Le rapport du soir sur Telegram, en entier : gabarit, ton, ce qu’il met en avant. Il reçoit les faits du jour, des 7 derniers jours, de la semaine et des projets. HTML Telegram : <b>, <i>, <u>, <s>, <code>, <blockquote>.',
@@ -1240,9 +1247,11 @@ function NotifyConfig({
       </Field>
       <div className="flex items-center gap-3 flex-wrap">
         <button type="button" className="btn self-start" onClick={showPreview} disabled={busy !== null}>
+          {busy === 'preview' ? <AiDots /> : null}
           {busy === 'preview' ? 'Préparation…' : 'Aperçu'}
         </button>
         <button type="button" className="btn self-start" onClick={send} disabled={!ready || busy !== null}>
+          {busy === 'send' ? <AiDots /> : null}
           {busy === 'send' ? 'Envoi…' : 'Envoyer le bilan du jour maintenant'}
         </button>
         <span className="text-[13px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
@@ -1502,6 +1511,7 @@ function AiConfig({
           </Field>
           <div className="flex flex-col gap-1">
             <button type="button" className="btn self-start" onClick={runCheck} disabled={checking}>
+              {checking ? <AiDots /> : null}
               {checking ? 'Test en cours…' : 'Tester et charger les modèles'}
             </button>
             {check && (

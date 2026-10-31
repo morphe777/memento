@@ -7,7 +7,7 @@ import { ApiError, get, post } from '../lib/api.ts';
 import { toast } from '../lib/hooks.ts';
 import type { AiDescribeRequest, AiStatus } from '../lib/types.ts';
 import { StarIcon } from './ai.tsx';
-import { Tabs } from './ui.tsx';
+import { AiDots, Tabs } from './ui.tsx';
 
 /** `plain`: links rendered as text, for Markdown shown inside a link (cards). */
 export function Markdown({ text, plain = false }: { text: string; plain?: boolean }) {
@@ -259,7 +259,7 @@ function AiDescribeButton({ ai, current }: { ai: AiState; current: string }) {
       title={ai.ready ? undefined : `IA non configurée : ${ai.reason} (Configuration › IA)`}
       onClick={() => ai.run(current)}
     >
-      <StarIcon size={16} />
+      {ai.busy ? <AiDots /> : <StarIcon size={16} />}
       {ai.busy && !ai.proposal
         ? "L'IA rédige…"
         : ai.proposal
@@ -317,6 +317,7 @@ function AiProposal({ ai, onUse }: { ai: AiState; onUse: (text: string) => void 
           disabled={ai.busy}
         />
         <button type="submit" className="btn btn-sm" disabled={ai.busy || !remark.trim()}>
+          {ai.busy ? <AiDots /> : null}
           {ai.busy ? 'Elle refait…' : 'Refaire'}
         </button>
       </form>

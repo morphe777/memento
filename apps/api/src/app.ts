@@ -86,12 +86,15 @@ export async function buildApp(opts: AppOptions) {
     if (!req.principal && SOFT.has(path)) return;
     if (!req.principal)
       return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'Connexion requise.' });
-    if (!req.principal.canWrite && req.method !== 'GET') {
+    // A read token may simulate a plan draft (POST /plan/preview writes nothing, 03 §Jetons).
+    if (!req.principal.canWrite && req.method !== 'GET' && path !== '/api/v1/plan/preview') {
       return reply.code(403).send({ code: 'READ_ONLY_TOKEN', message: 'Jeton en lecture seule.' });
     }
   });
 
   app.setErrorHandler((err, req, reply) => {
+    if (err instanceof D.ConflictError)
+      return reply.code(409).send({ code: err.code, message: err.message, details: err.details });
     if (err instanceof D.DomainError)
       return reply.code(422).send({ code: err.code, message: err.message, details: err.details });
     if (err instanceof D.NotFoundError)
@@ -298,6 +301,17 @@ export async function buildApp(opts: AppOptions) {
           return D.pathWithAi(c, req.body, llm);
         },
       );
+      // D-97: « Compléter avec l'IA » in the edit panels: alternative titles and field proposals (nothing saved).
+      r.post(
+        '/ai/fill',
+        { schema: { ...tag('IA'), body: D.aiFillBody }, preHandler: userOnly },
+        async (req) => {
+          const c = ctx(req);
+          const s = D.getSettings(c);
+          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+          return D.fillWithAi(c, req.body, llm);
+        },
+      );
       // D-68: « Rédiger avec l'IA »: a description proposal, returned to the editor (nothing saved).
       r.post(
         '/ai/describe',
@@ -406,9 +420,14 @@ export async function buildApp(opts: AppOptions) {
         { schema: { ...tag('Objectifs'), body: D.metaReorderBody } },
         async (req) => D.reorderMetaObjectives(ctx(req), req.body.ids),
       );
-      r.get('/meta-objectives/:id', { schema: { ...tag('Objectifs'), params: D.idParam } }, async (req) =>
-        D.getMetaObjective(ctx(req), req.params.id),
-      );
+      // API-01: a meta-objective with its objectives.
+      r.get('/meta-objectives/:id', { schema: { ...tag('Objectifs'), params: D.idParam } }, async (req) => {
+        const c = ctx(req);
+        return {
+          ...D.getMetaObjective(c, req.params.id),
+          objectives: D.listObjectives(c).filter((o) => o.metaObjectiveId === req.params.id),
+        };
+      });
       r.post(
         '/meta-objectives',
         { schema: { ...tag('Objectifs'), body: D.metaObjectiveCreate } },
@@ -522,6 +541,11 @@ export async function buildApp(opts: AppOptions) {
         '/projects/:id/dependencies',
         { schema: { ...tag('Projets'), params: D.idParam, body: D.dependencyBody } },
         async (req) => D.addProjectDependency(ctx(req), req.params.id, req.body.dependsOnId),
+      );
+      r.put(
+        '/projects/:id/dependencies',
+        { schema: { ...tag('Projets'), params: D.idParam, body: D.projectDependenciesBody } },
+        async (req) => D.setProjectDependencies(ctx(req), req.params.id, req.body.dependsOn),
       );
       r.delete(
         '/projects/:id/dependencies/:dependsOnId',
@@ -642,6 +666,28 @@ export async function buildApp(opts: AppOptions) {
         '/quarter-plans/:quarter',
         { schema: { ...tag('Planification'), params: z.object({ quarter: D.quarterKey }) } },
         async (req) => D.getQuarterPlanningPage(ctx(req), req.params.quarter),
+      );
+      // ---------- Vue Plan (memento-vue-plan/03) ----------
+      r.get(
+        '/plan-graph',
+        { schema: { ...tag('Planification'), querystring: D.planGraphQuery } },
+        async (req) => D.getPlanGraph(ctx(req), req.query),
+      );
+      r.get(
+        '/plan-graph/reserve',
+        { schema: { ...tag('Planification'), querystring: D.planGraphQuery } },
+        async (req) => D.getPlanReserve(ctx(req), req.query),
+      );
+      r.post('/plan/apply', { schema: { ...tag('Planification'), body: D.planApplyBody } }, async (req) =>
+        D.applyPlanChanges(ctx(req), req.body),
+      );
+      r.post('/plan/preview', { schema: { ...tag('Planification'), body: D.planApplyBody } }, async (req) =>
+        D.previewPlanChanges(ctx(req), req.body),
+      );
+      r.post(
+        '/plan/migrate-dependencies',
+        { schema: { ...tag('Planification'), body: z.object({ dryRun: z.boolean().default(true) }) } },
+        async (req) => D.migrateDependencies(ctx(req), { dryRun: req.body.dryRun }),
       );
       r.post(
         '/objectives/:id/quarter',

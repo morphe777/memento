@@ -34,11 +34,16 @@ export const groupCreate = z.object({ name: title, domainId: uuid });
 export const groupPatch = groupCreate.partial();
 
 export const metaObjectiveStatus = z.enum(['active', 'paused', 'achieved', 'abandoned']);
+/** DM-113: title rephrased as a result (Vue Plan), written by the AI or by hand. Empty = the title is shown. */
+const outcomeTitle = z.string().trim().max(80, '80 caractères au plus').nullable().optional();
 export const metaObjectiveCreate = z.object({
   title,
   description: text.optional(),
   horizonDate: date.nullable().optional(),
   status: metaObjectiveStatus.optional(),
+  outcomeTitle,
+  /** DM-114: domain of the meta-objective (Vue Plan filter); absent = deduced from its projects. */
+  primaryDomainId: uuid.nullable().optional(),
 });
 export const metaObjectivePatch = metaObjectiveCreate.partial();
 
@@ -59,6 +64,7 @@ export const objectiveCreate = z.object({
   status: objectiveStatus.optional(),
   /** D-62: renewed for the next quarter / year when closed. */
   recurrence: z.enum(['quarterly', 'yearly']).nullable().optional(),
+  outcomeTitle,
 });
 export const objectivePatch = objectiveCreate.partial();
 
@@ -92,7 +98,11 @@ export const projectMonthBody = z.object({ month: monthKey.nullable() });
 export const projectCreate = z.object({
   ...projectFields,
   groupIds: z.array(uuid).min(1, 'Au moins un groupe'),
+  /** DM-101: explicit prerequisites; absent = follows the last project of the objective (unless isFree). */
+  dependsOn: z.array(uuid).max(50).optional(),
 });
+/** API-02: replaces the prerequisites of a project. */
+export const projectDependenciesBody = z.object({ dependsOn: z.array(uuid).max(50) });
 export const projectPatch = z.object({ ...projectFields, status: projectStatus }).partial();
 export const projectGroupsBody = z.object({
   groupIds: z.array(uuid).min(1),

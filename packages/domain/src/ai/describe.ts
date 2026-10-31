@@ -75,7 +75,7 @@ function projectDomains(ctx: Ctx, projectId: string, primaryDomainId: string | n
 }
 
 /** The facts the AI may rely on, per kind (never other users' data: Mémento is single-user). */
-function context(ctx: Ctx, input: z.output<typeof aiDescribeBody>) {
+export function describeContext(ctx: Ctx, input: z.output<typeof aiDescribeBody>) {
   const { kind, id, parentId } = input;
   switch (kind) {
     case 'meta_objective': {
@@ -210,7 +210,7 @@ export async function describeWithAi(ctx: Ctx, raw: AiDescribeInput, llm: Llm) {
   const template = input.kind === 'domain' ? '' : settings[`templates.${input.kind}`];
   const data = {
     kind: LABEL[input.kind],
-    item: context(ctx, input),
+    item: describeContext(ctx, input),
     template: template.trim() || null,
     current: input.current.trim() && input.current.trim() !== template.trim() ? input.current : null,
     remark: input.remark || null,

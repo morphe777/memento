@@ -7,6 +7,7 @@ import { DomainError } from '../errors.ts';
 import { getSettings } from '../settings.ts';
 import { isValidQuarter, parisDate, quarterEnd, quarterOf, quarterStart, shiftQuarter } from '../time.ts';
 import { capacityBetween, workDoneBetween } from './month.ts';
+import { quarterPlanCheck } from './plan.ts';
 import { getObjectivePath } from './projects.ts';
 import { getObjective, refreshObjectiveProgress, updateObjective } from './referential.ts';
 
@@ -69,18 +70,16 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
       objectives: chosen.filter((o) => o.metaObjectiveId === m.id).length,
     }));
 
-  const alerts: { level: 'warn' | 'ok'; code: string; text: string }[] = [];
+  // API-16: capacity of every domain (experiences excluded, CH-21), paths (CH-22) and the Vue Plan alerts.
+  const check = quarterPlanCheck(ctx, quarter);
+  const alerts: { level: 'error' | 'warn' | 'info' | 'ok'; code: string; text: string }[] = check.alerts.map(
+    ({ level, code, text }) => ({ level, code, text }),
+  );
   if (openChosen.length > s['quarter.max_objectives'])
     alerts.push({
       level: 'warn',
       code: 'TOO_MANY_OBJECTIVES',
       text: `${openChosen.length} objectifs ce trimestre (limite ${s['quarter.max_objectives']}) : risque de dispersion.`,
-    });
-  if (neededMin > availableMin)
-    alerts.push({
-      level: 'warn',
-      code: 'QUARTER_OVER',
-      text: `Plus de travail prévu que de temps disponible : ${Math.round((neededMin - availableMin) / 60)} h de trop.`,
     });
   const unknown = openChosen.reduce((a, o) => a + o.unknownSize, 0);
   if (unknown)
@@ -110,6 +109,7 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
       neededMin,
       overMin: Math.max(0, neededMin - availableMin),
     },
+    capacity: check.capacity,
     chosen,
     candidates,
     metas: metaRows,

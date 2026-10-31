@@ -19,6 +19,8 @@ export function wouldCreateCycle(edges: { from: string; to: string }[], from: st
 }
 
 export function assertNoCycle(edges: { from: string; to: string }[], from: string, to: string): void {
+  // DM-105: a project never depends on itself (own code, distinct from a loop).
+  if (from === to) throw new DomainError('DEPENDENCY_SELF', 'Un élément ne peut pas dépendre de lui-même.');
   if (wouldCreateCycle(edges, from, to)) {
     throw new DomainError('DEPENDENCY_CYCLE', 'Ce prérequis créerait une boucle.');
   }

@@ -84,9 +84,106 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  // User request 31/10/2026: the sidebar folds into a thin rail to give the width to the page (remembered).
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem('memento.sidebar.folded') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const fold = (v: boolean) => {
+    setFolded(v);
+    try {
+      localStorage.setItem('memento.sidebar.folded', v ? '1' : '0');
+    } catch {
+      // private mode: not remembered
+    }
+  };
+  const location = useRouterState({ select: (s) => s.location });
+  // D-95: the Planifier tabs (Semaine, Mois, Plan) all use the whole width; every other page keeps 1 408 px.
+  // Folding the menu only gives its width back, it never changes this rule.
+  const wide = location.pathname === '/planifier';
   return (
     <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
-      {!phone && <Sidebar onSearch={() => setSearchOpen(true)} onCapture={() => setCaptureOpen(true)} />}
+      {!phone &&
+        (folded ? (
+          <nav
+            aria-label="Navigation principale (réduite)"
+            className="flex-none flex flex-col items-center gap-1.5 sticky top-0 h-screen box-border"
+            style={{
+              width: 52,
+              padding: '24px 6px',
+              zIndex: 30,
+              borderRight: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+            }}
+          >
+            <Link to="/semaine" aria-label="Mémento" className="hover:no-underline">
+              <img src="/icon.svg" alt="" width={26} height={26} />
+            </Link>
+            <button
+              type="button"
+              className="icon-btn rail-item"
+              aria-label="Déplier le menu"
+              data-label="Déplier le menu"
+              onClick={() => fold(false)}
+            >
+              »
+            </button>
+            <button
+              type="button"
+              className="icon-btn rail-item"
+              aria-label="Rechercher"
+              data-label="Rechercher (⌘K)"
+              onClick={() => setSearchOpen(true)}
+            >
+              <NavIcon name="search" />
+            </button>
+            <button
+              type="button"
+              className="icon-btn rail-item"
+              aria-label="Capturer dans l’Inbox"
+              data-label="Capturer dans l’Inbox"
+              onClick={() => setCaptureOpen(true)}
+            >
+              <NavIcon name="plus" />
+            </button>
+            {NAV.map((s) => (
+              <div key={s.section} className="flex flex-col items-center gap-1 w-full">
+                <span
+                  aria-hidden
+                  style={{ height: 1, width: 24, background: 'var(--border)', margin: '4px 0' }}
+                />
+                {s.items.map((i) => {
+                  const active = location.pathname === i.to || location.pathname.startsWith(`${i.to}/`);
+                  return (
+                    <Link
+                      key={i.to}
+                      to={i.to}
+                      aria-label={i.label}
+                      data-label={i.label}
+                      className="icon-btn rail-item hover:no-underline"
+                      style={
+                        active
+                          ? { background: 'var(--bin)', color: 'var(--text)' }
+                          : { color: 'var(--text-2)' }
+                      }
+                    >
+                      <NavIcon name={i.to} />
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+        ) : (
+          <Sidebar
+            onSearch={() => setSearchOpen(true)}
+            onCapture={() => setCaptureOpen(true)}
+            onFold={() => fold(true)}
+          />
+        ))}
       <div className="flex-1 min-w-0 flex flex-col">
         {phone && (
           <div
@@ -110,7 +207,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="flex-1 box-border"
           style={{
             padding: phone ? '12px 12px 96px' : '32px 24px',
-            maxWidth: phone ? undefined : 1408,
+            maxWidth: phone || wide ? undefined : 1408,
             width: '100%',
             margin: '0 auto',
           }}
@@ -144,7 +241,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Sidebar({ onSearch, onCapture }: { onSearch: () => void; onCapture: () => void }) {
+function Sidebar({
+  onSearch,
+  onCapture,
+  onFold,
+}: {
+  onSearch: () => void;
+  onCapture: () => void;
+  onFold: () => void;
+}) {
   const path = useRouterState({ select: (s) => s.location.pathname });
   const me = useMe();
   const groups = useGroups();
@@ -165,10 +270,21 @@ function Sidebar({ onSearch, onCapture }: { onSearch: () => void; onCapture: () 
         background: 'var(--surface-2)',
       }}
     >
-      <Link to="/semaine" className="flex items-center gap-2 px-2 hover:no-underline">
-        <img src="/icon.svg" alt="" width={26} height={26} />
-        <span className="text-[19px] font-bold tracking-tight">Mémento</span>
-      </Link>
+      <div className="flex items-center gap-2">
+        <Link to="/semaine" className="flex items-center gap-2 px-2 hover:no-underline flex-1">
+          <img src="/icon.svg" alt="" width={26} height={26} />
+          <span className="text-[19px] font-bold tracking-tight">Mémento</span>
+        </Link>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Réduire le menu"
+          title="Réduire le menu"
+          onClick={onFold}
+        >
+          «
+        </button>
+      </div>
       <button
         type="button"
         className="btn btn-sm justify-between"
@@ -635,5 +751,93 @@ function Toasts() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** Icons of the folded rail (user request 31/10/2026): one per page, the name shows on hover. */
+const ICON_PATHS: Record<string, ReactNode> = {
+  search: (
+    <>
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="M10.5 10.5 14 14" />
+    </>
+  ),
+  plus: <path d="M8 3v10M3 8h10" />,
+  '/semaine': (
+    <>
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
+    </>
+  ),
+  '/planifier': (
+    <>
+      <path d="M2 4h7M2 8h5M2 12h8" />
+      <path d="m11 3 1.5 1.5L15 2" />
+    </>
+  ),
+  '/inbox': (
+    <>
+      <path d="M2 9.5 4 3h8l2 6.5V13H2z" />
+      <path d="M2 9.5h3.5l1 1.5h3l1-1.5H14" />
+    </>
+  ),
+  '/objectifs': (
+    <>
+      <circle cx="8" cy="8" r="6" />
+      <circle cx="8" cy="8" r="3" />
+      <circle cx="8" cy="8" r="0.6" fill="currentColor" />
+    </>
+  ),
+  '/projets': <path d="M1.5 4.5V13h13V5.5H7.5L6 3.5H1.5z" />,
+  '/taches': (
+    <>
+      <rect x="2" y="2" width="12" height="12" rx="2" />
+      <path d="m5 8 2 2 4-4" />
+    </>
+  ),
+  '/domaines': (
+    <>
+      <rect x="2" y="2" width="5" height="5" rx="1" />
+      <rect x="9" y="2" width="5" height="5" rx="1" />
+      <rect x="2" y="9" width="5" height="5" rx="1" />
+      <rect x="9" y="9" width="5" height="5" rx="1" />
+    </>
+  ),
+  '/idees': (
+    <>
+      <path d="M5.5 10.5C4 9.5 3.5 8 3.5 6.5a4.5 4.5 0 0 1 9 0c0 1.5-.5 3-2 4V12h-5z" />
+      <path d="M6 14.5h4" />
+    </>
+  ),
+  '/experiences': (
+    <>
+      <path d="M6 1.5h4M6.5 1.5v4.5L2.5 13a1 1 0 0 0 .9 1.5h9.2a1 1 0 0 0 .9-1.5L9.5 6V1.5" />
+      <path d="M4.5 10h7" />
+    </>
+  ),
+  '/rapports': <path d="M2 14h12M4 14V9M8 14V4M12 14V7" />,
+  '/journal': (
+    <>
+      <path d="M3 2h8.5L13 3.5V14H3z" />
+      <path d="M5.5 6h5M5.5 9h5M5.5 12h3" />
+    </>
+  ),
+};
+
+function NavIcon({ name }: { name: string }) {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {ICON_PATHS[name]}
+    </svg>
   );
 }

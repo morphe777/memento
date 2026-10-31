@@ -70,15 +70,14 @@ const planRoute = createRoute({
   path: '/planifier',
   validateSearch: (
     s: Record<string, unknown>,
-  ): { semaine?: string; vue?: 'mois' | 'trimestre'; mois?: string; trimestre?: string } => ({
+  ): { semaine?: string; vue?: 'mois' | 'trimestre'; mois?: string } => ({
     semaine: str(s.semaine),
     vue: s.vue === 'mois' || s.vue === 'trimestre' ? s.vue : undefined,
     mois: str(s.mois),
-    trimestre: str(s.trimestre),
   }),
   component: function Plan() {
-    const { semaine, vue, mois, trimestre } = planRoute.useSearch();
-    return <PlanPage semaine={semaine} vue={vue} mois={mois} trimestre={trimestre} />;
+    const { semaine, vue, mois } = planRoute.useSearch();
+    return <PlanPage semaine={semaine} vue={vue} mois={mois} />;
   },
 });
 const inboxRoute = createRoute({

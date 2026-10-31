@@ -50,6 +50,8 @@ export const metaObjective = sqliteTable('meta_objective', {
     .notNull()
     .default('active'),
   position: integer('position').notNull().default(0), // D-69: order of the lanes on the map
+  outcomeTitle: text('outcome_title'), // DM-113: title rephrased as a result (Vue Plan), ≤ 80 chars
+  primaryDomainId: text('primary_domain_id').references(() => domain.id), // DM-114: domain filter of the Vue Plan
 });
 
 export const objective = sqliteTable('objective', {
@@ -72,6 +74,7 @@ export const objective = sqliteTable('objective', {
   recurrence: text('recurrence', { enum: ['quarterly', 'yearly'] }),
   previousId: text('previous_id'), // the occurrence this one renews
   position: integer('position').notNull().default(0), // D-69: order inside a (meta-objective, quarter) cell
+  outcomeTitle: text('outcome_title'), // DM-113
 });
 
 export const project = sqliteTable(
@@ -247,6 +250,7 @@ export const auditLog = sqliteTable(
     action: text('action').notNull(),
     diff: text('diff', { mode: 'json' }),
     reviewedAt: text('reviewed_at'),
+    batchId: text('batch_id'), // API-08: the writes of one applied plan draft share a batch
   },
   (t) => [index('audit_at_idx').on(t.at), index('audit_entity_idx').on(t.entityType, t.entityId)],
 );

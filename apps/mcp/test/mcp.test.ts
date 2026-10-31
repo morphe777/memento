@@ -9,6 +9,7 @@ let api: Awaited<ReturnType<typeof buildApp>>;
 let mcpUrl = '';
 let token = '';
 let cookie = '';
+let testDb: ReturnType<typeof openDb>['db'];
 
 async function rpc(method: string, params: unknown, auth = token) {
   const res = await fetch(mcpUrl, {
@@ -26,6 +27,7 @@ async function rpc(method: string, params: unknown, auth = token) {
 beforeAll(async () => {
   const { db, sqlite } = openDb(':memory:');
   runMigrations(db);
+  testDb = db;
   seed({ db, sqlite, actor: 'me' });
   await setUserPassword(db, 'mehdi', 'correct horse battery');
   token = createToken(db, 'claude', 'read_write').token;
@@ -76,6 +78,18 @@ describe('MCP L6', () => {
       'get_report',
       'list_changes',
       'add_resource',
+      'list_meta_objectives',
+      'get_meta_objective',
+      'create_meta_objective',
+      'update_meta_objective',
+      'set_objective_meta',
+      'set_project_dependencies',
+      'add_project_dependency',
+      'remove_project_dependency',
+      'get_plan_graph',
+      'preview_plan_changes',
+      'apply_plan_changes',
+      'reorder_objectives',
     ]) {
       expect(names).toContain(n);
     }
@@ -145,5 +159,42 @@ describe('MCP L6', () => {
     ).body;
     expect(res.result.isError).toBe(true);
     expect(JSON.parse(res.result.content[0].text).code).toBe('MONTH_PROJECT_INCOMPLETE');
+  });
+
+  it('Vue Plan: get_plan_graph returns the graph', async () => {
+    const res = (await rpc('tools/call', { name: 'get_plan_graph', arguments: { includeReserve: true } }))
+      .body;
+    expect(res.result.isError).toBeFalsy();
+    const graph = JSON.parse(res.result.content[0].text);
+    expect(graph.version).toBeTypeOf('string');
+    expect(Array.isArray(graph.objectives)).toBe(true);
+  });
+
+  it('Vue Plan: a self dependency is refused with DEPENDENCY_SELF', async () => {
+    const groups = (await api.inject({ url: '/api/v1/groups', headers: { cookie } })).json();
+    const idea = (
+      await rpc('tools/call', {
+        name: 'create_idea',
+        arguments: { title: 'Dépendance', groupIds: [groups[0].id] },
+      })
+    ).body;
+    const id = JSON.parse(idea.result.content[0].text).id;
+    const res = (
+      await rpc('tools/call', { name: 'set_project_dependencies', arguments: { id, dependsOn: [id] } })
+    ).body;
+    expect(res.result.isError).toBe(true);
+    expect(JSON.parse(res.result.content[0].text).code).toBe('DEPENDENCY_SELF');
+  });
+
+  it('Vue Plan: a read-only token previews but cannot apply', async () => {
+    const ro = createToken(testDb, 'lecteur', 'read').token;
+    const ops = [
+      { op: 'reorderObjectives', quarter: '2026-Q4', ids: ['00000000-0000-4000-8000-000000000001'] },
+    ];
+    const prev = (await rpc('tools/call', { name: 'preview_plan_changes', arguments: { ops } }, ro)).body;
+    expect(JSON.parse(prev.result.content[0].text).code).not.toBe('READ_ONLY_TOKEN');
+    const res = (await rpc('tools/call', { name: 'apply_plan_changes', arguments: { ops } }, ro)).body;
+    expect(res.result.isError).toBe(true);
+    expect(JSON.parse(res.result.content[0].text).code).toBe('READ_ONLY_TOKEN');
   });
 });
