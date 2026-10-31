@@ -1,0 +1,231 @@
+{
+  "_source": "Lecture MCP Memento (jeton lecture seule) le 2026-10-31. Extrait allégé pour les tests de la Vue Plan. heuresRestantesMin = totalMin - doneMin.",
+  "domaine": {
+    "id": "42c78381-18cd-49a7-8669-a433b808fd2a",
+    "name": "Carrière",
+    "colorLight": "#2F6FDB",
+    "colorDark": "#6A9BF2",
+    "priorityRank": 3
+  },
+  "metaObjectif": {
+    "id": "0d85069a-9925-41c0-8ed2-12baccf2cbef",
+    "title": null,
+    "_note": "titre non lisible via le MCP actuel (API-01)",
+    "outcomeTitlePropose": "Rester employable quand l'IA transforme le métier"
+  },
+  "objectifs": [
+    {
+      "id": "2d57e68b-44de-4484-9721-20ccdb2e3359",
+      "title": "Fondation du repositionnement",
+      "outcomeTitlePropose": "Un positionnement IA clair et visible",
+      "quarter": "2026-Q4",
+      "deadline": "2026-12-31",
+      "smartIndicator": "CV, Profil et init ADR",
+      "smartTarget": "3",
+      "criticality": 2
+    },
+    {
+      "id": "0508cf0b-0da5-494f-98ef-6dbcfde272bd",
+      "title": "2 Projets Vitrine & ADR",
+      "outcomeTitlePropose": "Le prouver par 2 projets vitrines",
+      "quarter": "2027-Q1",
+      "deadline": "2027-03-31",
+      "smartIndicator": "",
+      "smartTarget": "",
+      "criticality": 2
+    }
+  ],
+  "projetsDansObjectifs": [
+    {
+      "id": "b13654db-a67c-4b01-b380-0357d9c24741",
+      "title": "Plan, Profil & ADR",
+      "objectiveId": "2d57e68b-44de-4484-9721-20ccdb2e3359",
+      "positionInObjective": 2,
+      "isFree": false,
+      "status": "active",
+      "monthFlag": "2026-10",
+      "groups": ["IA"],
+      "tasks": "4/4 faites",
+      "heuresRestantesMin": 0,
+      "gaps": [],
+      "blocked": false,
+      "dependsOn": []
+    },
+    {
+      "id": "aea1807d-909a-434e-9028-990e4d4b089e",
+      "title": "Formation LangGraph",
+      "objectiveId": "2d57e68b-44de-4484-9721-20ccdb2e3359",
+      "positionInObjective": 3,
+      "isFree": true,
+      "status": "ready",
+      "monthFlag": "2026-11",
+      "groups": ["IA"],
+      "tasks": "0/9",
+      "heuresRestantesMin": 510,
+      "gaps": [],
+      "blocked": false,
+      "dependsOn": []
+    },
+    {
+      "id": "260ce484-e59b-47ea-8878-41f7d4735829",
+      "title": "Refonte du CV",
+      "objectiveId": "2d57e68b-44de-4484-9721-20ccdb2e3359",
+      "positionInObjective": 4,
+      "isFree": false,
+      "status": "idea",
+      "monthFlag": null,
+      "groups": ["IA"],
+      "tasks": "0/4",
+      "heuresRestantesMin": 240,
+      "gaps": ["SUCCESS_CRITERION_MISSING"],
+      "blocked": true,
+      "dependsOn": []
+    },
+    {
+      "id": "66901f7c-223f-41f3-b51d-50f3e6e25eed",
+      "title": "ADR Novembre",
+      "objectiveId": "2d57e68b-44de-4484-9721-20ccdb2e3359",
+      "positionInObjective": 6,
+      "isFree": false,
+      "status": "ready",
+      "monthFlag": null,
+      "groups": ["Mission"],
+      "tasks": "0/3",
+      "heuresRestantesMin": 180,
+      "gaps": [],
+      "blocked": true,
+      "dependsOn": []
+    },
+    {
+      "id": "97cef9aa-1769-48dd-9de0-d578e3b74d0e",
+      "title": "Premier RAG",
+      "objectiveId": "0508cf0b-0da5-494f-98ef-6dbcfde272bd",
+      "positionInObjective": 1,
+      "isFree": false,
+      "status": "idea",
+      "monthFlag": null,
+      "groups": ["IA"],
+      "tasks": "aucune",
+      "heuresRestantesMin": 0,
+      "gaps": ["SUCCESS_CRITERION_MISSING", "TASK_MISSING"],
+      "blocked": false,
+      "dependsOn": []
+    }
+  ],
+  "migrationAttendue_DM109": [
+    { "projet": "Refonte du CV", "dependsOn": ["Plan, Profil & ADR"] },
+    { "projet": "ADR Novembre", "dependsOn": ["Refonte du CV"] },
+    { "projet": "Formation LangGraph", "dependsOn": [], "_note": "libre" },
+    { "projet": "Premier RAG", "dependsOn": [], "_note": "seul dans son objectif" }
+  ],
+  "reserveProjets": [
+    {
+      "id": "5bda84f8-f9bc-4582-913a-41c513496c78",
+      "title": "Refonte CV & profil LinkedIn",
+      "status": "idea",
+      "groups": ["IA", "Mission"],
+      "heuresRestantesMin": 300,
+      "_note": "doublon possible avec Refonte du CV"
+    },
+    {
+      "id": "88b90d5d-abc2-4d42-b860-3ab3a904f3a3",
+      "title": "Colonne vertebrale data & IA",
+      "status": "idea",
+      "groups": ["IA", "Labo Tech"],
+      "heuresRestantesMin": 330
+    },
+    {
+      "id": "ba5a43a6-bab2-457a-aca5-171dd8db3297",
+      "title": "Évolution Yuki",
+      "status": "idea",
+      "groups": ["Labo Tech"],
+      "heuresRestantesMin": 300
+    },
+    {
+      "id": "d7ec6c56-30a1-4c9c-87a8-dab090b576b1",
+      "title": "Projet Resilience",
+      "status": "idea",
+      "groups": ["Labo Tech"],
+      "heuresRestantesMin": 180
+    },
+    {
+      "id": "b8d090bb-7d61-4707-8b8e-5515e85c863a",
+      "title": "Maj Automatique Docker",
+      "status": "ready",
+      "groups": ["Labo Tech", "Sécurité Digitale"],
+      "heuresRestantesMin": 240
+    },
+    {
+      "id": "25c29e85-ec60-497c-9184-b66c5a0c8866",
+      "title": "Lab Réseau IaC — Équipements Industrie",
+      "status": "idea",
+      "groups": ["Labo Tech"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "a2991d1b-ce53-418d-984d-402a6977de9e",
+      "title": "Integrer les outils persos comme serveurs MCP natifs dans OpenClaw",
+      "status": "idea",
+      "groups": ["IA", "Labo Tech"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "f8d51bc5-c523-4eb2-968a-998ad6a74521",
+      "title": "Backlog Dev : tracker les idées d'amélioration",
+      "status": "idea",
+      "groups": ["Labo Tech"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "62fc9678-a30f-41e2-bbc1-a1f884bb3623",
+      "title": "MonIP site",
+      "status": "idea",
+      "groups": ["Labo Tech"],
+      "heuresRestantesMin": 0
+    }
+  ],
+  "reserveConnexes": [
+    {
+      "id": "2d1a8bf5-b6ee-4e97-9be7-11578639fdce",
+      "title": "Interface Web pour la gestion Menu, Recette & Produit (qualité)",
+      "primaryDomain": "Santé",
+      "objectiveTitle": "Repas : Nourriture saine",
+      "groups": ["Outils Tracking", "IA", "Repas"],
+      "heuresRestantesMin": 300
+    },
+    {
+      "id": "8ba2ab97-d74f-40b0-a58d-7d922141ff8c",
+      "title": "Curation activites famille Albi",
+      "primaryDomain": "Famille",
+      "objectiveTitle": null,
+      "groups": ["Sorties & Activités", "IA", "Labo Tech"],
+      "heuresRestantesMin": 360
+    }
+  ],
+  "reserveObjectifs": [
+    {
+      "id": "2755275b-bba0-4590-b370-9b266591aaff",
+      "title": "Structurer semaine 4j et tester un mois",
+      "metaObjectiveId": null,
+      "quarter": "2027-Q4"
+    },
+    {
+      "id": "d0ad1fe9-363e-4722-aae8-89f0d14f97fb",
+      "title": "Sécuriser Compte @ et Homelab Auto Updates",
+      "metaObjectiveId": null,
+      "quarter": "2026-Q4"
+    },
+    {
+      "id": "50e7469b-b302-4614-8f6a-d20c83c94576",
+      "title": "Profits avec Reaper Bot",
+      "metaObjectiveId": "0bb48cd2-83aa-4315-8d9f-dac03001f140",
+      "quarter": "2026-Q4",
+      "_note": "dans un autre méta-objectif"
+    }
+  ],
+  "contexteSemaine_2026W44": {
+    "budgetMin": 360,
+    "plannedMin": 875,
+    "alertes": ["BUDGET_OVER", "NO_EXPERIENCE"]
+  }
+}

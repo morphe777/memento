@@ -8,7 +8,7 @@ import { ApiError, get, post, put } from '../lib/api.ts';
 import { fmtMin } from '../lib/format.ts';
 import { toast } from '../lib/hooks.ts';
 import type { AiStatus } from '../lib/types.ts';
-import { Panel } from './ui.tsx';
+import { AiDots, Panel } from './ui.tsx';
 
 type Scope = 'week' | 'month' | 'quarter';
 interface Change {
@@ -99,7 +99,7 @@ export function AiProposeButton({
         onClick={run}
         style={{ minHeight: 44, opacity: 1, padding: '0 18px' }}
       >
-        <StarIcon />
+        {busy ? <AiDots /> : <StarIcon />}
         {busy ? "L'IA réfléchit…" : "Proposer avec l'IA"}
       </button>
       {proposal && (

@@ -9,7 +9,7 @@ import { toast, useAction, useSettings } from '../lib/hooks.ts';
 import type { AiStatus } from '../lib/types.ts';
 import { StarIcon } from './ai.tsx';
 import { DurationOptions } from './tasks.tsx';
-import { Panel } from './ui.tsx';
+import { AiWait, Panel } from './ui.tsx';
 
 interface Msg {
   role: 'ai' | 'user';
@@ -146,8 +146,8 @@ function BreakdownPanel({ projectId, onClose }: { projectId: string; onClose: ()
               </div>
             ))}
             {busy && (
-              <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
-                L'IA réfléchit…
+              <div>
+                <AiWait />
               </div>
             )}
             <div ref={end} />

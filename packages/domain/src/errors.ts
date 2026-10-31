@@ -10,6 +10,9 @@ export class DomainError extends Error {
   }
 }
 
+/** State changed under the caller (API-08 PLAN_APPLY_CONFLICT) → HTTP 409; details carry the fresh state. */
+export class ConflictError extends DomainError {}
+
 export class NotFoundError extends Error {
   constructor(
     public readonly entity: string,

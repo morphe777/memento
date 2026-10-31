@@ -3,12 +3,12 @@
 // (achieved, partial or failed — not abandoned), is renewed for the next quarter / year. The new occurrence
 // keeps a link to the one it renews (previous_id); stopping the recurrence = removing it on the new occurrence.
 import { and, asc, eq, inArray, schema } from '@memento/db';
-import { type Ctx, ctxNow, ctxNowIso } from '../context.ts';
+import { audit, type Ctx, ctxNow, ctxNowIso } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { OBJECTIVE_RECURRENCE_MONTHS } from '../rules/recurrence.ts';
 import { addMonths, monthOf, parisDate, quarterOf, shiftMonth } from '../time.ts';
 import { createProject, getProject, getProjectRow, promoteProject, setProjectMonth } from './projects.ts';
-import { createObjective, getObjective } from './referential.ts';
+import { createObjective, getObjective, updateObjective } from './referential.ts';
 import { createTask } from './tasks.ts';
 
 const { project, projectGroup, task, objective } = schema;
@@ -29,7 +29,11 @@ function openSuccessor(ctx: Ctx, objectiveId: string): string | null {
   return null;
 }
 
-export function renewProject(ctx: Ctx, id: string) {
+/**
+ * D-62 renewal. `missed` (DM-108): the occurrence was closed unfinished at the end of its month, the next one may
+ * start in the current month (« la période suivante repart de zéro »).
+ */
+export function renewProject(ctx: Ctx, id: string, opts: { missed?: boolean } = {}) {
   const p = getProjectRow(ctx, id);
   if (!p.recurrence) return null;
   if (ctx.db.select({ id: project.id }).from(project).where(eq(project.previousId, id)).get()) return null;
@@ -37,7 +41,7 @@ export function renewProject(ctx: Ctx, id: string) {
   const current = monthOf(parisDate(ctxNow(ctx)));
   // The next period follows the one the project was planned for (or now), and is never in the past.
   let month = shiftMonth(p.monthFlag ?? current, months);
-  while (month <= current) month = shiftMonth(month, months);
+  while (opts.missed ? month < current : month <= current) month = shiftMonth(month, months);
   const groupIds = ctx.db
     .select({ g: projectGroup.groupId })
     .from(projectGroup)
@@ -56,6 +60,7 @@ export function renewProject(ctx: Ctx, id: string) {
     importance: p.importance,
     startDate: p.startDate ? addMonths(p.startDate, months) : null,
     dueDate: p.dueDate ? addMonths(p.dueDate, months) : null,
+    dependsOn: [], // DM-108: a new occurrence inherits no dependency
   });
   ctx.db
     .update(project)
@@ -86,6 +91,8 @@ export function renewProject(ctx: Ctx, id: string) {
   return getProject(ctx, next.id);
 }
 
+const numeric = (v: string) => (/^\s*\d+([.,]\d+)?\s*$/.test(v) ? Number(v.replace(',', '.')) : null);
+
 export function renewObjective(ctx: Ctx, id: string) {
   const o = getObjective(ctx, id);
   if (!o.recurrence) return null;
@@ -98,6 +105,7 @@ export function renewObjective(ctx: Ctx, id: string) {
     metaObjectiveId: o.metaObjectiveId,
     smartIndicator: o.smartIndicator,
     smartTarget: o.smartTarget,
+    smartCurrent: numeric(o.smartTarget) !== null ? '0' : '', // DM-108: the next one starts at 0 / target
     criticality: o.criticality,
     deadline,
     quarter: quarterOf(deadline),
@@ -108,4 +116,60 @@ export function renewObjective(ctx: Ctx, id: string) {
     .where(eq(objective.id, next.id))
     .run();
   return getObjective(ctx, next.id);
+}
+
+/**
+ * DM-108: a recurring project still open at the end of its month is closed without carry-over (done, success
+ * false, Q-07) and the next occurrence is created. Called by the month roll before the « back to prêt » rule,
+ * which never applies to recurring projects.
+ */
+export function closeMissedRecurringProjects(ctx: Ctx, month: string) {
+  const rows = ctx.db
+    .select()
+    .from(project)
+    .where(inArray(project.status, ['active', 'ready', 'paused']))
+    .all()
+    .filter((r) => r.recurrence && r.monthFlag && r.monthFlag < month);
+  for (const r of rows) {
+    ctx.db
+      .update(project)
+      .set({ status: 'done', success: false, completedAt: ctxNowIso(ctx), updatedAt: ctxNowIso(ctx) })
+      .where(eq(project.id, r.id))
+      .run();
+    audit(
+      ctx,
+      'project',
+      r.id,
+      'recurrence_missed',
+      { status: r.status },
+      { status: 'done', success: false },
+    );
+    renewProject(ctx, r.id, { missed: true });
+  }
+  return rows.length;
+}
+
+/**
+ * DM-108: a recurring objective still open after its quarter is closed: « atteint » when its measure reached the
+ * target, « partiel » with some progress, « échoué » otherwise; closing it renews it (D-62), from 0.
+ */
+export function closeRecurringObjectives(ctx: Ctx, currentQuarter: string) {
+  const rows = ctx.db
+    .select()
+    .from(objective)
+    .where(inArray(objective.status, OPEN_OBJECTIVE as ('active' | 'paused')[]))
+    .all()
+    .filter((o) => o.recurrence && o.quarter < currentQuarter);
+  for (const o of rows) {
+    const cur = numeric(o.smartCurrent);
+    const target = numeric(o.smartTarget);
+    const status =
+      (target && cur !== null && cur >= target) || o.progressPct >= 100
+        ? 'achieved'
+        : (cur ?? 0) > 0 || o.progressPct > 0
+          ? 'partial'
+          : 'failed';
+    updateObjective(ctx, o.id, { status }); // renews it (D-62)
+  }
+  return rows.length;
 }

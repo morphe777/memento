@@ -39,9 +39,15 @@ export interface EngineProject {
   dueDate: string | null;
   replannedAt: string | null;
   replanDoneMin: number | null;
+  /** DM-106: informative only (kept for compatibility), never excludes the project. */
   blocked: boolean;
+  /** DM-106: unfinished prerequisites (id + title): their tasks are proposed first. */
+  waitingOn?: { id: string; title: string }[];
   importance?: 'low' | 'normal' | 'high';
 }
+
+/** API-15: at a close score, tasks of a project waiting for another come after those of its prerequisite. */
+export const WAITING_FACTOR = 0.85;
 
 /** D-53: project importance multiplies the value V (a « basse » Santé project can rank below a « haute » Famille one). */
 export const IMPORTANCE_FACTOR = { low: 0.5, normal: 1, high: 1.5 } as const;
@@ -143,7 +149,13 @@ interface Prepared {
   month: string;
   /** D-79: the month(s) of the week: two when it straddles a month end (both count as month projects). */
   months: string[];
+  /** DM-106: eligible projects waiting for each prerequisite (prerequisite id → titles of the waiting ones). */
+  awaitedBy: Map<string, string[]>;
 }
+
+// D-42: month projects (actif) and the backlog (prêt) can feed the week; ideas and paused projects cannot.
+// DM-106: a project waiting for another one stays eligible (a dependency never blocks).
+const eligibleProject = (p: EngineProject) => p.status === 'active' || p.status === 'ready';
 
 const isMonthProject = (P: Prepared, p: EngineProject) => !!p.monthFlag && P.months.includes(p.monthFlag);
 
@@ -155,8 +167,13 @@ function prepare(input: EngineInput): Prepared {
     else tasksByProject.set(t.projectId, [...(tasksByProject.get(t.projectId) ?? []), t]);
   }
   const monday = weekMonday(input.isoWeek);
+  const awaitedBy = new Map<string, string[]>();
+  for (const p of input.projects)
+    if (eligibleProject(p))
+      for (const w of p.waitingOn ?? []) awaitedBy.set(w.id, [...(awaitedBy.get(w.id) ?? []), p.title]);
   return {
     input,
+    awaitedBy,
     domainById: new Map(input.domains.map((d) => [d.id, d])),
     projectById: new Map(input.projects.map((p) => [p.id, p])),
     tasksByProject,
@@ -167,9 +184,6 @@ function prepare(input: EngineInput): Prepared {
     months: [...new Set([monthOf(monday), monthOf(weekSunday(input.isoWeek))])],
   };
 }
-
-// D-42: month projects (actif) and the backlog (prêt) can feed the week; ideas and paused projects cannot.
-const eligibleProject = (p: EngineProject) => (p.status === 'active' || p.status === 'ready') && !p.blocked;
 
 function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   const { input } = P;
@@ -211,7 +225,10 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   const D = (t.durationMin ?? 60) / 60;
   const w = input.weights;
   const parts = { V, U, R, C, A, D };
-  const score = round3((w.value * V + w.urgency * U + w.delay * R + w.continuity * C + w.age * A) / D);
+  const waiting = project?.waitingOn ?? [];
+  const raw = (w.value * V + w.urgency * U + w.delay * R + w.continuity * C + w.age * A) / D;
+  const score = round3(waiting.length ? raw * WAITING_FACTOR : raw);
+  const awaited = project ? (P.awaitedBy.get(project.id) ?? []) : [];
   const mandatory = !!t.dueDate && t.dueDate <= P.sunday;
 
   // Why: one line from the dominant component (step 7).
@@ -223,6 +240,10 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
         : `Deadline ${frDay(t.dueDate)} ${frShort(t.dueDate)}`;
   } else if (t.isExperience && input.experiencesDone < input.experienceTarget) {
     why = `Expériences : ${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines`;
+  } else if (waiting.length) {
+    why = `Attend « ${waiting[0].title} » : termine-le d'abord`; // API-15
+  } else if (awaited.length) {
+    why = `À finir d'abord : « ${awaited[0]} » l'attend`;
   } else {
     const contrib: [string, number][] = [
       ['A', w.age * A],
@@ -309,6 +330,8 @@ export interface PageCard {
   domainId: string | null;
   objectiveId: string | null;
   objectiveTitle: string | null;
+  /** DM-106: « Attend « X » » shown on the card (titles of unfinished prerequisites). */
+  waitingOn: string[];
   tasks: PageTask[];
   hidden: { taskId: string; title: string; durationMin: number | null }[];
   /** Inbox only: the folded tasks are selectable too (any Inbox task is available). */
@@ -431,6 +454,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         domainId: p.domainIds[0] ?? null,
         objectiveId: p.objectiveId,
         objectiveTitle: p.objectiveTitle,
+        waitingOn: (p.waitingOn ?? []).map((w) => w.title),
         tasks: visible.map((t) => row(t, !avail.has(t.id) && !chosenSet.has(t.id))),
         hidden: pending.slice(k).map((t) => ({ taskId: t.id, title: t.title, durationMin: t.durationMin })),
         hiddenTasks: [],
@@ -493,6 +517,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
               domainId: null,
               objectiveId: null,
               objectiveTitle: null,
+              waitingOn: [],
               tasks: inboxShown,
               hidden: inboxFolded.map((r) => ({
                 taskId: r.taskId,

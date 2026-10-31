@@ -2,8 +2,7 @@ import { and, asc, desc, eq, inArray, schema, sql } from '@memento/db';
 // Projects and ideas (DM-89: same object, status). RB-01, RB-02, RB-04, RB-07, RB-08, RB-12, RB-13, RB-16.
 import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
-import { blockedProjectIds } from '../rules/availability.ts';
-import { assertNoCycle } from '../rules/graph.ts';
+import { topoOrder, waitingOnIds } from '../rules/plan.ts';
 import {
   assertCompletion,
   assertStatusTransition,
@@ -17,10 +16,19 @@ import { upcomingObjectiveOccurrences } from '../rules/recurrence.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
 import { getSettings, withTemplate } from '../settings.ts';
 import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
-import { renewProject } from './recurrence.ts';
+import {
+  allDependencies,
+  defaultDependsOn,
+  releaseDependenciesOn,
+  removeAllDependencies,
+  rewriteChain,
+  setProjectDependencies,
+  stripObjectiveDependencies,
+} from './dependencies.ts';
+import { closeMissedRecurringProjects, renewProject } from './recurrence.ts';
 import { refreshObjectiveProgress } from './referential.ts';
 
-const { project, projectGroup, group, domain, task, projectDependency, objective } = schema;
+const { project, projectGroup, group, domain, task, objective } = schema;
 
 export type ProjectRow = typeof project.$inferSelect;
 
@@ -88,8 +96,22 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
       ),
     )
     .all();
+  // API-12 (DM-100, DM-106): prerequisites and the unfinished ones among them (informative, never blocking).
+  const deps = allDependencies(ctx).filter((d) => ids.includes(d.projectId));
+  const targetIds = [...new Set(deps.map((d) => d.dependsOnProjectId))];
+  const targetStatus = new Map(
+    targetIds.length
+      ? ctx.db
+          .select({ id: project.id, status: project.status })
+          .from(project)
+          .where(inArray(project.id, targetIds))
+          .all()
+          .map((t) => [t.id, t.status] as const)
+      : [],
+  );
   return rows.map((r) => {
     const mine = links.filter((l) => l.projectId === r.id);
+    const waitingOn = waitingOnIds(r.id, deps, targetStatus);
     const domainRanks = new Map(mine.map((l) => [l.domainId, l.rank]));
     const others = [...domainRanks]
       .sort((a, b) => a[1] - b[1])
@@ -103,6 +125,10 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
       groupIds: mine.map((l) => l.groupId),
       domainIds: r.primaryDomainId ? [r.primaryDomainId, ...others] : others,
       objectiveTitle: objectives.find((o) => o.id === r.objectiveId)?.title ?? null,
+      dependsOn: deps.filter((d) => d.projectId === r.id).map((d) => d.dependsOnProjectId),
+      waitingOn,
+      /** Kept for compatibility (API-12): true while waitingOn is not empty; it never blocks anything. */
+      blocked: waitingOn.length > 0,
       taskStats: {
         todo: by('todo')?.n ?? 0,
         done: by('done')?.n ?? 0,
@@ -213,7 +239,7 @@ function nextPositionInObjective(ctx: Ctx, objectiveId: string | null | undefine
 
 export function createProject(ctx: Ctx, input: ProjectCreate) {
   return tx(ctx, () => {
-    const { groupIds, primaryDomainId: requested, ...fields } = input;
+    const { groupIds, primaryDomainId: requested, dependsOn, ...fields } = input;
     const { primaryDomainId } = resolveProjectDomains(groupDomainsOf(ctx, groupIds), requested); // RB-04
     if (fields.objectiveId)
       assertFound(
@@ -236,9 +262,13 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
       .run();
     for (const g of [...new Set(groupIds)])
       ctx.db.insert(projectGroup).values({ projectId: id, groupId: g }).run();
-    const after = getProject(ctx, id);
-    audit(ctx, 'project', id, 'create', null, after);
-    return after;
+    audit(ctx, 'project', id, 'create', null, getProject(ctx, id));
+    // DM-101: created in an objective, it follows the last project of the path unless free or told otherwise.
+    const wanted =
+      dependsOn ??
+      (fields.objectiveId && !fields.isFree ? defaultDependsOn(ctx, fields.objectiveId, id) : []);
+    if (wanted.length) setProjectDependencies(ctx, id, wanted);
+    return getProject(ctx, id);
   });
 }
 
@@ -253,7 +283,8 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
       updatedAt: ctxNowIso(ctx),
       lastTouchedAt: ctxNowIso(ctx),
     };
-    if (patch.objectiveId !== undefined && patch.objectiveId !== before.objectiveId) {
+    const moved = patch.objectiveId !== undefined && patch.objectiveId !== before.objectiveId;
+    if (moved) {
       if (patch.objectiveId)
         assertFound(
           ctx.db.select().from(objective).where(eq(objective.id, patch.objectiveId)).get(),
@@ -269,6 +300,14 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
     // Leaving the month (back to backlog, pause, abandon, idea): the project is no longer a month project.
     if (patch.status && patch.status !== before.status && before.status !== 'done') set.monthFlag = null;
     ctx.db.update(project).set(set).where(eq(project.id, id)).run();
+    if (moved && !patch.objectiveId)
+      removeAllDependencies(ctx, id); // back to the reserve: no more links
+    else if (moved && !before.objectiveId && !(patch.isFree ?? before.isFree) && !before.dependsOn.length) {
+      const wanted = defaultDependsOn(ctx, patch.objectiveId!, id); // DM-101 also on attachment (API-03)
+      if (wanted.length) setProjectDependencies(ctx, id, wanted);
+    }
+    if (patch.isFree === true) stripObjectiveDependencies(ctx, id); // DM-104
+    if (patch.status === 'abandoned' && before.status !== 'abandoned') releaseDependenciesOn(ctx, id); // DM-107
     assertActiveInvariant(ctx, id);
     const after = getProject(ctx, id);
     audit(
@@ -405,6 +444,7 @@ export function setProjectMonth(ctx: Ctx, id: string, month: string | null) {
  */
 export function rollMonth(ctx: Ctx, month: string) {
   return tx(ctx, () => {
+    const missed = closeMissedRecurringProjects(ctx, month); // DM-108, before the « back to prêt » rule
     const rows = ctx.db
       .select()
       .from(project)
@@ -453,13 +493,14 @@ export function rollMonth(ctx: Ctx, month: string) {
           .run();
       }
     }
-    return { backToReady, activated };
+    return { backToReady, activated, missed };
   });
 }
 
-/** Order of projects in an objective path (DM-26, F-10). */
+/** Order of projects in an objective path (DM-26, F-10); DM-103: the chain of dependencies follows the list. */
 export function reorderProjects(ctx: Ctx, objectiveId: string, ids: string[]) {
   return tx(ctx, () => {
+    rewriteChain(ctx, objectiveId, ids);
     ids.forEach((id, i) => {
       const p = getProjectRow(ctx, id);
       if (p.objectiveId !== objectiveId)
@@ -506,46 +547,10 @@ export function replanProject(ctx: Ctx, id: string, dueDate?: string) {
   });
 }
 
-export function addProjectDependency(ctx: Ctx, id: string, dependsOnId: string) {
-  return tx(ctx, () => {
-    getProjectRow(ctx, id);
-    getProjectRow(ctx, dependsOnId);
-    const edges = ctx.db
-      .select()
-      .from(projectDependency)
-      .all()
-      .map((e) => ({ from: e.projectId, to: e.dependsOnProjectId }));
-    assertNoCycle(edges, id, dependsOnId); // RB-07
-    ctx.db
-      .insert(projectDependency)
-      .values({ projectId: id, dependsOnProjectId: dependsOnId })
-      .onConflictDoNothing()
-      .run();
-    audit(ctx, 'project', id, 'dependency_add', null, { dependsOnProjectId: dependsOnId });
-    return listProjectDependencies(ctx, id);
-  });
-}
-
-export function removeProjectDependency(ctx: Ctx, id: string, dependsOnId: string) {
-  return tx(ctx, () => {
-    ctx.db
-      .delete(projectDependency)
-      .where(and(eq(projectDependency.projectId, id), eq(projectDependency.dependsOnProjectId, dependsOnId)))
-      .run();
-    audit(ctx, 'project', id, 'dependency_remove', { dependsOnProjectId: dependsOnId }, null);
-    return listProjectDependencies(ctx, id);
-  });
-}
-
-export const listProjectDependencies = (ctx: Ctx, id: string) =>
-  ctx.db
-    .select()
-    .from(projectDependency)
-    .where(eq(projectDependency.projectId, id))
-    .all()
-    .map((d) => d.dependsOnProjectId);
-
-/** V-02: ordered path of an objective's projects with prerequisites and blocked state. */
+/**
+ * V-02: an objective's projects with their prerequisites and waiting state, in display order: DM-102 stable
+ * topological sort (prerequisites first, ties by positionInObjective).
+ */
 export function getObjectivePath(ctx: Ctx, objectiveId: string) {
   const rows = ctx.db
     .select()
@@ -553,13 +558,7 @@ export function getObjectivePath(ctx: Ctx, objectiveId: string) {
     .where(eq(project.objectiveId, objectiveId))
     .orderBy(asc(project.positionInObjective), asc(project.createdAt))
     .all();
-  const deps = ctx.db.select().from(projectDependency).all();
-  const blocked = blockedProjectIds(rows, deps);
-  return serializeProjects(ctx, rows).map((p) => ({
-    ...p,
-    blocked: blocked.has(p.id),
-    dependsOn: deps.filter((d) => d.projectId === p.id).map((d) => d.dependsOnProjectId),
-  }));
+  return serializeProjects(ctx, topoOrder(rows, allDependencies(ctx)));
 }
 
 /** Ideas view (DM-90): sorted by age, oldest first. */

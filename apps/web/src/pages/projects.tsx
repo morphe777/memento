@@ -3,8 +3,9 @@ import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useRef, useState } from 'react';
+import { AiFill } from '../components/ai-fill.tsx';
 import { BreakdownButton } from '../components/breakdown.tsx';
-import { DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
+import { AiDescribe, DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { pathDefaultGroups, rememberGroups } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
@@ -605,12 +606,25 @@ export function NewProjectPanel({
   );
 }
 
+/** DM-106: information only; a title that is not known (other objective path) reads « un autre projet ». */
+const waitingLine = (titles: (string | undefined)[]) => {
+  const known = titles.filter((t): t is string => !!t);
+  return known.length ? `Attend ${known.map((t) => `« ${t} »`).join(', ')}` : 'Attend un autre projet';
+};
+
 export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vue?: TaskView }) {
   const navigate = useNavigate();
   const board = useBoardTasks(id, !!vue);
   const q = useQuery({ queryKey: ['project', id], queryFn: () => get<ProjectDetail>(`/projects/${id}`) });
   const tasks = useQuery({ queryKey: ['tasks', id], queryFn: () => get<Task[]>(`/tasks?projectId=${id}`) });
   const dl = useDomainLookup();
+  // DM-106: titles of the unfinished prerequisites come from the objective path.
+  const objectiveId = q.data?.objectiveId;
+  const siblings = useQuery({
+    queryKey: ['objective-path', objectiveId],
+    queryFn: () => get<PathProject[]>(`/objectives/${objectiveId}/path`),
+    enabled: !!objectiveId && (q.data?.waitingOn.length ?? 0) > 0,
+  });
   const [editing, setEditing] = useState(false);
   const saveDescription = useAction((description: string) => patch(`/projects/${id}`, { description }), {
     toast: 'Description enregistrée.',
@@ -653,6 +667,12 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
           title={p.title}
           actions={<ProjectActions p={p} />}
         />
+        {p.waitingOn.length > 0 && (
+          <div className="text-[13px] mt-1" style={{ color: 'var(--text-faint)' }}>
+            {waitingLine(p.waitingOn.map((w) => siblings.data?.find((x) => x.id === w)?.title))} (n'empêche
+            rien)
+          </div>
+        )}
       </div>
       <DescriptionBlock
         text={p.description}
@@ -1112,13 +1132,25 @@ function FormSection({ title, children }: { title: string; children: React.React
 }
 
 /** « Modifier le projet »: every editable field in one dialog (description is edited in place under the title). */
-function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolean; onClose: () => void }) {
+export function ProjectEditPanel({
+  p,
+  open,
+  onClose,
+  footer,
+}: {
+  p: ProjectDetail;
+  open: boolean;
+  onClose: () => void;
+  footer?: React.ReactNode;
+}) {
+  const settings = useSettings();
   const navigate = useNavigate();
   const dl = useDomainLookup();
   const groups = useGroups();
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: () => get<Objective[]>('/objectives') });
   const [f, setF] = useState({
     title: p.title,
+    description: p.description,
     successCriterion: p.successCriterion,
     startDate: p.startDate ?? '',
     dueDate: p.dueDate ?? '',
@@ -1149,6 +1181,7 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         });
       return patch(`/projects/${p.id}`, {
         title: f.title,
+        description: f.description,
         successCriterion: f.successCriterion,
         startDate: f.startDate || null,
         dueDate: f.dueDate || null,
@@ -1182,6 +1215,13 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
       </Field>
+      <AiFill
+        kind="project"
+        id={p.id}
+        values={f}
+        template={settings.data?.['templates.project']}
+        onUse={(k, v) => set(k as 'title', v)}
+      />
       <Field
         label="Critère de succès (oui / non)"
         info="Phrase vérifiable par oui ou non à la fin du projet. Obligatoire pour promouvoir une idée."
@@ -1291,11 +1331,25 @@ function ProjectEditPanel({ p, open, onClose }: { p: ProjectDetail; open: boolea
         </label>
       </FormSection>
 
+      <Field label="Description" hint="Markdown accepté · le contexte que l'IA lit pour ce projet">
+        <AiDescribe
+          request={{ kind: 'project', id: p.id }}
+          current={f.description}
+          onUse={(v) => set('description', v)}
+        />
+        <textarea
+          value={f.description}
+          onChange={(e) => set('description', e.target.value)}
+          className="mono"
+          style={{ minHeight: 200 }}
+        />
+      </Field>
       <Resources ownerType="project" ownerId={p.id} resources={p.resources} />
       <div
         className="flex flex-wrap gap-2 items-center pt-3"
         style={{ borderTop: '1px solid var(--border)' }}
       >
+        {footer}
         <button
           type="button"
           className="btn btn-ghost btn-danger ml-auto"

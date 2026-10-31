@@ -1,22 +1,15 @@
 // Objectifs (V-01), Objectif = chemin (V-02), Domaines / Domaine (V-15).
-import {
-  type CollisionDetection,
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  pointerWithin,
-  useDroppable,
-} from '@dnd-kit/core';
+import { closestCenter, DndContext, type DragEndEvent } from '@dnd-kit/core';
 import { arrayMove, SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { AiFill } from '../components/ai-fill.tsx';
 import { AiDescribe, DescriptionBlock, Markdown, PencilIcon } from '../components/markdown.tsx';
 import { PathAiButton, PathQuickAdd } from '../components/path.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
-  LockIcon,
   QuickAdd,
   ResourceList,
   Resources,
@@ -36,11 +29,10 @@ import {
   SearchSelect,
   Section,
   StatusPill,
-  Tabs,
 } from '../components/ui.tsx';
-import { del, get, patch, post } from '../lib/api.ts';
+import { ApiError, del, get, patch, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { toast, useAction, useDomainLookup, useIsPhone, useMe, useSettings } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
 import type {
   MetaObjective,
   Objective,
@@ -79,8 +71,6 @@ export function ObjectivesPage() {
     queryFn: () => get<Project[]>('/projects?status=active,paused,done'),
   });
   const [creating, setCreating] = useState<'objective' | 'meta' | null>(null);
-  // « + » of a map cell: the objective starts in that meta-objective, due at the end of that quarter.
-  const [preset, setPreset] = useState<{ metaObjectiveId: string; deadline: string } | undefined>();
   const [editingMeta, setEditingMeta] = useState<MetaObjective | null>(null);
   const saveMetaDescription = useAction(
     ({ id, description }: { id: string; description: string }) =>
@@ -88,11 +78,6 @@ export function ObjectivesPage() {
     { toast: 'Description enregistrée.' },
   );
   const [showClosed, setShowClosed] = useState(false);
-  const [view, setView] = useState<'map' | 'list'>('map');
-  // D-69: « Réorganiser » sits with the page actions, map view only, never on iPhone (no drag there).
-  const phone = useIsPhone();
-  const [reorgMode, setReorg] = useState(false);
-  const reorg = reorgMode && view === 'map' && !phone;
   const dl = useDomainLookup();
   const me = useMe();
   const year = me.data?.today.slice(0, 4);
@@ -105,7 +90,7 @@ export function ObjectivesPage() {
     meta: m as MetaObjective | null,
     items: list.filter((o) => o.metaObjectiveId === m.id),
   }));
-  // D-69: « Sans méta-objectif » at the place chosen on the map (on top by default).
+  // D-69: « Sans méta-objectif » at the configured place (on top by default).
   groups.splice(Math.min(settings.data?.['map.no_meta_position'] ?? 0, groups.length), 0, {
     meta: null,
     items: list.filter((o) => !o.metaObjectiveId),
@@ -119,16 +104,9 @@ export function ObjectivesPage() {
           title="Objectifs"
           actions={
             <>
-              {view === 'map' && !phone && (
-                <button
-                  type="button"
-                  className={reorg ? 'btn btn-primary' : 'btn'}
-                  onClick={() => setReorg((r) => !r)}
-                  aria-pressed={reorg}
-                >
-                  {reorg ? 'Terminer' : 'Réorganiser'}
-                </button>
-              )}
+              <Link to="/planifier" search={{ vue: 'trimestre' }} className="btn">
+                Vue Plan
+              </Link>
               <button type="button" className="btn" onClick={() => setCreating('meta')}>
                 + Méta-objectif
               </button>
@@ -140,138 +118,113 @@ export function ObjectivesPage() {
         />
       </div>
       <div className="flex flex-wrap items-center gap-4">
-        <Tabs
-          value={view}
-          onChange={setView}
-          options={[
-            { value: 'map', label: 'Carte' },
-            { value: 'list', label: 'Liste' },
-          ]}
-        />
         <label className="flex items-center gap-2 text-[14px]">
           <input type="checkbox" checked={showClosed} onChange={(e) => setShowClosed(e.target.checked)} />{' '}
           Afficher les objectifs clos cette année
         </label>
       </div>
       {objectives.isError && <ErrorBox error={objectives.error} />}
-      {view === 'map' && (
-        <ObjectivesMapView
-          includeClosed={showClosed}
-          reorg={reorg}
-          drag={!phone}
-          onEditMeta={setEditingMeta}
-          onCreateIn={(p) => {
-            setPreset(p);
-            setCreating('objective');
-          }}
-        />
-      )}
-      {view === 'list' &&
-        groups.map(({ meta, items }) =>
-          items.length || meta ? (
-            <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
-              <div className="flex flex-wrap items-baseline gap-2.5">
-                <h2 className="h2-bin">
-                  {meta ? (
-                    <Link to="/meta-objectifs/$id" params={{ id: meta.id }}>
-                      {meta.title}
-                    </Link>
-                  ) : (
-                    'Sans méta-objectif'
-                  )}
-                </h2>
-                {meta?.horizonDate && (
-                  <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-                    horizon {fmtDate(meta.horizonDate)}
-                  </span>
+      {groups.map(({ meta, items }) =>
+        items.length || meta ? (
+          <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
+            <div className="flex flex-wrap items-baseline gap-2.5">
+              <h2 className="h2-bin">
+                {meta ? (
+                  <Link to="/meta-objectifs/$id" params={{ id: meta.id }}>
+                    {meta.title}
+                  </Link>
+                ) : (
+                  'Sans méta-objectif'
                 )}
-                {meta && <StatusPill>{STATUS_LABEL[meta.status]}</StatusPill>}
-                {meta && (
-                  <button
-                    type="button"
-                    className="icon-btn ml-auto"
-                    aria-label={`Modifier le méta-objectif ${meta.title}`}
-                    title="Modifier le méta-objectif"
-                    onClick={() => setEditingMeta(meta)}
-                  >
-                    <PencilIcon />
-                  </button>
-                )}
-              </div>
+              </h2>
+              {meta?.horizonDate && (
+                <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+                  horizon {fmtDate(meta.horizonDate)}
+                </span>
+              )}
+              {meta && <StatusPill>{STATUS_LABEL[meta.status]}</StatusPill>}
               {meta && (
-                <DescriptionBlock
-                  text={meta.description}
-                  ai={{ kind: 'meta_objective', id: meta.id }}
-                  lines={3}
-                  emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
-                  onSave={(description, done) =>
-                    saveMetaDescription.mutate({ id: meta.id, description }, { onSuccess: done })
-                  }
-                />
+                <button
+                  type="button"
+                  className="icon-btn ml-auto"
+                  aria-label={`Modifier le méta-objectif ${meta.title}`}
+                  title="Modifier le méta-objectif"
+                  onClick={() => setEditingMeta(meta)}
+                >
+                  <PencilIcon />
+                </button>
               )}
-              {items.length === 0 && (
-                <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
-                  Aucun objectif trimestriel rattaché.
-                </div>
-              )}
-              <div
-                className="grid gap-3"
-                style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
-              >
-                {items.map((o) => {
-                  const ps = (projects.data ?? []).filter((p) => p.objectiveId === o.id);
-                  const doms = [...new Set(ps.flatMap((p) => p.domainIds.slice(0, 1)))];
-                  return (
-                    <Link
-                      key={o.id}
-                      to="/objectifs/$id"
-                      params={{ id: o.id }}
-                      className="card flex flex-col gap-2.5 hover:no-underline"
-                      style={{ padding: '16px 18px' }}
-                    >
-                      <div className="flex justify-between items-start gap-3">
-                        <span className="text-[16px] font-semibold hover:underline">{o.title}</span>
-                        <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
-                          {o.quarter}
-                        </span>
-                      </div>
-                      <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-                        {o.smartIndicator
-                          ? `${o.smartIndicator} → ${o.smartTarget}`
-                          : 'Indicateur SMART à préciser'}{' '}
-                        · deadline {fmtDate(o.deadline)}
-                      </div>
-                      <Progress pct={o.progressPct} />
-                      <div
-                        className="flex items-center gap-2 text-[12px]"
-                        style={{ color: 'var(--text-faint)' }}
-                      >
-                        {doms.map((d) => (
-                          <span
-                            key={d}
-                            className="dot"
-                            style={{ background: dl.color(d) }}
-                            title={dl.name(d)}
-                          />
-                        ))}
-                        {ps.length} projet{ps.length > 1 ? 's' : ''} · criticité {o.criticality}/3 ·{' '}
-                        {STATUS_LABEL[o.status]}
-                      </div>
-                    </Link>
-                  );
-                })}
+            </div>
+            {meta && (
+              <DescriptionBlock
+                text={meta.description}
+                ai={{ kind: 'meta_objective', id: meta.id }}
+                lines={3}
+                emptyLabel="Pas encore de description : pourquoi ce cap compte pour toi."
+                onSave={(description, done) =>
+                  saveMetaDescription.mutate({ id: meta.id, description }, { onSuccess: done })
+                }
+              />
+            )}
+            {items.length === 0 && (
+              <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
+                Aucun objectif trimestriel rattaché.
               </div>
-            </section>
-          ) : null,
-        )}
+            )}
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))' }}
+            >
+              {items.map((o) => {
+                const ps = (projects.data ?? []).filter((p) => p.objectiveId === o.id);
+                const doms = [...new Set(ps.flatMap((p) => p.domainIds.slice(0, 1)))];
+                return (
+                  <Link
+                    key={o.id}
+                    to="/objectifs/$id"
+                    params={{ id: o.id }}
+                    className="card flex flex-col gap-2.5 hover:no-underline"
+                    style={{ padding: '16px 18px' }}
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <span className="text-[16px] font-semibold hover:underline">{o.title}</span>
+                      <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
+                        {o.quarter}
+                      </span>
+                    </div>
+                    <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                      {o.smartIndicator
+                        ? `${o.smartIndicator} → ${o.smartTarget}`
+                        : 'Indicateur SMART à préciser'}{' '}
+                      · deadline {fmtDate(o.deadline)}
+                    </div>
+                    <Progress pct={o.progressPct} />
+                    <div
+                      className="flex items-center gap-2 text-[12px]"
+                      style={{ color: 'var(--text-faint)' }}
+                    >
+                      {doms.map((d) => (
+                        <span
+                          key={d}
+                          className="dot"
+                          style={{ background: dl.color(d) }}
+                          title={dl.name(d)}
+                        />
+                      ))}
+                      {ps.length} projet{ps.length > 1 ? 's' : ''} · criticité {o.criticality}/3 ·{' '}
+                      {STATUS_LABEL[o.status]}
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </section>
+        ) : null,
+      )}
       <ObjectivePanel
         open={creating === 'objective'}
-        onClose={() => {
-          setCreating(null);
-          setPreset(undefined);
-        }}
+        onClose={() => setCreating(null)}
         metas={metas.data ?? []}
-        preset={preset}
       />
       <MetaPanel open={creating === 'meta'} onClose={() => setCreating(null)} />
       {editingMeta && <MetaPanel open meta={editingMeta} onClose={() => setEditingMeta(null)} />}
@@ -279,18 +232,24 @@ export function ObjectivesPage() {
   );
 }
 
-function ObjectivePanel({
+export function ObjectivePanel({
   open,
   onClose,
   metas,
   objective,
-  preset,
+  defaults,
+  onCreated,
+  footer,
 }: {
   open: boolean;
   onClose: () => void;
   metas: MetaObjective[];
   objective?: Objective & { resources?: Resource[] };
-  preset?: { metaObjectiveId: string; deadline: string };
+  /** Creation from the Vue Plan (D-91): its cell's meta-objective and quarter. */
+  defaults?: { metaObjectiveId?: string | null; quarter?: string };
+  /** Creation: stay where we are instead of opening the new objective (D-75). */
+  onCreated?: (o: Objective) => void;
+  footer?: React.ReactNode;
 }) {
   const settings = useSettings();
   const me = useMe();
@@ -325,8 +284,12 @@ function ObjectivePanel({
         }
       : {
           ...empty,
-          deadline: me.data ? quarterEnd(quarterOfDate(me.data.today)) : '',
-          ...preset,
+          metaObjectiveId: defaults?.metaObjectiveId ?? '',
+          deadline: defaults?.quarter
+            ? quarterEnd(defaults.quarter)
+            : me.data
+              ? quarterEnd(quarterOfDate(me.data.today))
+              : '',
           description: settings.data?.['templates.objective'] ?? '',
         };
     initial.current = JSON.stringify(start);
@@ -335,17 +298,16 @@ function ObjectivePanel({
   const navigate = useNavigate();
   const save = useAction(
     () => {
-      const { description, ...rest } = f;
-      const body = objective
-        ? { ...rest, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null }
-        : { ...f, metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null };
+      const nulls = { metaObjectiveId: f.metaObjectiveId || null, recurrence: f.recurrence || null };
+      const body = { ...f, ...nulls };
       return objective ? patch(`/objectives/${objective.id}`, body) : post<Objective>('/objectives', body);
     },
     {
       // D-75: a new objective opens right away, to lay its path.
       onSuccess: (r) => {
         onClose();
-        if (!objective && r) navigate({ to: '/objectifs/$id', params: { id: (r as Objective).id } });
+        if (!objective && r && onCreated) onCreated(r as Objective);
+        else if (!objective && r) navigate({ to: '/objectifs/$id', params: { id: (r as Objective).id } });
       },
       toast: 'Objectif enregistré.',
     },
@@ -383,6 +345,14 @@ function ObjectivePanel({
           }}
         />
       </Field>
+      <AiFill
+        kind="objective"
+        id={objective?.id}
+        parentId={f.metaObjectiveId || undefined}
+        values={f}
+        template={settings.data?.['templates.objective']}
+        onUse={(k, v) => set(k as 'title', v)}
+      />
       {!objective && (
         <>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
@@ -411,9 +381,9 @@ function ObjectivePanel({
               />
             </Field>
           </div>
-          <details>
+          <details open>
             <summary className="cursor-pointer text-[14px]" style={{ color: 'var(--text-muted)' }}>
-              Compléter (facultatif) : mesure, deadline précise, criticité, récurrence, description
+              Mesure, deadline précise, criticité, récurrence, description
             </summary>
             <div className="flex flex-col gap-3 pt-3">
               <div
@@ -567,6 +537,19 @@ function ObjectivePanel({
               options={metas.map((m) => ({ value: m.id, label: m.title }))}
             />
           </Field>
+          <Field label="Description" hint="Markdown accepté · le contexte que l'IA lit pour cet objectif">
+            <AiDescribe
+              request={{ kind: 'objective', id: objective.id }}
+              current={f.description}
+              onUse={(v) => set('description', v)}
+            />
+            <textarea
+              value={f.description}
+              onChange={(e) => set('description', e.target.value)}
+              className="mono"
+              style={{ minHeight: 220 }}
+            />
+          </Field>
         </>
       )}
       {objective && (
@@ -583,6 +566,7 @@ function ObjectivePanel({
             Créer
           </button>
         )}
+        {footer}
         {objective && (
           <button
             type="button"
@@ -612,26 +596,45 @@ function ObjectivePanel({
   );
 }
 
-function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void; meta?: MetaObjective }) {
+export function MetaPanel({
+  open,
+  onClose,
+  meta,
+  defaults,
+  footer,
+}: {
+  open: boolean;
+  onClose: () => void;
+  meta?: MetaObjective;
+  /** Creation from the Vue Plan (D-91): the filtered domain. */
+  defaults?: { primaryDomainId?: string };
+  footer?: React.ReactNode;
+}) {
   const settings = useSettings();
   const [title, setTitle] = useState(meta?.title ?? '');
   const [horizonDate, setHorizon] = useState(meta?.horizonDate ?? '');
   const [status, setStatus] = useState<string>(meta?.status ?? 'active');
-  const [description, setDescription] = useState('');
+  const [primaryDomainId, setPrimary] = useState(meta?.primaryDomainId ?? defaults?.primaryDomainId ?? '');
+  const dl = useDomainLookup();
+  const [description, setDescription] = useState(meta?.description ?? '');
   const [deleting, setDeleting] = useState(false);
   useEffect(() => {
     if (open && !meta) setDescription(settings.data?.['templates.meta_objective'] ?? '');
   }, [open]);
-  const initial = useRef(JSON.stringify({ title, horizonDate, status }));
+  const initial = useRef(JSON.stringify({ title, horizonDate, status, primaryDomainId, description }));
+  const extra = { primaryDomainId: primaryDomainId || null, description };
   const save = useAction(
     () =>
       meta
-        ? patch(`/meta-objectives/${meta.id}`, { title, horizonDate: horizonDate || null, status })
-        : post('/meta-objectives', { title, horizonDate: horizonDate || null, description }),
+        ? patch(`/meta-objectives/${meta.id}`, { title, horizonDate: horizonDate || null, status, ...extra })
+        : post('/meta-objectives', { title, horizonDate: horizonDate || null, ...extra }),
     { onSuccess: onClose, toast: meta ? 'Méta-objectif enregistré.' : 'Méta-objectif créé.' },
   );
   const close = () => {
-    if (meta && JSON.stringify({ title, horizonDate, status }) !== initial.current) {
+    if (
+      meta &&
+      JSON.stringify({ title, horizonDate, status, primaryDomainId, description }) !== initial.current
+    ) {
       if (!title.trim()) return toast('Le titre est obligatoire.', 'error');
       save.mutate(undefined);
     }
@@ -656,6 +659,22 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
       <Field label="Titre">
         <input value={title} onChange={(e) => setTitle(e.target.value)} />
       </Field>
+      <AiFill
+        kind="meta_objective"
+        id={meta?.id}
+        values={{ title, description }}
+        template={settings.data?.['templates.meta_objective']}
+        onUse={(k, v) => (k === 'title' ? setTitle(v) : setDescription(v))}
+      />
+      <Field label="Domaine principal">
+        <SearchSelect
+          value={primaryDomainId}
+          onChange={setPrimary}
+          emptyLabel="Déduit de ses projets"
+          ariaLabel="Domaine principal"
+          options={dl.domains.map((d) => ({ value: d.id, label: d.name }))}
+        />
+      </Field>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <Field label="Horizon" info="Date visée, en général un an ou plus. Facultatif.">
           <input type="date" value={horizonDate} onChange={(e) => setHorizon(e.target.value)} />
@@ -672,10 +691,10 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
           </Field>
         )}
       </div>
-      {!meta && (
+      {
         <Field label="Description" hint="Markdown accepté · modèle repris de Configuration › Templates">
           <AiDescribe
-            request={{ kind: 'meta_objective', title }}
+            request={meta ? { kind: 'meta_objective', id: meta.id } : { kind: 'meta_objective', title }}
             current={description}
             onUse={setDescription}
           />
@@ -686,7 +705,7 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
             style={{ minHeight: 220 }}
           />
         </Field>
-      )}
+      }
       <div className="flex flex-wrap gap-2 items-center">
         {!meta && (
           <button
@@ -698,6 +717,7 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
             Créer
           </button>
         )}
+        {footer}
         {meta && (
           <button
             type="button"
@@ -726,15 +746,22 @@ function MetaPanel({ open, onClose, meta }: { open: boolean; onClose: () => void
   );
 }
 
+/** DM-106: a prerequisite never blocks anything, the row only says what it waits for. */
+const waitingText = (titles: string[]) =>
+  titles.length ? `Attend ${titles.map((t) => `« ${t} »`).join(', ')}` : 'Attend un autre projet';
+
 function PathRow({
   p,
   index,
   handle,
   open,
   onToggle,
+  waiting,
 }: {
   p: PathProject;
   index: number;
+  /** Titles of the unfinished prerequisites (information only, DM-106). */
+  waiting: string[];
   handle: React.ReactNode;
   open: boolean;
   onToggle: () => void;
@@ -783,18 +810,13 @@ function PathRow({
           >
             {p.title}
           </Link>
-          {p.blocked && (
-            <span style={{ color: 'var(--text-faint)' }}>
-              <LockIcon />
-            </span>
-          )}
         </span>
         <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
           {STATUS_LABEL[p.status]}
           {p.isFree ? ' · libre' : ''}
           {p.dueDate ? ` · fin ${fmtDate(p.dueDate)}` : ''} · {fmtMin(p.taskStats.doneMin)} /{' '}
           {fmtMin(p.taskStats.totalMin)} · {p.taskStats.todo} tâche{p.taskStats.todo > 1 ? 's' : ''} à faire
-          {p.blocked ? ' · attend le projet précédent' : ''}
+          {p.blocked ? ` · ${waitingText(waiting)}` : ''}
         </span>
       </div>
     </div>
@@ -828,10 +850,12 @@ function PathTasks({ p, onOpen }: { p: PathProject; onOpen: (taskId: string) => 
 function SortablePath({
   p,
   index,
+  waiting,
   onOpenTask,
 }: {
   p: PathProject;
   index: number;
+  waiting: string[];
   onOpenTask: (taskId: string) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: p.id });
@@ -845,6 +869,7 @@ function SortablePath({
       <PathRow
         p={p}
         index={index}
+        waiting={waiting}
         open={open}
         onToggle={() => setOpen((x) => !x)}
         handle={
@@ -930,6 +955,7 @@ export function ObjectivePage({ id }: { id: string }) {
   const [taskId, setTaskId] = useState<string | null>(null);
   const addInput = useRef<HTMLInputElement>(null);
   const [order, setOrder] = useState<string[]>([]);
+  const [notLinear, setNotLinear] = useState(false);
   useEffect(() => setOrder((path.data ?? []).map((p) => p.id)), [path.data]);
   const sensors = useSortSensors();
   const reorder = useAction((ids: string[]) => post('/projects/reorder', { objectiveId: id, ids }));
@@ -941,11 +967,21 @@ export function ObjectivePage({ id }: { id: string }) {
   const meta = metas.data?.find((m) => m.id === o.data.metaObjectiveId);
   const byId = new Map((path.data ?? []).map((p) => [p.id, p]));
   const rows = order.map((x) => byId.get(x)).filter((x): x is PathProject => !!x);
+  // DM-106: titles of the unfinished prerequisites; one that is not in this path stays anonymous.
+  const waitingTitles = (p: PathProject) =>
+    p.waitingOn.map((w) => byId.get(w)?.title).filter((t): t is string => !!t);
   const onDragEnd = (e: DragEndEvent) => {
     if (!e.over || e.active.id === e.over.id) return;
     const next = arrayMove(order, order.indexOf(String(e.active.id)), order.indexOf(String(e.over.id)));
     setOrder(next);
-    reorder.mutate(next);
+    setNotLinear(false);
+    reorder.mutate(next, {
+      onError: (err) => {
+        setOrder((path.data ?? []).map((x) => x.id));
+        // DM-103: a path that is not a single chain is reordered in the Vue Plan (the API message is toasted).
+        if (err instanceof ApiError && err.code === 'PATH_NOT_LINEAR') setNotLinear(true);
+      },
+    });
   };
   return (
     <div className="flex flex-col gap-6">
@@ -999,6 +1035,17 @@ export function ObjectivePage({ id }: { id: string }) {
               <PathAiButton objectiveId={id} path={path.data} />
             </div>
           </div>
+          {notLinear && (
+            <div
+              className="flex items-center justify-between gap-3 flex-wrap text-[14px]"
+              style={{ padding: '10px 20px', background: 'var(--surface-2)' }}
+            >
+              <span>Ce chemin n'est pas une simple suite : réordonne-le dans la Vue Plan.</span>
+              <Link to="/planifier" search={{ vue: 'trimestre' }} className="btn btn-sm">
+                Ouvrir la Vue Plan
+              </Link>
+            </div>
+          )}
           {rows.length === 0 && (
             <Empty>
               Aucun projet sur ce chemin. Tape-les ci-dessous (Entrée entre chaque), ou demande un chemin à
@@ -1008,7 +1055,7 @@ export function ObjectivePage({ id }: { id: string }) {
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext items={order} strategy={verticalListSortingStrategy}>
               {rows.map((p, i) => (
-                <SortablePath key={p.id} p={p} index={i} onOpenTask={setTaskId} />
+                <SortablePath key={p.id} p={p} index={i} waiting={waitingTitles(p)} onOpenTask={setTaskId} />
               ))}
             </SortableContext>
           </DndContext>
@@ -1214,34 +1261,19 @@ function PathStatus({ p }: { p: ObjectivesMap['lanes'][number]['objectives'][num
 
 function MapObjective({
   o,
-  drag = false,
   onAddProject,
 }: {
   o: ObjectivesMap['lanes'][number]['objectives'][number];
-  drag?: boolean;
   /** D-75: an empty path offers « + projet » right on the card. */
   onAddProject?: (o: { id: string; title: string }) => void;
 }) {
   const dl = useDomainLookup();
-  // D-73: the card always moves (another quarter, another meta-objective, another place in its cell),
-  // « Réorganiser » only sorts the lanes. A click stays a click (the drag starts after 4 px).
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: o.id,
-    disabled: !drag,
-  });
   return (
     <div
-      ref={setNodeRef}
-      {...(drag ? { ...attributes, ...listeners } : {})}
       className="card flex flex-col gap-2"
       style={{
         padding: '12px 14px 12px 12px',
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
-        transform: CSS.Translate.toString(transform),
-        transition,
-        zIndex: isDragging ? 30 : undefined,
-        position: 'relative',
-        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.18)' : undefined,
       }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -1314,11 +1346,6 @@ function MapObjective({
                   ★
                 </span>
               )}
-              {p.blocked && (
-                <span style={{ color: 'var(--text-ghost)' }}>
-                  <LockIcon />
-                </span>
-              )}
             </li>
           ))}
         </ol>
@@ -1327,48 +1354,6 @@ function MapObjective({
   );
 }
 
-/**
- * D-65: upcoming occurrence of a recurring objective (not created yet): a dashed, muted card so that the
- * load recurrences will bring stays visible when planning ahead. Not draggable; links to the current one.
- */
-function MapUpcoming({
-  o,
-  deadline,
-}: {
-  o: ObjectivesMap['lanes'][number]['objectives'][number];
-  deadline: string;
-}) {
-  const dl = useDomainLookup();
-  return (
-    <Link
-      to="/objectifs/$id"
-      params={{ id: o.id }}
-      className="flex flex-col gap-1 rounded-[14px] hover:no-underline"
-      style={{
-        padding: '10px 14px 10px 12px',
-        border: '1.5px dashed var(--btn-border)',
-        borderLeft: `4px solid ${dl.color(o.domainId)}`,
-        opacity: 0.75,
-      }}
-      title="Occurrence à venir : créée quand l'actuelle sera close"
-    >
-      <span className="flex items-start justify-between gap-2">
-        <span className="text-[14px] font-semibold leading-snug" style={{ color: 'var(--text-2)' }}>
-          {o.title}
-        </span>
-        <span aria-hidden style={{ color: 'var(--text-faint)' }}>
-          ↻
-        </span>
-      </span>
-      <span className="flex justify-between gap-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        <span>À venir · {o.recurrence === 'yearly' ? 'chaque année' : 'chaque trimestre'}</span>
-        <span className="mono">{fmtDate(deadline)}</span>
-      </span>
-    </Link>
-  );
-}
-
-/** A (lane, quarter) cell of the map: drop target for an objective card, sortable inside (D-69). */
 /** Last day of a quarter (« 2026-Q4 » → 2026-12-31): the deadline of an objective added from its cell. */
 function quarterEnd(qt: string) {
   const [y, q] = [Number(qt.slice(0, 4)), Number(qt.slice(-1))];
@@ -1394,297 +1379,6 @@ function quarterChoices(today: string | undefined, deadline: string) {
   const cur = deadline && quarterOfDate(deadline);
   if (cur && !out.includes(cur)) out.push(cur);
   return out;
-}
-
-function QuarterCell({
-  id,
-  ids,
-  onAdd,
-  children,
-}: {
-  id: string;
-  ids: string[];
-  onAdd?: () => void;
-  children: ReactNode;
-}) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      className="flex flex-col gap-3 rounded-[14px]"
-      style={{
-        background: 'var(--bin)',
-        padding: 8,
-        minHeight: 80,
-        outline: isOver ? '2px dashed var(--text-ghost)' : undefined,
-      }}
-    >
-      {onAdd && (
-        <button
-          type="button"
-          className="icon-btn self-start"
-          style={{ width: 26, height: 26, minHeight: 0, marginBottom: -4 }}
-          aria-label="Ajouter un objectif sur ce trimestre"
-          title="Ajouter un objectif sur ce trimestre (deadline : fin du trimestre)"
-          onClick={onAdd}
-        >
-          +
-        </button>
-      )}
-      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {children}
-      </SortableContext>
-    </div>
-  );
-}
-
-function ObjectivesMapView({
-  includeClosed,
-  reorg,
-  drag,
-  onEditMeta,
-  onCreateIn,
-}: {
-  includeClosed: boolean;
-  reorg: boolean;
-  drag: boolean;
-  onEditMeta: (m: MetaObjective) => void;
-  onCreateIn: (p: { metaObjectiveId: string; deadline: string }) => void;
-}) {
-  const q = useQuery({
-    queryKey: ['objectives-map', includeClosed],
-    queryFn: () => get<ObjectivesMap>(`/objectives/map${includeClosed ? '?includeClosed=true' : ''}`),
-  });
-  const sensors = useSortSensors();
-  const place = useAction(
-    ({ id, ...body }: { id: string; metaObjectiveId: string | null; quarter: string; ids: string[] }) =>
-      post(`/objectives/${id}/place`, body),
-  );
-  const reorderMetas = useAction((ids: string[]) => post('/meta-objectives/reorder', { ids }));
-  const [addingTo, setAddingTo] = useState<{ id: string; title: string } | null>(null);
-  if (q.isError) return <ErrorBox error={q.error} />;
-  if (!q.data) return <Loading />;
-  const { quarters, lanes, currentQuarter } = q.data;
-  const metaKey = (id: string | null | undefined) => id ?? 'none';
-  const cellIds = (meta: string, qt: string) =>
-    (lanes.find((l) => metaKey(l.meta?.id) === meta)?.objectives ?? [])
-      .filter((o) => o.quarter === qt)
-      .map((o) => o.id);
-  const laneIds = lanes.map((l) => `lane:${metaKey(l.meta?.id)}`);
-  /** Lanes only collide with lanes, cards with cards and cells (the card under the pointer wins). */
-  const collision: CollisionDetection = (args) => {
-    const lane = String(args.active.id).startsWith('lane:');
-    const droppableContainers = args.droppableContainers.filter(
-      (c) => String(c.id).startsWith('lane:') === lane,
-    );
-    const within = pointerWithin({ ...args, droppableContainers });
-    if (within.length)
-      return [...within].sort(
-        (a, b) => Number(String(a.id).includes('|')) - Number(String(b.id).includes('|')),
-      );
-    return closestCenter({ ...args, droppableContainers });
-  };
-  const onDragEnd = (e: DragEndEvent) => {
-    const active = String(e.active.id);
-    const over = e.over ? String(e.over.id) : null;
-    if (!over || active === over) return;
-    if (active.startsWith('lane:')) {
-      const from = laneIds.indexOf(active);
-      const to = laneIds.indexOf(over);
-      if (from >= 0 && to >= 0) reorderMetas.mutate(arrayMove(laneIds, from, to).map((x) => x.slice(5)));
-      return;
-    }
-    const o = lanes.flatMap((l) => l.objectives).find((x) => x.id === active);
-    if (!o) return;
-    // Target cell: the cell itself (dropped in its empty part: at the end) or the card it was dropped on.
-    let meta: string;
-    let qt: string;
-    let overCard: string | null = null;
-    if (over.includes('|')) [meta, qt] = over.split('|');
-    else {
-      const target = lanes.flatMap((l) => l.objectives.map((x) => ({ l, x }))).find((t) => t.x.id === over);
-      if (!target) return;
-      meta = metaKey(target.l.meta?.id);
-      qt = target.x.quarter;
-      overCard = over;
-    }
-    const sameCell = meta === metaKey(o.metaObjectiveId) && qt === o.quarter;
-    let ids = cellIds(meta, qt);
-    if (sameCell) {
-      if (!overCard) return;
-      ids = arrayMove(ids, ids.indexOf(active), ids.indexOf(overCard));
-    } else {
-      const at = overCard ? ids.indexOf(overCard) : ids.length;
-      ids = [...ids.slice(0, at), active, ...ids.slice(at)];
-    }
-    place.mutate({ id: active, metaObjectiveId: meta === 'none' ? null : meta, quarter: qt, ids });
-  };
-  if (!lanes.length) return <Empty>Aucun objectif pour l'instant.</Empty>;
-  /** Objectives of a quarter, recurring ones to come included (D-65): the load at a glance. */
-  const loadLabel = (qt: string) => {
-    const all = lanes.flatMap((l) => l.objectives);
-    const real = all.filter((o) => o.quarter === qt).length;
-    const upcoming = all.filter((o) => o.upcoming.some((u) => u.quarter === qt)).length;
-    const n = real + upcoming;
-    if (!n) return 'aucun objectif';
-    return `${n} objectif${n > 1 ? 's' : ''}${upcoming ? ` dont ${upcoming} à venir` : ''}`;
-  };
-  const cols = `220px repeat(${Math.max(1, quarters.length)}, minmax(280px, 1fr))`;
-  const legend: [ReactNode, string][] = [
-    [<PathStatus key="d" p={{ status: 'done' } as never} />, 'terminé'],
-    [<PathStatus key="a" p={{ status: 'active' } as never} />, 'actif'],
-    [<PathStatus key="p" p={{ status: 'paused' } as never} />, 'en pause'],
-    [<PathStatus key="i" p={{ status: 'idea' } as never} />, 'idée'],
-    [
-      <span key="s" style={{ color: 'var(--experience)' }}>
-        ★
-      </span>,
-      'projet du mois',
-    ],
-    [<LockIcon key="l" />, 'attend le projet précédent'],
-  ];
-  return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-4 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        {reorg ? (
-          <span>
-            Trie les lignes (« Sans méta-objectif » comprise) par leur poignée ⠿. Les cartes, elles, se
-            glissent hors de ce mode vers un autre trimestre ou un autre méta-objectif.
-          </span>
-        ) : (
-          legend.map(([icon, label]) => (
-            <span key={label} className="flex items-center gap-1.5">
-              {icon}
-              {label}
-            </span>
-          ))
-        )}
-      </div>
-      <DndContext sensors={sensors} collisionDetection={collision} onDragEnd={onDragEnd}>
-        <SortableContext items={laneIds} strategy={verticalListSortingStrategy}>
-          <div className="overflow-x-auto">
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: cols, minWidth: 220 + Math.max(1, quarters.length) * 292 }}
-            >
-              <span />
-              {quarters.map((qt) => (
-                <div
-                  key={qt}
-                  className="label-caps px-1"
-                  style={{ fontSize: 12, opacity: qt < currentQuarter ? 0.6 : 1 }}
-                >
-                  {quarterLabel(qt)}
-                  {qt === currentQuarter ? ' · en cours' : qt < currentQuarter ? ' · passé' : ''}
-                  <span className="block normal-case font-normal" style={{ letterSpacing: 0 }}>
-                    {loadLabel(qt)}
-                  </span>
-                </div>
-              ))}
-              {lanes.map((l) => (
-                <Fragment key={l.meta?.id ?? 'none'}>
-                  <LaneHeader id={`lane:${metaKey(l.meta?.id)}`} reorg={reorg}>
-                    <div className="flex items-start justify-between gap-1">
-                      {l.meta ? (
-                        <Link
-                          to="/meta-objectifs/$id"
-                          params={{ id: l.meta.id }}
-                          className="text-[16px] font-bold leading-snug"
-                        >
-                          {l.meta.title}
-                        </Link>
-                      ) : (
-                        <span className="text-[16px] font-bold leading-snug">Sans méta-objectif</span>
-                      )}
-                      {l.meta && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          style={{ width: 28, height: 28 }}
-                          aria-label={`Modifier ${l.meta.title}`}
-                          onClick={() => onEditMeta(l.meta!)}
-                        >
-                          <PencilIcon />
-                        </button>
-                      )}
-                    </div>
-                    {l.meta?.horizonDate && (
-                      <span className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                        horizon {fmtDate(l.meta.horizonDate)}
-                      </span>
-                    )}
-                    {l.meta && l.meta.status !== 'active' && (
-                      <StatusPill>{STATUS_LABEL[l.meta.status]}</StatusPill>
-                    )}
-                  </LaneHeader>
-                  {quarters.map((qt) => (
-                    <QuarterCell
-                      key={qt}
-                      id={`${metaKey(l.meta?.id)}|${qt}`}
-                      ids={cellIds(metaKey(l.meta?.id), qt)}
-                      onAdd={
-                        qt < currentQuarter || reorg
-                          ? undefined
-                          : () => onCreateIn({ metaObjectiveId: l.meta?.id ?? '', deadline: quarterEnd(qt) })
-                      }
-                    >
-                      {l.objectives
-                        .filter((o) => o.quarter === qt)
-                        .map((o) => (
-                          <MapObjective key={o.id} o={o} drag={drag && !reorg} onAddProject={setAddingTo} />
-                        ))}
-                      {l.objectives.flatMap((o) =>
-                        o.upcoming
-                          .filter((u) => u.quarter === qt)
-                          .map((u) => <MapUpcoming key={`${o.id}|${qt}`} o={o} deadline={u.deadline} />),
-                      )}
-                    </QuarterCell>
-                  ))}
-                </Fragment>
-              ))}
-            </div>
-          </div>
-        </SortableContext>
-      </DndContext>
-      {addingTo && <NewProjectPanel open onClose={() => setAddingTo(null)} objective={addingTo} />}
-    </div>
-  );
-}
-
-/** D-69, D-73: header of a lane; « Réorganiser » only shows its handle ⠿ to sort the meta-objectives. */
-function LaneHeader({ id, reorg, children }: { id: string; reorg: boolean; children: ReactNode }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id,
-    disabled: !reorg,
-  });
-  return (
-    <div
-      ref={setNodeRef}
-      className="bin flex gap-2"
-      style={{
-        padding: '14px 14px 16px',
-        transform: CSS.Translate.toString(transform),
-        transition,
-        zIndex: isDragging ? 30 : undefined,
-        position: 'relative',
-        boxShadow: isDragging ? '0 8px 24px rgba(0,0,0,.18)' : undefined,
-      }}
-    >
-      {reorg && (
-        <button
-          type="button"
-          className="icon-btn flex-none cursor-grab"
-          style={{ width: 28, height: 28, touchAction: 'none' }}
-          aria-label="Déplacer le méta-objectif"
-          {...attributes}
-          {...listeners}
-        >
-          ⠿
-        </button>
-      )}
-      <div className="flex flex-col gap-1.5 flex-1 min-w-0">{children}</div>
-    </div>
-  );
 }
 
 /** Méta-objectif page: description under the title (the heart of the long-term goal), its objectives. */

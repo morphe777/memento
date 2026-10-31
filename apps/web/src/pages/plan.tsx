@@ -23,7 +23,7 @@ import { fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
 import type { PageTask, PlanningPage } from '../lib/types.ts';
 import { MonthPlanPage } from './plan-month.tsx';
-import { QuarterPlanPage } from './plan-quarter.tsx';
+import { PlanViewPage } from './plan-view.tsx';
 import { Chevron } from './week.tsx';
 
 /** Default week to plan: the current one Monday–Thursday, the next one from Friday (display choice only). */
@@ -36,12 +36,10 @@ export function PlanPage({
   semaine,
   vue,
   mois,
-  trimestre,
 }: {
   semaine?: string;
   vue?: 'mois' | 'trimestre';
   mois?: string;
-  trimestre?: string;
 }) {
   const navigate = useNavigate();
   const tabs = (
@@ -52,13 +50,14 @@ export function PlanPage({
         options={[
           { value: 'semaine', label: 'Semaine' },
           { value: 'mois', label: 'Mois' },
-          { value: 'trimestre', label: 'Trimestre' },
+          { value: 'trimestre', label: 'Plan (trimestres)' },
         ]}
       />
     </div>
   );
   if (vue === 'mois') return <MonthPlanPage mois={mois} tabs={tabs} />;
-  if (vue === 'trimestre') return <QuarterPlanPage trimestre={trimestre} tabs={tabs} />;
+  // memento-vue-plan V-20: the Vue Plan replaces the former quarter page (and the « Carte » of Objectifs).
+  if (vue === 'trimestre') return <PlanViewPage tabs={tabs} />;
   return <WeekPlanPage semaine={semaine} tabs={tabs} />;
 }
 
@@ -334,6 +333,12 @@ function ProjectCard({
               <Link to="/objectifs/$id" params={{ id: card.objectiveId }} style={{ color: 'var(--text-2)' }}>
                 {card.objectiveTitle}
               </Link>
+            </span>
+          )}
+          {/* DM-106: information only, a prerequisite never blocks the week. */}
+          {card.waitingOn.length > 0 && (
+            <span className="text-[12px] w-full" style={{ color: 'var(--text-faint)' }}>
+              Attend {card.waitingOn.map((w) => `« ${w} »`).join(', ')}
             </span>
           )}
         </div>

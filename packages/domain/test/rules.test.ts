@@ -188,19 +188,16 @@ describe('RB-06 availability', () => {
       ...availableTaskIds(tasks, 'parallel', new Set(), [{ taskId: 'c', dependsOnTaskId: 'b' }]),
     ]).toEqual(['b']);
   });
-  it('objective path: a project waits for the active one before it (D-12)', () => {
-    const p = (id: string, pos: number, status: string, isFree = false) => ({
-      id,
-      objectiveId: 'o',
-      positionInObjective: pos,
-      isFree,
-      status,
-    });
+  it('DM-100: position no longer blocks; only unfinished prerequisites make a project wait', () => {
+    const p = (id: string, status: string) => ({ id, status });
     const blocked = blockedProjectIds(
-      [p('a', 1, 'active'), p('b', 2, 'active'), p('c', 3, 'active', true)],
-      [],
+      [p('a', 'active'), p('b', 'active'), p('c', 'ready'), p('d', 'ready')],
+      [
+        { projectId: 'c', dependsOnProjectId: 'a' },
+        { projectId: 'd', dependsOnProjectId: 'x' },
+      ],
     );
-    expect([...blocked]).toEqual(['b']);
+    expect([...blocked]).toEqual(['c']);
   });
 });
 

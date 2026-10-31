@@ -1,5 +1,5 @@
 import { openDb, runMigrations, schema } from '@memento/db';
-import { seed } from '@memento/domain';
+import { createObjective, createProject, listGroups, seed } from '@memento/domain';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { createToken, setUserPassword } from '../src/auth.ts';
@@ -18,7 +18,7 @@ async function setup() {
     payload: { login: 'mehdi', password: PASSWORD },
   });
   const cookie = `memento_session=${res.cookies.find((c) => c.name === 'memento_session')!.value}`;
-  return { app, db, cookie };
+  return { app, db, sqlite, cookie };
 }
 
 describe('API L0 — auth', () => {
@@ -228,6 +228,55 @@ describe('API — purge (D-57)', () => {
   });
 });
 
+describe('API — Compléter avec l’IA (D-97)', () => {
+  it('returns alternative titles and the wanted fields, without saving anything', async () => {
+    const { db, sqlite } = openDb(':memory:');
+    runMigrations(db);
+    seed({ db, sqlite, actor: 'me' });
+    await setUserPassword(db, 'mehdi', PASSWORD);
+    let asked = '';
+    const llm = async (r: { user: string }) => {
+      asked = r.user;
+      return {
+        text: '{"titles":["Dormir 7 h par nuit.","Sommeil","Des nuits réparatrices"],"fields":{"description":"## Pourquoi\\nMieux récupérer.","smartIndicator":"Nuits ≥ 7 h","smartTarget":"20","successCriterion":"ignoré"},"comment":"Ok."}',
+        model: 'fake',
+      };
+    };
+    const app = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent', llm });
+    const login = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: { login: 'mehdi', password: PASSWORD },
+    });
+    const h = { cookie: `memento_session=${login.cookies.find((c) => c.name === 'memento_session')!.value}` };
+    const r = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/fill',
+      headers: h,
+      payload: { kind: 'objective', values: { title: 'Sommeil' } },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      titles: ['Dormir 7 h par nuit', 'Des nuits réparatrices'],
+      fields: {
+        description: '## Pourquoi\nMieux récupérer.',
+        smartIndicator: 'Nuits ≥ 7 h',
+        smartTarget: '20',
+      },
+      comment: 'Ok.',
+    });
+    expect(r.json().fields.successCriterion).toBeUndefined();
+    expect(asked).toMatch(/smartIndicator/);
+    const empty = await app.inject({
+      method: 'POST',
+      url: '/api/v1/ai/fill',
+      headers: h,
+      payload: { kind: 'project', values: { title: ' ' } },
+    });
+    expect(empty.statusCode).toBe(400);
+  });
+});
+
 describe('API — Proposer avec l’IA (D-58)', () => {
   it('reports the status, refuses tokens and returns a proposal through the configured model', async () => {
     const { db, sqlite } = openDb(':memory:');
@@ -386,5 +435,81 @@ describe('API L1 — business errors', () => {
         })
       ).statusCode,
     ).toBe(404);
+  });
+});
+
+describe('API Vue Plan (CA-12, CA-13)', () => {
+  const post = (s: Awaited<ReturnType<typeof setup>>, url: string, payload: Record<string, unknown>) =>
+    s.app.inject({ method: 'POST', url: `/api/v1${url}`, headers: { cookie: s.cookie }, payload });
+
+  async function fixture() {
+    const s = await setup();
+    const ctx = { db: s.db, sqlite: s.sqlite, actor: 'me' as const };
+    const o = createObjective(ctx, { title: 'Obj', deadline: '2026-12-20' });
+    const groupIds = [listGroups(ctx)[0].id];
+    const a = createProject(ctx, { title: 'A', groupIds, objectiveId: o.id, dependsOn: [] });
+    const b = createProject(ctx, { title: 'B', groupIds, objectiveId: o.id, dependsOn: [] });
+    const deps = () => s.db.select().from(schema.projectDependency).all();
+    const audits = () => s.db.select().from(schema.auditLog).all().length;
+    return { s, a, b, deps, audits };
+  }
+
+  it('CA-12 /plan/apply with an invalid op applies nothing and answers a French 422', async () => {
+    const { s, a, b, deps } = await fixture();
+    const res = await post(s, '/plan/apply', {
+      ops: [
+        { op: 'setDependencies', projectId: b.id, dependsOn: [a.id] }, // valid
+        { op: 'setDependencies', projectId: a.id, dependsOn: [b.id] }, // loop
+      ],
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('DEPENDENCY_CYCLE');
+    expect(res.json().message).toMatch(/[a-zé]+ /i);
+    expect(res.json().message).not.toMatch(/^[A-Z_]+$/);
+    expect(deps()).toHaveLength(0);
+    const ok = await post(s, '/plan/apply', {
+      ops: [{ op: 'setDependencies', projectId: b.id, dependsOn: [a.id] }],
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json().applied).toBe(1);
+    expect(deps()).toHaveLength(1);
+  });
+
+  it('CA-12 a stale baseVersion is 409 PLAN_APPLY_CONFLICT and writes nothing', async () => {
+    const { s, a, b, deps } = await fixture();
+    const graph = await s.app.inject({ url: '/api/v1/plan-graph', headers: { cookie: s.cookie } });
+    const { version } = graph.json();
+    await post(s, '/plan/apply', {
+      ops: [{ op: 'setDependencies', projectId: b.id, dependsOn: [a.id] }],
+      baseVersion: version,
+    });
+    const before = deps().length;
+    const stale = await post(s, '/plan/apply', {
+      ops: [{ op: 'setDependencies', projectId: b.id, dependsOn: [] }],
+      baseVersion: version,
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().code).toBe('PLAN_APPLY_CONFLICT');
+    expect(deps()).toHaveLength(before);
+  });
+
+  it('CA-13 /plan/preview recomputes capacity and alerts without writing anything', async () => {
+    const { s, a, b, deps, audits } = await fixture();
+    const n = audits();
+    const res = await post(s, '/plan/preview', {
+      ops: [{ op: 'setDependencies', projectId: b.id, dependsOn: [a.id] }],
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(Array.isArray(body.capacity)).toBe(true);
+    expect(Array.isArray(body.alerts)).toBe(true);
+    expect(body.objectives[0]).toMatchObject({ pathMonths: 2 }); // the draft chain A → B is counted
+    expect(audits()).toBe(n);
+    expect(deps()).toHaveLength(0);
+    const bad = await post(s, '/plan/preview', {
+      ops: [{ op: 'setDependencies', projectId: a.id, dependsOn: [a.id] }],
+    });
+    expect(bad.statusCode).toBe(422);
+    expect(audits()).toBe(n);
   });
 });

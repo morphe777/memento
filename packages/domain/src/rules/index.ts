@@ -4,6 +4,7 @@ export * from './delay.ts';
 export * from './engine.ts';
 export * from './graph.ts';
 export * from './objectives.ts';
+export * from './plan.ts';
 export * from './projects.ts';
 export * from './recurrence.ts';
 export * from './reports.ts';

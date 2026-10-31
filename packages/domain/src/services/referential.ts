@@ -230,6 +230,7 @@ export const getMetaObjective = (ctx: Ctx, id: string) =>
 
 export function createMetaObjective(ctx: Ctx, input: MetaObjectiveCreate) {
   return tx(ctx, () => {
+    if (input.primaryDomainId) getDomain(ctx, input.primaryDomainId);
     const id = newId();
     ctx.db
       .insert(metaObjective)
@@ -249,6 +250,7 @@ export function createMetaObjective(ctx: Ctx, input: MetaObjectiveCreate) {
 export function updateMetaObjective(ctx: Ctx, id: string, patch: MetaObjectivePatch) {
   return tx(ctx, () => {
     const before = getMetaObjective(ctx, id);
+    if (patch.primaryDomainId) getDomain(ctx, patch.primaryDomainId);
     ctx.db
       .update(metaObjective)
       .set({ ...patch, updatedAt: ctxNowIso(ctx) })

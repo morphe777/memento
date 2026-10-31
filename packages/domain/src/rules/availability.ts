@@ -35,32 +35,16 @@ export function availableTaskIds(
 }
 
 /**
- * Same logic for projects of an objective path (DM-51, decision D-12): a project is blocked while a
- * non-free project placed before it is active or paused, or while an explicit prerequisite is not done.
+ * DM-100, DM-106: between projects, dependsOn is the only source of truth and it never blocks. A project is
+ * « waiting » (blocked: informative only) while one of its prerequisites is neither done nor abandoned.
+ * The position in the objective no longer creates an implicit prerequisite.
  */
 export function blockedProjectIds(
-  projects: {
-    id: string;
-    objectiveId: string | null;
-    positionInObjective: number;
-    isFree: boolean;
-    status: string;
-  }[],
+  projects: { id: string; status: string }[],
   deps: { projectId: string; dependsOnProjectId: string }[],
 ): Set<string> {
-  const blocked = new Set<string>();
   const status = new Map(projects.map((p) => [p.id, p.status]));
-  const byObjective = new Map<string, typeof projects>();
-  for (const p of projects)
-    if (p.objectiveId) byObjective.set(p.objectiveId, [...(byObjective.get(p.objectiveId) ?? []), p]);
-  for (const list of byObjective.values()) {
-    const ordered = [...list].sort((a, b) => a.positionInObjective - b.positionInObjective);
-    let open = true;
-    for (const p of ordered) {
-      if (!open && !p.isFree) blocked.add(p.id);
-      if (!p.isFree && ['ready', 'active', 'paused'].includes(p.status)) open = false;
-    }
-  }
+  const blocked = new Set<string>();
   for (const d of deps) {
     const s = status.get(d.dependsOnProjectId);
     if (s && s !== 'done' && s !== 'abandoned') blocked.add(d.projectId);

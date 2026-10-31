@@ -214,14 +214,14 @@ describe('L1 référentiel', () => {
     expect(setProjectMonth(ctx, next.id, '2026-11')).toMatchObject({ status: 'ready', monthFlag: '2026-11' });
     expect(errCode(() => setProjectMonth(ctx, next.id, '2026-09'))).toBe('MONTH_IN_PAST');
     ctx.setNow('2026-11-01T08:00:00.000Z');
-    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 1, activated: 1 });
+    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 1, activated: 1, missed: 0 });
     expect(getProject(ctx, project.id)).toMatchObject({
       status: 'ready',
       monthFlag: null,
       previousMonthFlag: '2026-10',
     });
     expect(getProject(ctx, next.id).status).toBe('active');
-    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 0, activated: 0 });
+    expect(rollMonth(ctx, '2026-11')).toEqual({ backToReady: 0, activated: 0, missed: 0 });
     expect(setProjectMonth(ctx, next.id, null).status).toBe('ready');
   });
 
