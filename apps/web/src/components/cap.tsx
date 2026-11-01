@@ -65,10 +65,14 @@ export function MotiveField({
   );
 }
 
+/** Seconds between two sets of « why » (iPhone: one at a time; PC / iPad: three). */
+const TURN_S = { compact: 5, wide: 8 };
+
 /**
- * Ma semaine: up to three « why » at a glance — month projects first, then quarter objectives and
- * meta-objectives. The set turns each day; a click on ↻ shows the next ones.
- * iPhone (`compact`, user request 01/11/2026): one at a time, the next one every 5 s.
+ * Ma semaine: « why » at a glance — month projects first, then quarter objectives and meta-objectives. The
+ * starting set changes each day, then turns by itself (user request 01/11/2026): one at a time every 5 s on
+ * iPhone (`compact`), three every 8 s elsewhere; ↻ shows the next ones. Always one line: what does not fit ends
+ * with « … » (the full text is in the tooltip).
  */
 export function CapLine({ compact = false }: { compact?: boolean }) {
   const me = useMe();
@@ -77,16 +81,16 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
   const [shift, setShift] = useState(0);
   const all = q.data?.reminders ?? [];
   const SHOWN = compact ? 1 : 3;
-  const turns = compact && all.length > 1;
+  const turns = all.length > SHOWN;
   useEffect(() => {
     if (!turns) return;
-    const t = setInterval(() => setShift((s) => s + 1), 5000);
+    const t = setInterval(() => setShift((s) => s + 1), (compact ? TURN_S.compact : TURN_S.wide) * 1000);
     return () => clearInterval(t);
-  }, [turns]);
+  }, [turns, compact]);
   if (!q.data) return null;
   if (!all.length)
     return (
-      <Link to="/cap" className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+      <Link to="/cap" className="text-[13px] truncate" style={{ color: 'var(--text-faint)' }}>
         Cap : écris en quelques mots le pourquoi de tes objectifs →
       </Link>
     );
@@ -94,25 +98,27 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
   const shown = Array.from({ length: Math.min(SHOWN, all.length) }, (_, i) => all[(start + i) % all.length]);
   return (
     <div
-      className={compact ? 'flex items-center gap-3' : 'flex items-center gap-x-5 gap-y-1 flex-wrap'}
-      style={{ fontSize: compact ? 14 : 15, color: 'var(--text-muted)', minHeight: compact ? 28 : undefined }}
+      className="flex items-center gap-3 min-w-0"
+      style={{ fontSize: compact ? 14 : 15, color: 'var(--text-muted)', minHeight: 28 }}
     >
-      <Link to="/cap" className="label-caps hover:no-underline" style={{ color: 'var(--primary)' }}>
+      <Link to="/cap" className="label-caps hover:no-underline flex-none" style={{ color: 'var(--primary)' }}>
         Cap
       </Link>
-      {shown.map((r) => (
-        <span
-          key={compact ? `${r.type}-${r.id}-${shift}` : `${r.type}-${r.id}`}
-          title={r.title}
-          className={compact ? 'cap-turn flex-1 min-w-0' : undefined}
-        >
-          <MotiveText text={r.motive} />
-        </span>
-      ))}
-      {all.length > SHOWN && !compact && (
+      <span
+        key={shift}
+        className="cap-turn flex-1 min-w-0 truncate"
+        title={shown.map((r) => r.motive.replaceAll('**', '')).join(' · ')}
+      >
+        {shown.map((r, i) => (
+          <span key={`${r.type}-${r.id}`} style={{ marginLeft: i ? 20 : 0 }}>
+            <MotiveText text={r.motive} />
+          </span>
+        ))}
+      </span>
+      {turns && !compact && (
         <button
           type="button"
-          className="icon-btn"
+          className="icon-btn flex-none"
           aria-label="Autres rappels"
           title="Autres rappels"
           onClick={() => setShift((s) => s + 1)}

@@ -26,6 +26,14 @@ import {
 import { notifyFrozenReports, runDailyRecapJob, runDueJobs } from '../src/services/jobs.ts';
 import { getExecution, setWeekItems } from '../src/services/planning.ts';
 import { completeProject, createProject, promoteProject, setProjectMonth } from '../src/services/projects.ts';
+import {
+  addPushSubscription,
+  listPushDevices,
+  type PushSender,
+  pushPublicKey,
+  removePushSubscription,
+  sendPush,
+} from '../src/services/push.ts';
 import { completeTask, createTask } from '../src/services/tasks.ts';
 import { patchSettings } from '../src/settings.ts';
 import { lookups, makeCtx } from './helpers.ts';
@@ -422,5 +430,55 @@ describe('D-77 « Bilan du jour »', () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+
+  it('Web Push: subscribe, send, a gone device is forgotten, recap and report notices without Telegram', async () => {
+    const ctx = makeCtx('2026-11-02T07:00:00.000Z'); // Monday W45, 08:00 Paris
+    const { publicKey } = pushPublicKey(ctx);
+    expect(publicKey.length).toBeGreaterThan(40);
+    expect(pushPublicKey(ctx).publicKey).toBe(publicKey); // generated once
+    const sub = (n: string) => ({
+      endpoint: `https://web.push.apple.com/${n}`,
+      keys: { p256dh: 'p', auth: 'a' },
+      label: n,
+    });
+    addPushSubscription(ctx, sub('iphone'));
+    addPushSubscription(ctx, sub('ipad'));
+    addPushSubscription(ctx, sub('iphone')); // renewed, not duplicated
+    expect(listPushDevices(ctx).devices.map((d) => d.label)).toEqual(['ipad', 'iphone']);
+    expect(JSON.stringify(listPushDevices(ctx))).not.toContain('"auth"');
+
+    const got: { endpoint: string; payload: { title: string; body: string; url: string } }[] = [];
+    const sender: PushSender = async (s, payload) => {
+      if (s.endpoint.endsWith('ipad')) throw Object.assign(new Error('gone'), { statusCode: 410 });
+      got.push({ endpoint: s.endpoint, payload: JSON.parse(payload) });
+    };
+    expect(await sendPush(ctx, { title: 'T', body: 'B', url: '/semaine' }, sender)).toEqual({
+      sent: 1,
+      failed: 0,
+      removed: 1,
+    });
+    expect(listPushDevices(ctx).devices.map((d) => d.label)).toEqual(['iphone']);
+
+    // No Telegram: the frozen report is still announced, the tap opens the report.
+    const ran = runDueJobs(ctx);
+    expect(await notifyFrozenReports(ctx, {}, ran, sender)).toMatchObject({ notify_week: 'done' });
+    const notice = got.find((g) => g.payload.title === '📊 Rapport de la semaine prêt')!.payload;
+    expect(notice.body).toContain('Semaine 44');
+    expect(notice.url).toMatch(/^\/rapports\/\S+$/);
+
+    // Evening recap job runs with push only (Telegram not set up).
+    ctx.setNow('2026-11-02T18:31:00.000Z'); // 19:31 Paris
+    patchSettings(ctx, { 'notify.daily_recap': { enabled: true, time: '19:30', ai: false } });
+    expect(await runDailyRecapJob(ctx, {}, sender)).toBe('done');
+    expect(got.at(-1)!.payload.url).toBe('/semaine');
+    expect(got.at(-1)!.payload.title).toBe('🌱 Lundi 2 novembre');
+    expect(await sendDailyRecap(ctx, { env: {}, llm: null, pushSender: sender })).toMatchObject({
+      pushed: 1,
+    });
+    removePushSubscription(ctx, sub('iphone').endpoint);
+    await expect(sendDailyRecap(ctx, { env: {}, llm: null, pushSender: sender })).rejects.toThrow(
+      /Aucun canal/,
+    );
   });
 });

@@ -39,6 +39,7 @@ import {
 } from '../time.ts';
 import { buildEngineInput, getExecution } from './planning.ts';
 import { serializeProjects } from './projects.ts';
+import { hasPushDevices, listPushDevices, type PushMessage, type PushSender, sendPush } from './push.ts';
 
 type Env = Record<string, string | undefined>;
 const doneDate = (iso: string | null) => (iso ? parisDate(new Date(iso)) : null);
@@ -302,6 +303,7 @@ export function notifyStatus(ctx: Pick<Ctx, 'db'>, env: Env) {
     tokenHint: token ? `…${token.slice(-4)}` : null,
     tokenEnv: TELEGRAM_TOKEN_ENV,
     configured: !!token && !!s['notify.telegram_chat_id'],
+    pushDevices: listPushDevices(ctx).devices.length,
   };
 }
 
@@ -348,6 +350,8 @@ export interface SendRecapOptions {
   /** Replaces the configured AI provider (tests). Null: no AI. */
   llm?: Llm | null;
   date?: string;
+  /** Replaces the Web Push sender (tests). */
+  pushSender?: PushSender;
 }
 
 /** The message of the day: written by the AI when enabled and configured, else the plain report. */
@@ -366,22 +370,44 @@ export async function buildDailyMessage(ctx: Ctx, opts: SendRecapOptions) {
   }
 }
 
-/** Builds the message of the day and sends it on Telegram (plain text if Telegram refuses the HTML). */
+/** Telegram (plain text if Telegram refuses the HTML). */
+async function sendTelegramHtml(token: string, chatId: string, html: string) {
+  const base = { chat_id: chatId, link_preview_options: { is_disabled: true } };
+  try {
+    await telegram(token, 'sendMessage', { ...base, text: html, parse_mode: 'HTML' });
+  } catch (e) {
+    if (!/parse entities|can't parse|message is too long/i.test((e as Error).message)) throw e;
+    await telegram(token, 'sendMessage', { ...base, text: stripTelegramHtml(html).slice(0, 4096) });
+  }
+}
+
+/** A Telegram HTML message as a push notification: first line as title, the rest as body. */
+export function htmlToPush(html: string, url: string): PushMessage {
+  const lines = stripTelegramHtml(html)
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  return { title: lines[0] ?? 'Mémento', body: lines.slice(1).join('\n'), url };
+}
+
+/**
+ * Builds the message of the day and sends it on Telegram and, Web Push (user request 01/11/2026), to every
+ * subscribed device. Fails when neither channel is set up, or when Telegram fails.
+ */
 export async function sendDailyRecap(ctx: Ctx, opts: SendRecapOptions) {
   const s = getSettings(ctx);
   const token = telegramToken(ctx, opts.env);
   const chatId = s['notify.telegram_chat_id'];
-  if (!token || !chatId)
-    throw new DomainError('NOTIFY_NOT_CONFIGURED', 'Telegram non configuré (jeton du bot et chat).');
+  const push = hasPushDevices(ctx);
+  if ((!token || !chatId) && !push)
+    throw new DomainError(
+      'NOTIFY_NOT_CONFIGURED',
+      'Aucun canal : configure Telegram (jeton du bot et chat) ou active les notifications sur un appareil.',
+    );
   const msg = await buildDailyMessage(ctx, opts);
-  const base = { chat_id: chatId, link_preview_options: { is_disabled: true } };
-  try {
-    await telegram(token, 'sendMessage', { ...base, text: msg.text, parse_mode: 'HTML' });
-  } catch (e) {
-    if (!/parse entities|can't parse|message is too long/i.test((e as Error).message)) throw e;
-    await telegram(token, 'sendMessage', { ...base, text: stripTelegramHtml(msg.text).slice(0, 4096) });
-  }
-  return { sent: true, ...msg };
+  const pushed = push ? await sendPush(ctx, htmlToPush(msg.text, '/semaine'), opts.pushSender) : null;
+  if (token && chatId) await sendTelegramHtml(token, chatId, msg.text);
+  return { sent: true, pushed: pushed?.sent ?? 0, ...msg };
 }
 
 /**
@@ -393,11 +419,13 @@ export async function notifyReportReady(
   env: Env,
   kind: 'week' | 'month' | 'quarter',
   periodKey: string,
+  pushSender?: PushSender,
 ): Promise<'done' | 'skipped'> {
   const s = getSettings(ctx);
   const token = telegramToken(ctx, env);
   const chatId = s['notify.telegram_chat_id'];
-  if (!s['notify.reports'] || !token || !chatId) return 'skipped';
+  const push = hasPushDevices(ctx);
+  if (!s['notify.reports'] || ((!token || !chatId) && !push)) return 'skipped';
   if (isOnVacation(parisDate(ctxNow(ctx)), s['notify.vacations'])) return 'skipped';
   const row = ctx.db
     .select()
@@ -409,18 +437,19 @@ export async function notifyReportReady(
     period?: { label?: string };
     global?: { title: string; sentence: string };
   };
-  await telegram(token, 'sendMessage', {
-    chat_id: chatId,
-    link_preview_options: { is_disabled: true },
-    parse_mode: 'HTML',
-    text: reportNoticeHtml({
-      kind,
-      id: row.id,
-      label: payload.period?.label ?? periodKey,
-      global: payload.global ?? null,
-      appUrl: s['notify.app_url'],
-    }),
+  const html = reportNoticeHtml({
+    kind,
+    id: row.id,
+    label: payload.period?.label ?? periodKey,
+    global: payload.global ?? null,
+    appUrl: s['notify.app_url'],
   });
+  // The push opens the report itself: no address needed, the link stays inside the app.
+  if (push) {
+    const p = htmlToPush(html, `/rapports/${row.id}`);
+    await sendPush(ctx, { ...p, body: p.body.replace(/\n?https?:\/\/\S+$/, '') }, pushSender);
+  }
+  if (token && chatId) await sendTelegramHtml(token, chatId, html);
   return 'done';
 }
 

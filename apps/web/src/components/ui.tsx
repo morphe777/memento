@@ -101,13 +101,31 @@ export function Kpi({
   );
 }
 
+/** R-06 in plain words, for the (i) of the delay bars (user request 01/11/2026). */
+export const DELAY_HELP =
+  "Pour chaque projet du mois. Temps prévu à ce jour = durée estimée de ses tâches (hors annulées) × part des jours écoulés entre sa date de début et son échéance, aujourd'hui compris. Écart = durée estimée des tâches faites − temps prévu à ce jour : le temps réel passé n'entre pas en compte, une tâche sans durée compte 0. Moins de 15 min d'écart : à l'heure ; la barre est pleine à ±4 h. Sans date de début ou d'échéance, rien n'est prévu : tout ce qui est fait compte en avance. « Replanifier » repart du jour du recalage et du temps déjà fait : la barre revient au centre.";
+
+/** The legend of the delay bars, written once above them (user request 01/11/2026). */
+export function DelayLegend() {
+  return (
+    <div className="flex justify-between items-center text-[11px]" style={{ color: 'var(--text-faint)' }}>
+      <span style={{ color: 'var(--late-text)' }}>← retard</span>
+      <span className="flex items-center gap-1">
+        centre = à l'heure
+        <InfoTip>{DELAY_HELP}</InfoTip>
+      </span>
+      <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
+    </div>
+  );
+}
+
 /** Centred delay bar (R-06): centre = on time, left = late (orange), right = ahead (blue); ±4 h = half bar. */
 export function DelayBar({
   title,
   color,
   deltaMin,
   to,
-  showLegend = true,
+  showLegend = false,
 }: {
   title: string;
   color: string;

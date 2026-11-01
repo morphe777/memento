@@ -213,9 +213,12 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
                   Tous les projets
                 </Link>
               )}
-              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-                + Projet / idée
-              </button>
+              {/* iPhone: the « + » button creates (user request 01/11/2026). */}
+              {!phone && (
+                <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                  + Projet / idée
+                </button>
+              )}
             </>
           }
         />
@@ -1453,6 +1456,7 @@ type IdeaSort = 'title' | 'domain' | 'group' | 'createdAt';
 export function IdeasPage() {
   const [domains, setDomains] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  const phone = useIsPhone();
   usePageFab('Nouvelle idée', () => setCreating(true));
   const q = useQuery({ queryKey: ['ideas'], queryFn: () => get<Project[]>('/ideas') });
   const dl = useDomainLookup();
@@ -1484,9 +1488,12 @@ export function IdeasPage() {
           eyebrow="Vider la tête · les plus anciennes en premier"
           title="Idées"
           actions={
-            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
-              + Idée
-            </button>
+            // iPhone: the « + » button creates (user request 01/11/2026).
+            phone ? undefined : (
+              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                + Idée
+              </button>
+            )
           }
         />
       </div>

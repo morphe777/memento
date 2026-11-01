@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
   DelayBar,
+  DelayLegend,
   DomainBars,
   Empty,
   ErrorBox,
@@ -386,10 +387,8 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
         >
           <div className="flex justify-between items-baseline gap-3">
             <h2 className="h2">Avance / retard · projets du mois</h2>
-            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-              centre = à l'heure
-            </span>
           </div>
+          {p.delays.length > 0 && <DelayLegend />}
           {p.delays.length === 0 && (
             <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
               Aucun projet du mois.
@@ -405,10 +404,6 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
               showLegend={false}
             />
           ))}
-          <div className="flex justify-between text-[11px]" style={{ color: 'var(--text-ghost)' }}>
-            <span>← retard</span>
-            <span>avance →</span>
-          </div>
         </section>
         <section
           className="card flex flex-col gap-3 min-w-0"

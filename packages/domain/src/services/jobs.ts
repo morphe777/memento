@@ -18,6 +18,7 @@ import {
 import { notifyReportReady, notifyStatus, sendDailyRecap } from './daily.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
+import type { PushSender } from './push.ts';
 import { closeRecurringObjectives } from './recurrence.ts';
 import { generateReport } from './reports.ts';
 
@@ -110,11 +111,13 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
 export async function runDailyRecapJob(
   ctx: Ctx,
   env: Record<string, string | undefined>,
+  pushSender?: PushSender,
 ): Promise<'done' | 'skipped' | 'failed'> {
   const s = getSettings(ctx);
   const r = s['notify.daily_recap'];
   const { date, time } = parisClock(ctxNow(ctx));
-  if (!r.enabled || time < r.time || !notifyStatus(ctx, env).configured) return 'skipped';
+  const st = notifyStatus(ctx, env);
+  if (!r.enabled || time < r.time || (!st.configured && !st.pushDevices)) return 'skipped';
   if (isoDay(date) === 6 || isOnVacation(date, s['notify.vacations'])) return 'skipped';
   const { jobRun } = schema;
   if (
@@ -139,7 +142,7 @@ export async function runDailyRecapJob(
     })
     .run();
   try {
-    await sendDailyRecap(ctx, { env, date });
+    await sendDailyRecap(ctx, { env, date, pushSender });
     return 'done';
   } catch (e) {
     ctx.db
@@ -159,6 +162,7 @@ export async function notifyFrozenReports(
   ctx: Ctx,
   env: Record<string, string | undefined>,
   ran: Record<string, string>,
+  pushSender?: PushSender,
 ): Promise<Record<string, string>> {
   const { date } = parisClock(ctxNow(ctx));
   const periods = {
@@ -170,7 +174,7 @@ export async function notifyFrozenReports(
   for (const kind of ['week', 'month', 'quarter'] as const) {
     if (ran[kind] !== 'done') continue;
     try {
-      out[`notify_${kind}`] = await notifyReportReady(ctx, env, kind, periods[kind]);
+      out[`notify_${kind}`] = await notifyReportReady(ctx, env, kind, periods[kind], pushSender);
     } catch (e) {
       out[`notify_${kind}`] = `failed: ${(e as Error).message}`;
     }
