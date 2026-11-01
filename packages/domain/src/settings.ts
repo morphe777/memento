@@ -66,6 +66,9 @@ export const settingsSchema = z.object({
     .regex(/^(-?\d{1,20}|@\w{3,64})?$/),
   // D-78: no evening report during these periods; the weeks they touch never break the week streak.
   'notify.vacations': z.array(vacationSchema).max(100),
+  // User request 01/11/2026: a Telegram notice when a report is frozen, with a link if the address is known.
+  'notify.reports': z.boolean(),
+  'notify.app_url': z.union([z.literal(''), z.url({ protocol: /^https?$/ })]),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -116,6 +119,8 @@ export const DEFAULT_SETTINGS: Settings = {
   'notify.daily_recap': { enabled: true, time: '19:30', ai: true }, // sent only once Telegram is set up
   'notify.telegram_chat_id': '',
   'notify.vacations': [],
+  'notify.reports': true, // sent only once Telegram is set up
+  'notify.app_url': '', // e.g. https://memento.example.lan: the notice then links to the report
 };
 
 export const settingsPatchSchema = settingsSchema.partial();

@@ -333,12 +333,17 @@ export function QuickAdd({
   placeholder,
   defaultDuration = 30,
   withSchedule = false,
+  compact = false,
+  inputId,
 }: {
   projectId: string | null;
   placeholder: string;
   defaultDuration?: TaskDuration | null;
   /** Inbox: deadline and recurrence can be set right away (RB-11). */
   withSchedule?: boolean;
+  /** One line whatever the width: a wide title, a narrow duration on its right, « + » (project page). */
+  compact?: boolean;
+  inputId?: string;
 }) {
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState<string>(defaultDuration ? String(defaultDuration) : '');
@@ -362,24 +367,26 @@ export function QuickAdd({
   );
   return (
     <form
-      className="flex flex-wrap gap-2 items-center"
+      className={compact ? 'flex gap-2 items-center' : 'flex flex-wrap gap-2 items-center'}
       onSubmit={(e) => {
         e.preventDefault();
         if (title.trim()) add.mutate(title.trim());
       }}
     >
       <input
+        id={inputId}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         placeholder={placeholder}
         aria-label={placeholder}
-        style={{ flex: '1 1 240px', minWidth: 0 }}
+        enterKeyHint="done"
+        style={{ flex: compact ? '1 1 0' : '1 1 240px', minWidth: 0 }}
       />
       <select
         value={duration}
         onChange={(e) => setDuration(e.target.value)}
         aria-label="Durée"
-        style={{ flex: '0 1 112px', minWidth: 0 }}
+        style={compact ? { flex: 'none', width: 76 } : { flex: '0 1 112px', minWidth: 0 }}
       >
         <option value="">Durée ?</option>
         <DurationOptions />
@@ -408,8 +415,15 @@ export function QuickAdd({
           </select>
         </>
       )}
-      <button type="submit" className="btn" disabled={!title.trim() || add.isPending}>
-        Ajouter
+      <button
+        type="submit"
+        className="btn"
+        disabled={!title.trim() || add.isPending}
+        aria-label="Ajouter"
+        title="Ajouter"
+        style={compact ? { flex: 'none', width: 44, padding: 0 } : undefined}
+      >
+        {compact ? '+' : 'Ajouter'}
       </button>
     </form>
   );

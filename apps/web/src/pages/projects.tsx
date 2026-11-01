@@ -6,9 +6,10 @@ import { useEffect, useRef, useState } from 'react';
 import { AiFill, type AiRequest, WithWand } from '../components/ai-fill.tsx';
 import { BreakdownButton } from '../components/breakdown.tsx';
 import { MotiveField } from '../components/cap.tsx';
+import { CaptureSheet } from '../components/capture.tsx';
 import { AiDescribe, DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { pathDefaultGroups, rememberGroups } from '../components/path.tsx';
-import { Breadcrumb } from '../components/shell.tsx';
+import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import {
   GroupPicker,
   QuickAdd,
@@ -37,7 +38,15 @@ import {
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
+import {
+  toast,
+  useAction,
+  useDomainLookup,
+  useGroups,
+  useIsPhone,
+  useMe,
+  useSettings,
+} from '../lib/hooks.ts';
 import type {
   InboxPage as InboxPageData,
   Objective,
@@ -53,13 +62,14 @@ type View = 'tree' | 'list' | 'kanban';
 
 function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent?: string }) {
   const dl = useDomainLookup();
+  const phone = useIsPhone();
   return (
     <Link
       to="/projets/$id"
       params={{ id: p.id }}
       className="row-line flex items-center gap-3 hover:no-underline"
       style={{
-        padding: '10px 16px',
+        padding: phone ? '10px 12px' : '10px 16px',
         opacity: muted ? 0.6 : 1,
         borderLeft: accent ? `3px solid ${accent}` : undefined,
       }}
@@ -87,14 +97,25 @@ function ProjectLine({ p, muted, accent }: { p: Project; muted?: boolean; accent
           </svg>
         )}
       </span>
-      {p.monthFlag && <StatusPill>Projet du mois</StatusPill>}
-      <StatusPill tone={p.status === 'active' ? 'ok' : 'neutral'}>{STATUS_LABEL[p.status]}</StatusPill>
-      <span
-        className="mono text-[12px] flex-none"
-        style={{ color: 'var(--text-faint)', width: 90, textAlign: 'right' }}
-      >
-        {fmtMin(p.taskStats.doneMin)} / {fmtMin(p.taskStats.totalMin)}
-      </span>
+      {phone ? (
+        // iPhone (user request 01/11/2026): one short pill, so the title keeps the width of the line.
+        <StatusPill tone={p.status === 'active' ? 'ok' : 'neutral'}>
+          {p.monthFlag ? `Mois · ${STATUS_LABEL[p.status].toLowerCase()}` : STATUS_LABEL[p.status]}
+        </StatusPill>
+      ) : (
+        <>
+          {p.monthFlag && <StatusPill>Projet du mois</StatusPill>}
+          <StatusPill tone={p.status === 'active' ? 'ok' : 'neutral'}>{STATUS_LABEL[p.status]}</StatusPill>
+        </>
+      )}
+      {!phone && (
+        <span
+          className="mono text-[12px] flex-none"
+          style={{ color: 'var(--text-faint)', width: 90, textAlign: 'right' }}
+        >
+          {fmtMin(p.taskStats.doneMin)} / {fmtMin(p.taskStats.totalMin)}
+        </span>
+      )}
     </Link>
   );
 }
@@ -116,8 +137,11 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
   const navigate = useNavigate();
   const settings = useSettings();
   const me = useMe();
-  const view: View =
+  const phone = useIsPhone();
+  const wanted: View =
     filtre === 'a-completer' ? 'list' : (vue ?? settings.data?.['ui.projects_default_view'] ?? 'tree');
+  // No Kanban on iPhone (user request 01/11/2026).
+  const view: View = phone && wanted === 'kanban' ? 'tree' : wanted;
   const [domainFilter, setDomainFilter] = useState<string[]>([]);
   // Arriving on a group (sidebar link): show all its projects, whatever the domain filter was.
   useEffect(() => {
@@ -147,6 +171,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
   const groups = useGroups();
   const dl = useDomainLookup();
   const [creating, setCreating] = useState(false);
+  usePageFab('Nouveau projet', () => setCreating(true));
   const group = groups.data?.find((g) => g.id === groupe);
   const list =
     filtre === 'a-completer'
@@ -202,7 +227,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
           options={[
             { value: 'tree', label: 'Arborescence' },
             { value: 'list', label: 'Liste' },
-            { value: 'kanban', label: 'Kanban' },
+            ...(phone ? [] : [{ value: 'kanban' as const, label: 'Kanban' }]),
           ]}
         />
         {view !== 'kanban' && filtre !== 'a-completer' && (
@@ -251,6 +276,7 @@ export function ProjectsPage({ groupe, vue, filtre }: { groupe?: string; vue?: V
 function ProjectTree({ projects }: { projects: Project[] }) {
   const dl = useDomainLookup();
   const groups = useGroups();
+  const phone = useIsPhone();
   return (
     <div className="flex flex-col gap-5">
       {dl.domains.map((d) => {
@@ -260,7 +286,11 @@ function ProjectTree({ projects }: { projects: Project[] }) {
           .filter((x) => x.ps.length);
         if (!gs.length) return null;
         return (
-          <section key={d.id} className="bin flex flex-col gap-3">
+          <section
+            key={d.id}
+            className="bin flex flex-col gap-3"
+            style={phone ? { padding: '12px 8px', borderRadius: 14 } : undefined}
+          >
             <div className="flex items-center gap-2.5">
               <span className="dot" style={{ width: 10, height: 10, background: dl.colorOf(d) }} />
               <Link to="/domaines/$id" params={{ id: d.id }} className="h2-bin">
@@ -617,8 +647,10 @@ const waitingLine = (titles: (string | undefined)[]) => {
   return known.length ? `Attend ${known.map((t) => `« ${t} »`).join(', ')}` : 'Attend un autre projet';
 };
 
-export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vue?: TaskView }) {
+export function ProjectPage({ id, tache, vue: vueParam }: { id: string; tache?: string; vue?: TaskView }) {
   const navigate = useNavigate();
+  const phone = useIsPhone();
+  const vue = phone && vueParam === 'kanban' ? undefined : vueParam;
   const board = useBoardTasks(id, !!vue);
   const q = useQuery({ queryKey: ['project', id], queryFn: () => get<ProjectDetail>(`/projects/${id}`) });
   const tasks = useQuery({ queryKey: ['tasks', id], queryFn: () => get<Task[]>(`/tasks?projectId=${id}`) });
@@ -631,6 +663,11 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
     enabled: !!objectiveId && (q.data?.waitingOn.length ?? 0) > 0,
   });
   const [editing, setEditing] = useState(false);
+  usePageFab('Nouvelle tâche', () => {
+    const el = document.getElementById('project-new-task');
+    el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    el?.focus();
+  });
   const saveDescription = useAction((description: string) => patch(`/projects/${id}`, { description }), {
     toast: 'Description enregistrée.',
   });
@@ -705,7 +742,8 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
               options={[
                 { value: 'list', label: 'Liste' },
                 { value: 'table', label: 'Tableau' },
-                { value: 'kanban', label: 'Kanban' },
+                // No Kanban on iPhone (user request 01/11/2026).
+                ...(phone ? [] : [{ value: 'kanban' as const, label: 'Kanban' }]),
               ]}
             />
           </div>
@@ -741,12 +779,20 @@ export function ProjectPage({ id, tache, vue }: { id: string; tache?: string; vu
               )}
             </div>
           )}
-          <div style={{ padding: '12px 16px', background: 'var(--surface-2)' }}>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="flex-1 min-w-0">
-                <QuickAdd projectId={p.id} placeholder="Nouvelle tâche…" defaultDuration={60} />
-              </div>
-              <BreakdownButton projectId={p.id} description={p.description} />
+          {/* User request 01/11/2026: « Découper avec l'IA » first, then title + narrow duration on one line. */}
+          <div
+            className="flex flex-col gap-2 items-start"
+            style={{ padding: '12px 16px', background: 'var(--surface-2)' }}
+          >
+            <BreakdownButton projectId={p.id} description={p.description} />
+            <div className="w-full">
+              <QuickAdd
+                projectId={p.id}
+                placeholder="Nouvelle tâche…"
+                defaultDuration={60}
+                compact
+                inputId="project-new-task"
+              />
             </div>
           </div>
         </section>
@@ -1407,6 +1453,7 @@ type IdeaSort = 'title' | 'domain' | 'group' | 'createdAt';
 export function IdeasPage() {
   const [domains, setDomains] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
+  usePageFab('Nouvelle idée', () => setCreating(true));
   const q = useQuery({ queryKey: ['ideas'], queryFn: () => get<Project[]>('/ideas') });
   const dl = useDomainLookup();
   const promote = useAction((id: string) => post(`/projects/${id}/promote`), {
@@ -1499,6 +1546,8 @@ export function InboxPage({ tache }: { tache?: string }) {
   const q = useQuery({ queryKey: ['tasks', 'inbox', 'page'], queryFn: () => get<InboxPageData>('/inbox') });
   const [showDone, setShowDone] = useState(false);
   const [showLater, setShowLater] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  usePageFab('Capturer dans l’Inbox', () => setCapturing(true));
   const dl = useDomainLookup();
   const open = (id: string) => navigate({ to: '/inbox', search: { tache: id } });
   const color = (t: Task) => dl.color(t.domainId);
@@ -1558,6 +1607,7 @@ export function InboxPage({ tache }: { tache?: string }) {
         </section>
       )}
       <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/inbox', search: {} })} />
+      <CaptureSheet open={capturing} onClose={() => setCapturing(false)} />
     </div>
   );
 }

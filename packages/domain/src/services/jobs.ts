@@ -15,7 +15,7 @@ import {
   shiftWeek,
   TZ,
 } from '../time.ts';
-import { notifyStatus, sendDailyRecap } from './daily.ts';
+import { notifyReportReady, notifyStatus, sendDailyRecap } from './daily.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
 import { closeRecurringObjectives } from './recurrence.ts';
@@ -149,4 +149,31 @@ export async function runDailyRecapJob(
       .run();
     return 'failed';
   }
+}
+
+/**
+ * User request 01/11/2026: after `runDueJobs`, a Telegram notice for each report it has just frozen (the week,
+ * month or quarter that ended). A failed sending is logged by the worker, never retried.
+ */
+export async function notifyFrozenReports(
+  ctx: Ctx,
+  env: Record<string, string | undefined>,
+  ran: Record<string, string>,
+): Promise<Record<string, string>> {
+  const { date } = parisClock(ctxNow(ctx));
+  const periods = {
+    week: shiftWeek(isoWeekOf(date), -1),
+    month: shiftMonth(monthOf(date), -1),
+    quarter: shiftQuarter(quarterOf(date), -1),
+  };
+  const out: Record<string, string> = {};
+  for (const kind of ['week', 'month', 'quarter'] as const) {
+    if (ran[kind] !== 'done') continue;
+    try {
+      out[`notify_${kind}`] = await notifyReportReady(ctx, env, kind, periods[kind]);
+    } catch (e) {
+      out[`notify_${kind}`] = `failed: ${(e as Error).message}`;
+    }
+  }
+  return out;
 }

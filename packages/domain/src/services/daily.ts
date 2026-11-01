@@ -3,7 +3,7 @@
 // (Telegram HTML, cleaned up before sending); otherwise a plain report: achievements sentence, KPIs, done tasks.
 // D-78: no day streak but a week streak and the 4-week volume; encouragement and leads when nothing was done;
 // on Sunday the weekend; nothing on Saturday nor during holidays (jobs.ts).
-import { eq, gte, inArray, schema } from '@memento/db';
+import { and, eq, gte, inArray, schema } from '@memento/db';
 import { z } from 'zod';
 import { parseJsonObject } from '../ai/propose.ts';
 import { getAiKey, type Llm, makeLlm, SECRET_SETTING_PREFIX } from '../ai/providers.ts';
@@ -17,6 +17,7 @@ import {
   type RecapFacts,
   type RecapTask,
   recapToTelegramHtml,
+  reportNoticeHtml,
   sanitizeTelegramHtml,
   stripTelegramHtml,
   type WeekVolume,
@@ -381,6 +382,46 @@ export async function sendDailyRecap(ctx: Ctx, opts: SendRecapOptions) {
     await telegram(token, 'sendMessage', { ...base, text: stripTelegramHtml(msg.text).slice(0, 4096) });
   }
   return { sent: true, ...msg };
+}
+
+/**
+ * User request 01/11/2026: tells on Telegram that a report was frozen. Silent when Telegram is not set up, the
+ * notice is turned off or the user is on holiday (D-78: no alert then).
+ */
+export async function notifyReportReady(
+  ctx: Ctx,
+  env: Env,
+  kind: 'week' | 'month' | 'quarter',
+  periodKey: string,
+): Promise<'done' | 'skipped'> {
+  const s = getSettings(ctx);
+  const token = telegramToken(ctx, env);
+  const chatId = s['notify.telegram_chat_id'];
+  if (!s['notify.reports'] || !token || !chatId) return 'skipped';
+  if (isOnVacation(parisDate(ctxNow(ctx)), s['notify.vacations'])) return 'skipped';
+  const row = ctx.db
+    .select()
+    .from(schema.report)
+    .where(and(eq(schema.report.kind, kind), eq(schema.report.periodKey, periodKey)))
+    .get();
+  if (!row) return 'skipped';
+  const payload = row.payload as {
+    period?: { label?: string };
+    global?: { title: string; sentence: string };
+  };
+  await telegram(token, 'sendMessage', {
+    chat_id: chatId,
+    link_preview_options: { is_disabled: true },
+    parse_mode: 'HTML',
+    text: reportNoticeHtml({
+      kind,
+      id: row.id,
+      label: payload.period?.label ?? periodKey,
+      global: payload.global ?? null,
+      appUrl: s['notify.app_url'],
+    }),
+  });
+  return 'done';
 }
 
 // ---------- Holidays (D-78) ----------

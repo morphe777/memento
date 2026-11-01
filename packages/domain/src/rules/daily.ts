@@ -288,3 +288,23 @@ export const stripTelegramHtml = (html: string): string =>
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&amp;/g, '&');
+
+/**
+ * User request 01/11/2026: the Telegram notice sent when the worker freezes a report (week, month, quarter):
+ * its title and verdict when the payload has one, and a link to it when Mémento's address is known.
+ */
+export function reportNoticeHtml(r: {
+  kind: 'week' | 'month' | 'quarter';
+  id: string;
+  label: string;
+  global?: { title: string; sentence: string } | null;
+  appUrl: string;
+}): string {
+  const head = { week: 'Rapport de la semaine', month: 'Rapport du mois', quarter: 'Rapport du trimestre' }[
+    r.kind
+  ];
+  const lines = [`<b>📊 ${head} prêt</b>`, escapeHtml(r.label)];
+  if (r.global) lines.push('', `<b>${escapeHtml(r.global.title)}</b> — ${escapeHtml(r.global.sentence)}`);
+  if (r.appUrl) lines.push('', `${escapeHtml(r.appUrl.replace(/\/+$/, ''))}/rapports/${r.id}`);
+  return lines.join('\n');
+}

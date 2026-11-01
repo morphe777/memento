@@ -288,7 +288,7 @@ export function StatusPill({
   const color = tone === 'ok' ? 'var(--ok)' : tone === 'warn' ? 'var(--late-text)' : 'var(--text-muted)';
   return (
     <span
-      className="text-[12px] font-semibold rounded-full px-2.5 py-0.5"
+      className="text-[12px] font-semibold rounded-full px-2.5 py-0.5 whitespace-nowrap flex-none"
       style={{ background: 'var(--bin)', color }}
     >
       {children}
