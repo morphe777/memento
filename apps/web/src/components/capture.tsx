@@ -1,17 +1,46 @@
 // D-68: quick Inbox capture from anywhere (« + » button on iPhone, sidebar on PC / iPad, ?capturer=1 for an
 // iOS Shortcut or a home-screen bookmark). Title first, short duration by default: an idea is caught in 2 taps.
+// User request 01/11/2026: from Ma semaine the task can go to the week plan instead (`isoWeek`), and from
+// Tâches it can go to a project (`withProject`).
+import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { post } from '../lib/api.ts';
-import { useAction, useDomainLookup } from '../lib/hooks.ts';
+import { get, post, put } from '../lib/api.ts';
+import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
+import type { Project, Task } from '../lib/types.ts';
 import { DurationOptions } from './tasks.tsx';
-import { Panel } from './ui.tsx';
+import { Panel, Tabs } from './ui.tsx';
 
-export function CaptureSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+type Target = 'inbox' | 'week';
+
+export function CaptureSheet({
+  open,
+  onClose,
+  isoWeek,
+  withProject = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  /** Ma semaine: offers « Plan de la semaine » besides the Inbox. */
+  isoWeek?: string;
+  /** The task may belong to a project (Inbox when none is chosen). */
+  withProject?: boolean;
+}) {
   const dl = useDomainLookup();
+  const me = useMe();
+  const month = me.data?.today.slice(0, 7);
+  const [target, setTarget] = useState<Target>(isoWeek ? 'week' : 'inbox');
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState('15');
   const [domainId, setDomainId] = useState('');
+  const [projectId, setProjectId] = useState('');
   const input = useRef<HTMLInputElement>(null);
+  const pickProject = withProject || target === 'week';
+  const projects = useQuery({
+    queryKey: ['projects', 'capture-picker'],
+    // The week plan takes ready or active projects only (setWeekItems).
+    queryFn: () => get<Project[]>(`/projects?status=active,ready${target === 'week' ? '' : ',paused'}`),
+    enabled: open && pickProject,
+  });
   useEffect(() => {
     if (open) setTimeout(() => input.current?.focus(), 50);
   }, [open]);
@@ -19,25 +48,48 @@ export function CaptureSheet({ open, onClose }: { open: boolean; onClose: () => 
     setTitle('');
     setDuration('15');
     setDomainId('');
+    setProjectId('');
   };
   const add = useAction(
-    () =>
-      post('/tasks', {
+    async () => {
+      const t = await post<Task>('/tasks', {
         title: title.trim(),
-        projectId: null,
+        projectId: (pickProject && projectId) || null,
         durationMin: duration ? Number(duration) : null,
-        domainId: domainId || null,
-      }),
+        domainId: (!projectId && domainId) || null,
+      });
+      if (target === 'week' && isoWeek) {
+        const plan = await get<{ items: { taskId: string; kind: string }[] }>(`/week-plans/${isoWeek}`);
+        await put(`/week-plans/${isoWeek}/items`, {
+          items: [...plan.items, { taskId: t.id, kind: 'week' }],
+        });
+      }
+    },
     {
-      toast: 'Ajouté à l’Inbox.',
+      toast:
+        target === 'week'
+          ? 'Ajouté au plan de la semaine.'
+          : projectId
+            ? 'Tâche ajoutée.'
+            : 'Ajouté à l’Inbox.',
       onSuccess: () => {
         reset();
         onClose();
       },
     },
   );
+  // Month projects first: the likeliest home of a new task.
+  const choices = [...(projects.data ?? [])].sort(
+    (a, b) => Number(b.monthFlag === month) - Number(a.monthFlag === month) || a.title.localeCompare(b.title),
+  );
   return (
-    <Panel open={open} onClose={onClose} title="Capturer dans l’Inbox" side={false} width={520}>
+    <Panel
+      open={open}
+      onClose={onClose}
+      title={isoWeek ? 'Ajouter une tâche' : withProject ? 'Nouvelle tâche' : 'Capturer dans l’Inbox'}
+      side={false}
+      width={520}
+    >
       <form
         className="flex flex-col gap-3"
         onSubmit={(e) => {
@@ -45,27 +97,52 @@ export function CaptureSheet({ open, onClose }: { open: boolean; onClose: () => 
           if (title.trim() && !add.isPending) add.mutate(undefined);
         }}
       >
+        {isoWeek && (
+          <Tabs
+            value={target}
+            onChange={setTarget}
+            options={[
+              { value: 'week', label: 'Plan de la semaine' },
+              { value: 'inbox', label: 'Inbox' },
+            ]}
+          />
+        )}
         <input
           ref={input}
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Une idée, une chose à faire…"
+          placeholder={
+            target === 'week' ? 'Une tâche à faire cette semaine…' : 'Une idée, une chose à faire…'
+          }
           aria-label="Titre"
           enterKeyHint="done"
         />
+        {pickProject && (
+          <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Projet">
+            <option value="">Sans projet (Inbox)</option>
+            {choices.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.title}
+                {p.monthFlag === month ? ' · du mois' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
           <select value={duration} onChange={(e) => setDuration(e.target.value)} aria-label="Durée">
             <option value="">Durée ?</option>
             <DurationOptions />
           </select>
-          <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
-            <option value="">Domaine ?</option>
-            {dl.domains.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name}
-              </option>
-            ))}
-          </select>
+          {!projectId && (
+            <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
+              <option value="">Domaine ?</option>
+              {dl.domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <button type="submit" className="btn btn-primary" disabled={!title.trim() || add.isPending}>
           Ajouter

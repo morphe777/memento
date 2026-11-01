@@ -8,6 +8,7 @@ import {
   type RecapFacts,
   type RecapTask,
   recapToTelegramHtml,
+  reportNoticeHtml,
   sanitizeTelegramHtml,
   stripTelegramHtml,
   type WeekVolume,
@@ -22,7 +23,7 @@ import {
   sendDailyRecap,
   setTelegramToken,
 } from '../src/services/daily.ts';
-import { runDailyRecapJob } from '../src/services/jobs.ts';
+import { notifyFrozenReports, runDailyRecapJob, runDueJobs } from '../src/services/jobs.ts';
 import { getExecution, setWeekItems } from '../src/services/planning.ts';
 import { completeProject, createProject, promoteProject, setProjectMonth } from '../src/services/projects.ts';
 import { completeTask, createTask } from '../src/services/tasks.ts';
@@ -365,6 +366,59 @@ describe('D-77 « Bilan du jour »', () => {
       expect(sent).toHaveLength(2);
       expect(sent[1]).toContain('ça arrive');
       expect(removeVacation(ctx, '2026-11-02').periods).toEqual([]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('reportNoticeHtml: title, verdict, link when the address is known (user request 01/11/2026)', () => {
+    const html = reportNoticeHtml({
+      kind: 'week',
+      id: 'r1',
+      label: 'Semaine 44 · 26 oct. – 1 nov.',
+      global: { title: 'Bonne semaine', sentence: 'Cap tenu & rythme OK.' },
+      appUrl: 'https://memento.internal.lcl/',
+    });
+    expect(html).toBe(
+      '<b>📊 Rapport de la semaine prêt</b>\nSemaine 44 · 26 oct. – 1 nov.\n\n<b>Bonne semaine</b> — Cap tenu &amp; rythme OK.\n\nhttps://memento.internal.lcl/rapports/r1',
+    );
+    expect(reportNoticeHtml({ kind: 'month', id: 'r2', label: 'Octobre 2026', appUrl: '' })).toBe(
+      '<b>📊 Rapport du mois prêt</b>\nOctobre 2026',
+    );
+  });
+
+  it('a frozen report is announced on Telegram once, never on holiday nor when turned off', async () => {
+    const ctx = makeCtx('2026-11-02T07:00:00.000Z'); // Monday W45, 08:00 Paris: week plan + W44 report
+    const sent: Record<string, unknown>[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = (async (_url: string, init?: RequestInit) => {
+      sent.push(JSON.parse(String(init?.body)));
+      return new Response(JSON.stringify({ ok: true, result: {} }));
+    }) as typeof fetch;
+    try {
+      // Telegram not set up: nothing sent, nothing fails.
+      const first = runDueJobs(ctx);
+      expect(first.week).toBe('done');
+      expect(await notifyFrozenReports(ctx, {}, first)).toMatchObject({ notify_week: 'skipped' });
+      setTelegramToken(ctx, '123456:ABC-def');
+      patchSettings(ctx, {
+        'notify.telegram_chat_id': '42',
+        'notify.app_url': 'https://memento.internal.lcl',
+      });
+      const out = await notifyFrozenReports(ctx, {}, { week: 'done', month: 'skipped' });
+      expect(out).toEqual({ notify_week: 'done' });
+      expect(sent).toHaveLength(1);
+      expect(String(sent[0].text)).toContain('Rapport de la semaine prêt');
+      expect(String(sent[0].text)).toContain('Semaine 44');
+      expect(String(sent[0].text)).toMatch(/https:\/\/memento\.internal\.lcl\/rapports\/\S+$/);
+      // Already done this week: runDueJobs skips, nothing more is announced.
+      expect(await notifyFrozenReports(ctx, {}, runDueJobs(ctx))).toEqual({});
+      addVacation(ctx, { from: '2026-11-01', to: '2026-11-05' });
+      expect(await notifyFrozenReports(ctx, {}, { week: 'done' })).toEqual({ notify_week: 'skipped' });
+      removeVacation(ctx, '2026-11-01');
+      patchSettings(ctx, { 'notify.reports': false });
+      expect(await notifyFrozenReports(ctx, {}, { week: 'done' })).toEqual({ notify_week: 'skipped' });
+      expect(sent).toHaveLength(1);
     } finally {
       globalThis.fetch = realFetch;
     }

@@ -104,6 +104,11 @@
   --color-ahead: var(--ahead-text);
 }
 
+:root {
+  /* iPhone bottom tabs (user request 01/11/2026): the home indicator may overlap the band's last pixels. */
+  --tabs-pad: max(calc(env(safe-area-inset-bottom) - 14px), 6px);
+  --tabs-h: calc(43px + var(--tabs-pad));
+}
 html,
 body {
   margin: 0;
@@ -163,11 +168,12 @@ select {
   select {
     height: 44px;
   }
-  /* iPhone Safari zooms on any field under 16 px and the page then stays wider than the screen. */
+  /* User request 01/11/2026 (replaces D-80's 16 px): fields use the small text size of the app; Safari's
+     zoom on fields under 16 px is turned off by maximum-scale=1 in index.html (pinch zoom still works). */
   input,
   select,
   textarea {
-    font-size: 16px;
+    font-size: 14px;
   }
 }
 /* Drawers: children keep their height (the body scrolls), the save hint leaves the title room on phones. */
@@ -727,4 +733,20 @@ input[type="checkbox"] {
   opacity: 1;
   color: var(--primary);
   background: color-mix(in srgb, var(--primary) 12%, transparent);
+}
+
+/* iPhone Cap line: the next « why » fades in every 5 s (user request 01/11/2026). */
+.cap-turn {
+  animation: cap-turn 0.5s ease-out;
+}
+@keyframes cap-turn {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cap-turn {
+    animation: none;
+  }
 }

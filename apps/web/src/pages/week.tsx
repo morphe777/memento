@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapLine } from '../components/cap.tsx';
-import { Breadcrumb } from '../components/shell.tsx';
+import { CaptureSheet } from '../components/capture.tsx';
+import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { ActualTime } from '../components/tasks.tsx';
 import {
   BonusBadge,
@@ -557,11 +558,13 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  usePageFab('Ajouter une tâche', () => setAdding(true)); // Inbox or week plan (user request 01/11/2026)
   const view = useWeekView();
   const tasks = useSortedTasks(ex, view);
   return (
     <div className="flex flex-col" style={{ gap: 12 }}>
-      <div className="flex flex-col gap-1" style={{ padding: '16px 8px 0' }}>
+      <div className="flex flex-col gap-1" style={{ padding: '4px 8px 0' }}>
         <div className="eyebrow" style={{ fontSize: 12 }}>
           {eyebrow(ex)}
         </div>
@@ -695,6 +698,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
           ))}
       </div>
       <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
+      <CaptureSheet open={adding} onClose={() => setAdding(false)} isoWeek={ex.isoWeek} />
     </div>
   );
 }

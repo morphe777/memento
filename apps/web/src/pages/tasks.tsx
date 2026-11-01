@@ -4,7 +4,8 @@ import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { Breadcrumb } from '../components/shell.tsx';
+import { CaptureSheet } from '../components/capture.tsx';
+import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { LockIcon, TaskDrawer, useSortSensors } from '../components/tasks.tsx';
 import {
   DomainFilter,
@@ -68,6 +69,8 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
   const q = useBoardTasks();
   const [domains, setDomains] = useState<string[]>([]);
   const [projectId, setProjectId] = useState('');
+  const [adding, setAdding] = useState(false);
+  usePageFab('Nouvelle tâche', () => setAdding(true));
   const all = q.data ?? [];
   const projects = [
     ...new Map(all.filter((t) => t.projectId).map((t) => [t.projectId!, t.projectTitle!])).entries(),
@@ -113,6 +116,7 @@ export function TasksPage({ vue, tache }: { vue?: TaskView; tache?: string }) {
       {q.data && view === 'kanban' && <TaskBoard tasks={tasks} onOpen={open} showProject />}
       {q.data && view === 'table' && <TaskTable tasks={tasks} onOpen={open} showProject />}
       <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/taches', search: { vue } })} />
+      <CaptureSheet open={adding} onClose={() => setAdding(false)} withProject />
     </div>
   );
 }

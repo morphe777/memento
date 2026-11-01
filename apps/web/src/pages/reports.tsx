@@ -252,12 +252,23 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
         eyebrow={generatedLabel(r.generatedAt)}
         title={p.period.label}
         actions={
-          <>
-            <button type="button" className="btn" onClick={() => go('week', p.navigation.previous)}>
-              ‹ Semaine {weekNumber(p.navigation.previous)}
+          // User request 01/11/2026: « W. 42 » and the four buttons on one line (iPhone).
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn whitespace-nowrap"
+              title={`Semaine ${weekNumber(p.navigation.previous)}`}
+              onClick={() => go('week', p.navigation.previous)}
+            >
+              ‹ W. {weekNumber(p.navigation.previous)}
             </button>
-            <button type="button" className="btn" onClick={() => go('week', p.navigation.next)}>
-              Semaine {weekNumber(p.navigation.next)} ›
+            <button
+              type="button"
+              className="btn whitespace-nowrap"
+              title={`Semaine ${weekNumber(p.navigation.next)}`}
+              onClick={() => go('week', p.navigation.next)}
+            >
+              W. {weekNumber(p.navigation.next)} ›
             </button>
             <button type="button" className="btn" onClick={() => go('month', p.navigation.month)}>
               Mois
@@ -274,7 +285,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
             >
               Trimestre
             </button>
-          </>
+          </div>
         }
       />
       <Hero light={p.global.light} title={p.global.title} sentence={p.global.sentence} />

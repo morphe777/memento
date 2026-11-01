@@ -272,7 +272,14 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'month.max_projects',
       'quarter.max_objectives',
     ],
-    planning: ['schedule.week_plan', 'schedule.reports', 'notify.daily_recap', 'notify.telegram_chat_id'],
+    planning: [
+      'schedule.week_plan',
+      'schedule.reports',
+      'notify.daily_recap',
+      'notify.telegram_chat_id',
+      'notify.reports',
+      'notify.app_url',
+    ],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
     ia: [
       'ai.provider',
@@ -1258,6 +1265,30 @@ function NotifyConfig({
           {ready ? '✓ Telegram prêt' : 'Jeton et chat à enregistrer'}
         </span>
       </div>
+      {/* User request 01/11/2026: a notice when the weekly, monthly or quarterly report is frozen. */}
+      <label className="flex items-center gap-2 text-[14px]">
+        <input
+          type="checkbox"
+          checked={s['notify.reports']}
+          onChange={(e) => setS({ ...s, 'notify.reports': e.target.checked })}
+        />
+        Prévenir quand un rapport est prêt
+        <InfoTip>
+          Lundi matin pour la semaine, le 1er pour le mois, au début du trimestre : un message Telegram avec
+          le verdict du rapport et son lien. Rien pendant les vacances.
+        </InfoTip>
+      </label>
+      <Field
+        label="Adresse de Mémento"
+        hint="Pour le lien vers le rapport dans le message, ex. https://memento.internal.lcl"
+      >
+        <input
+          type="url"
+          value={s['notify.app_url']}
+          onChange={(e) => setS({ ...s, 'notify.app_url': e.target.value.trim() })}
+          placeholder="https://memento.internal.lcl"
+        />
+      </Field>
       {preview && (
         <div className="flex flex-col gap-1.5">
           <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>

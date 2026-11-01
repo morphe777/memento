@@ -1,7 +1,7 @@
 // AppShell (sidebar on PC / iPad, bottom tabs on iPhone), Breadcrumb, SearchPalette (Cmd+K), Toasts.
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { Fragment, type ReactNode, useEffect, useRef, useState } from 'react';
+import { createContext, Fragment, type ReactNode, useContext, useEffect, useRef, useState } from 'react';
 import { get, post } from '../lib/api.ts';
 import {
   useAction,
@@ -15,7 +15,7 @@ import {
 } from '../lib/hooks.ts';
 import type { Project, SearchResult } from '../lib/types.ts';
 import { CaptureSheet, PlusIcon } from './capture.tsx';
-import { DomainDot } from './ui.tsx';
+import { DomainDot, Panel } from './ui.tsx';
 
 interface NavItem {
   to: string;
@@ -70,12 +70,33 @@ const NAV: { section: string; items: NavItem[] }[] = [
   },
 ];
 
+// iPhone (user request 01/11/2026): Cap joins the tabs; « ☰ » opens every other page, search and settings.
 const TABS = [
   { to: '/semaine', label: 'Semaine' },
+  { to: '/cap', label: 'Cap' },
   { to: '/projets', label: 'Projets' },
   { to: '/idees', label: 'Idées' },
   { to: '/rapports', label: 'Rapports' },
 ];
+
+/**
+ * iPhone « + » (user request 01/11/2026): what it creates depends on the page (an idea in Idées, a task in
+ * Tâches…). A page registers its action with `usePageFab`; without one (Rapports, Cap…) there is no « + ».
+ */
+interface FabAction {
+  label: string;
+  run: () => void;
+}
+const FabContext = createContext<(a: FabAction | null) => void>(() => {});
+export function usePageFab(label: string, run: () => void) {
+  const set = useContext(FabContext);
+  const latest = useRef(run);
+  latest.current = run;
+  useEffect(() => {
+    set({ label, run: () => latest.current() });
+    return () => set(null);
+  }, [set, label]);
+}
 
 const vueOf = (search: unknown) => (search as { vue?: string } | undefined)?.vue;
 const isActive = (i: NavItem, path: string, vue?: string) =>
@@ -89,6 +110,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [captureOpen, setCaptureOpen] = useState(
     () => new URLSearchParams(window.location.search).get('capturer') === '1',
   );
+  const [fab, setFab] = useState<FabAction | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const settings = useSettings();
   useEffect(() => {
     const c = settings.data?.['experience.badge_color'];
@@ -212,54 +235,48 @@ export function AppShell({ children }: { children: ReactNode }) {
           />
         ))}
       <div className="flex-1 min-w-0 flex flex-col">
-        {phone && (
-          <div
-            className="flex justify-end px-4 pt-3"
-            style={{ paddingTop: 'calc(env(safe-area-inset-top) + 12px)' }}
-          >
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={() => setSearchOpen(true)}
-                aria-label="Rechercher"
-              >
-                Rechercher
-              </button>
-              <SettingsLink active={false} />
-            </div>
-          </div>
-        )}
         <main
           className="flex-1 box-border"
           style={{
-            padding: phone ? '12px 12px 96px' : '32px 24px',
+            // No top bar on iPhone: only the status bar / Dynamic Island inset (user request 01/11/2026).
+            padding: phone ? 'calc(env(safe-area-inset-top) + 8px) 12px 88px' : '32px 24px',
             maxWidth: phone ? undefined : 1408,
             width: '100%',
             margin: '0 auto',
           }}
         >
-          {children}
+          <FabContext.Provider value={setFab}>{children}</FabContext.Provider>
         </main>
       </div>
-      {phone && <BottomTabs />}
-      {phone && (
+      {phone && <BottomTabs onMenu={() => setMenuOpen(true)} />}
+      {phone && fab && (
         <button
           type="button"
           className="fixed z-30 grid place-items-center rounded-full border-0 shadow-lg"
-          aria-label="Capturer dans l’Inbox"
-          onClick={() => setCaptureOpen(true)}
+          aria-label={fab.label}
+          title={fab.label}
+          onClick={fab.run}
           style={{
             right: 16,
-            bottom: 'calc(env(safe-area-inset-bottom) + 84px)',
-            width: 56,
-            height: 56,
+            bottom: 'calc(var(--tabs-h) + 14px)',
+            width: 52,
+            height: 52,
             background: 'var(--inverse-bg)',
             color: 'var(--inverse-text)',
           }}
         >
           <PlusIcon />
         </button>
+      )}
+      {phone && (
+        <PhoneMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          onSearch={() => {
+            setMenuOpen(false);
+            setSearchOpen(true);
+          }}
+        />
       )}
       <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
@@ -549,9 +566,10 @@ export function ThemeSwitch() {
   );
 }
 
-function SettingsLink({ active }: { active: boolean }) {
+function SettingsLink({ active, onClick }: { active: boolean; onClick?: () => void }) {
   return (
     <Link
+      onClick={onClick}
       to="/configuration/$onglet"
       params={{ onglet: 'budget' }}
       aria-label="Configuration"
@@ -615,15 +633,20 @@ function LogoutIcon() {
   );
 }
 
-function BottomTabs() {
+function BottomTabs({ onMenu }: { onMenu: () => void }) {
   const path = useRouterState({ select: (s) => s.location.pathname });
+  const tab = {
+    minHeight: 40,
+    fontSize: 12,
+  };
   return (
     <nav
       aria-label="Navigation principale"
       className="fixed bottom-0 left-0 right-0 z-30 grid"
       style={{
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-        padding: '8px 8px calc(env(safe-area-inset-bottom) + 12px)',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr)) 44px',
+        // User request 01/11/2026: a thinner band; the home indicator may overlap its bottom few pixels.
+        padding: '2px 4px var(--tabs-pad)',
         background: 'var(--surface)',
         borderTop: '1px solid var(--border)',
       }}
@@ -634,9 +657,9 @@ function BottomTabs() {
           <Link
             key={t.to}
             to={t.to}
-            className="grid place-items-center text-[12px] hover:no-underline"
+            className="grid place-items-center hover:no-underline"
             style={{
-              minHeight: 48,
+              ...tab,
               fontWeight: active ? 600 : 400,
               color: active ? 'var(--text)' : 'var(--text-muted)',
             }}
@@ -645,7 +668,86 @@ function BottomTabs() {
           </Link>
         );
       })}
+      <button
+        type="button"
+        className="grid place-items-center border-0 bg-transparent cursor-pointer"
+        style={{ ...tab, color: 'var(--text-muted)' }}
+        aria-label="Menu"
+        onClick={onMenu}
+      >
+        <svg {...ICON} width={18} height={18} aria-hidden>
+          <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+        </svg>
+      </button>
     </nav>
+  );
+}
+
+/** iPhone « ☰ »: every page of the sidebar, search, theme, settings and logout. */
+function PhoneMenu({
+  open,
+  onClose,
+  onSearch,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSearch: () => void;
+}) {
+  const path = useRouterState({ select: (s) => s.location.pathname });
+  const vue = useRouterState({ select: (s) => vueOf(s.location.search) });
+  const me = useMe();
+  const logout = useAction(() => post('/auth/logout'), {
+    onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
+  });
+  return (
+    <Panel open={open} onClose={onClose} title="Menu" side={false} width={420}>
+      <button type="button" className="btn justify-start" onClick={onSearch}>
+        <NavIcon name="search" /> Rechercher
+      </button>
+      {NAV.map((s) => (
+        <div key={s.section} className="flex flex-col">
+          <div className="label-caps pb-1">{s.section}</div>
+          <div className="grid gap-1" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+            {s.items.map((i) => {
+              const active = isActive(i, path, vue);
+              return (
+                <Link
+                  key={i.label}
+                  to={i.to}
+                  search={i.search as never}
+                  onClick={onClose}
+                  className="flex items-center gap-2 px-2 rounded-md text-[14px] hover:no-underline"
+                  style={{
+                    minHeight: 40,
+                    fontWeight: active ? 600 : 400,
+                    background: active ? 'var(--bin)' : undefined,
+                    color: active ? 'var(--text)' : 'var(--text-2)',
+                  }}
+                >
+                  <NavIcon name={i.icon ?? i.to} />
+                  {i.label}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+      <ThemeSwitch />
+      <div className="flex items-center gap-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        <span className="flex-1 min-w-0 truncate font-medium">{me.data?.login}</span>
+        <SettingsLink active={path.startsWith('/configuration')} onClick={onClose} />
+        <button
+          type="button"
+          aria-label="Se déconnecter"
+          title="Se déconnecter"
+          className="icon-btn"
+          onClick={() => logout.mutate(undefined)}
+        >
+          <LogoutIcon />
+        </button>
+      </div>
+      <AppVersion />
+    </Panel>
   );
 }
 
@@ -847,7 +949,10 @@ function Toasts() {
   return (
     <div
       className="fixed z-[60] flex flex-col gap-2"
-      style={{ right: 16, bottom: `calc(env(safe-area-inset-bottom) + ${phone ? 152 : 88}px)` }}
+      style={{
+        right: 16,
+        bottom: phone ? 'calc(var(--tabs-h) + 76px)' : 'calc(env(safe-area-inset-bottom) + 88px)',
+      }}
       aria-live="polite"
     >
       {toasts.map((t) => (

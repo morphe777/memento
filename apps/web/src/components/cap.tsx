@@ -1,7 +1,7 @@
 // D-100: the « why » in a few words (motive), keyword in **bold**, and the reminder line of Ma semaine.
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { get } from '../lib/api.ts';
 import { useMe } from '../lib/hooks.ts';
 import type { Cap } from '../lib/types.ts';
@@ -65,11 +65,10 @@ export function MotiveField({
   );
 }
 
-const SHOWN = 3;
-
 /**
  * Ma semaine: up to three « why » at a glance — month projects first, then quarter objectives and
  * meta-objectives. The set turns each day; a click on ↻ shows the next ones.
+ * iPhone (`compact`, user request 01/11/2026): one at a time, the next one every 5 s.
  */
 export function CapLine({ compact = false }: { compact?: boolean }) {
   const me = useMe();
@@ -77,6 +76,13 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
   const day = Number((me.data?.today ?? '').replaceAll('-', '')) || 0;
   const [shift, setShift] = useState(0);
   const all = q.data?.reminders ?? [];
+  const SHOWN = compact ? 1 : 3;
+  const turns = compact && all.length > 1;
+  useEffect(() => {
+    if (!turns) return;
+    const t = setInterval(() => setShift((s) => s + 1), 5000);
+    return () => clearInterval(t);
+  }, [turns]);
   if (!q.data) return null;
   if (!all.length)
     return (
@@ -88,18 +94,22 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
   const shown = Array.from({ length: Math.min(SHOWN, all.length) }, (_, i) => all[(start + i) % all.length]);
   return (
     <div
-      className="flex items-center gap-x-5 gap-y-1 flex-wrap"
-      style={{ fontSize: compact ? 14 : 15, color: 'var(--text-muted)' }}
+      className={compact ? 'flex items-center gap-3' : 'flex items-center gap-x-5 gap-y-1 flex-wrap'}
+      style={{ fontSize: compact ? 14 : 15, color: 'var(--text-muted)', minHeight: compact ? 28 : undefined }}
     >
       <Link to="/cap" className="label-caps hover:no-underline" style={{ color: 'var(--primary)' }}>
         Cap
       </Link>
       {shown.map((r) => (
-        <span key={`${r.type}-${r.id}`} title={r.title}>
+        <span
+          key={compact ? `${r.type}-${r.id}-${shift}` : `${r.type}-${r.id}`}
+          title={r.title}
+          className={compact ? 'cap-turn flex-1 min-w-0' : undefined}
+        >
           <MotiveText text={r.motive} />
         </span>
       ))}
-      {all.length > SHOWN && (
+      {all.length > SHOWN && !compact && (
         <button
           type="button"
           className="icon-btn"
