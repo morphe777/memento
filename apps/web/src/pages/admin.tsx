@@ -7,7 +7,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, useEffect, useState } from 'react';
 import { PushConfig } from '../components/push.tsx';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
-import { useSortSensors } from '../components/tasks.tsx';
+import { openTask, useSortSensors } from '../components/tasks.tsx';
 import {
   AiDots,
   ConfirmDialog,
@@ -57,14 +57,10 @@ export function ReviewPage() {
         </Link>
       );
     if (c.entityType === 'task')
-      return c.projectId ? (
-        <Link to="/projets/$id" params={{ id: c.projectId }} search={{ tache: c.entityId }}>
+      return (
+        <button type="button" className="link-btn" onClick={() => openTask(c.entityId)}>
           {c.title || 'Tâche'}
-        </Link>
-      ) : (
-        <Link to="/inbox" search={{ tache: c.entityId }}>
-          {c.title || 'Tâche'}
-        </Link>
+        </button>
       );
     return <span>{c.title || ENTITY_LABEL[c.entityType] || c.entityType}</span>;
   };

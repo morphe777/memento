@@ -18,6 +18,7 @@ import {
   globalIndicator,
   minutesByDomain,
   nextOccurrence,
+  objectiveFocus,
   objectiveProgressPct,
   plannedToDateMin,
   promotionGaps,
@@ -259,6 +260,32 @@ describe('RB-12 completion and DM-89 lifecycle', () => {
   });
   it('objective progress = done projects ÷ path', () => {
     expect(objectiveProgressPct([{ status: 'done' }, { status: 'active' }, { status: 'idea' }])).toBe(50);
+  });
+});
+
+describe('D-108 objective focus', () => {
+  const base = {
+    criticality: 2,
+    progressPct: 20,
+    openProjects: 2,
+    remainingMin: 1200,
+    covered: false,
+    daysLeft: 60,
+    capacityToDeadlineMin: 3000,
+  };
+  const f = (o: Partial<typeof base>) => objectiveFocus({ ...base, ...o }).focus;
+  it('tells what to focus on', () => {
+    expect(f({})).toBe('can_wait');
+    expect(f({ covered: true })).toBe('on_track');
+    expect(f({ remainingMin: 180 })).toBe('finish');
+    expect(f({ progressPct: 80, remainingMin: 420 })).toBe('finish');
+    expect(f({ remainingMin: 4000 })).toBe('at_risk');
+    expect(f({ criticality: 3 })).toBe('critical');
+    expect(f({ daysLeft: 20 })).toBe('critical');
+    expect(f({ daysLeft: 20, covered: true })).toBe('on_track');
+    expect(f({ daysLeft: -1, remainingMin: 60 })).toBe('critical');
+    expect(f({ openProjects: 0, progressPct: 0 })).toBe('no_path');
+    expect(f({ openProjects: 0, progressPct: 100 })).toBe('done');
   });
 });
 

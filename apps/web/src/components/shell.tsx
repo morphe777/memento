@@ -16,6 +16,7 @@ import {
 } from '../lib/hooks.ts';
 import type { Project, SearchResult } from '../lib/types.ts';
 import { CaptureSheet, PlusIcon } from './capture.tsx';
+import { openTask, TaskPeekHost } from './tasks.tsx';
 import { DomainDot, Panel } from './ui.tsx';
 
 interface NavItem {
@@ -285,6 +286,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       <CaptureSheet open={captureOpen} onClose={() => setCaptureOpen(false)} />
       <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+      <TaskPeekHost />
       <Toasts />
     </div>
   );
@@ -833,9 +835,7 @@ function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }
     if (r.type === 'objective') navigate({ to: '/objectifs/$id', params: { id: r.id } });
     else if (r.type === 'project' || r.type === 'idea')
       navigate({ to: '/projets/$id', params: { id: r.id } });
-    else if (r.type === 'task' && r.projectId)
-      navigate({ to: '/projets/$id', params: { id: r.projectId }, search: { tache: r.id } });
-    else navigate({ to: '/inbox', search: { tache: r.id } });
+    else openTask(r.id); // a task opens over the current page
   };
   if (!open) return null;
   let i = -1;

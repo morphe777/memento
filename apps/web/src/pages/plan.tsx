@@ -5,6 +5,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { AiProposeButton } from '../components/ai.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
+import { openTask } from '../components/tasks.tsx';
 import {
   DomainBars,
   Duration,
@@ -344,14 +345,14 @@ function ProjectCard({
         </div>
       )}
       {card.tasks.map((t) => (
-        <PlanTaskRow key={t.taskId} t={t} projectId={card.projectId} onToggle={onToggle} busy={busy} />
+        <PlanTaskRow key={t.taskId} t={t} onToggle={onToggle} busy={busy} />
       ))}
       {hidden > 0 && (
         <>
           {open && inbox && (
             <div style={{ background: 'var(--surface-2)' }}>
               {card.hiddenTasks.map((t) => (
-                <PlanTaskRow key={t.taskId} t={t} projectId={null} onToggle={onToggle} busy={busy} />
+                <PlanTaskRow key={t.taskId} t={t} onToggle={onToggle} busy={busy} />
               ))}
             </div>
           )}
@@ -405,12 +406,10 @@ function ProjectCard({
 
 function PlanTaskRow({
   t,
-  projectId,
   onToggle,
   busy,
 }: {
   t: PageTask;
-  projectId: string | null;
   onToggle: (id: string, k: 'week' | 'bonus') => void;
   busy: boolean;
 }) {
@@ -427,14 +426,13 @@ function PlanTaskRow({
     >
       <div className="min-w-0 flex flex-col gap-0.5" style={{ flex: '1 1 260px' }}>
         <div className="flex flex-wrap items-center gap-2">
-          <Link
-            to={projectId ? '/projets/$id' : '/inbox'}
-            params={projectId ? { id: projectId } : undefined}
-            search={{ tache: t.taskId } as never}
-            className="text-[15px] font-medium"
+          <button
+            type="button"
+            className="link-btn text-[15px] font-medium text-left"
+            onClick={() => openTask(t.taskId)}
           >
             {t.title}
-          </Link>
+          </button>
           {t.isExperience && <ExperienceBadge />}
         </div>
         <span

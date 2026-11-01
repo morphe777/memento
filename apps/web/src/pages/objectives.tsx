@@ -33,7 +33,7 @@ import {
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post } from '../lib/api.ts';
 import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
-import { toast, useAction, useDomainLookup, useMe, useSettings } from '../lib/hooks.ts';
+import { toast, useAction, useDomainLookup, useLeaveDeleted, useMe, useSettings } from '../lib/hooks.ts';
 import type {
   MetaObjective,
   Objective,
@@ -316,8 +316,12 @@ export function ObjectivePanel({
     },
   );
   const [deleting, setDeleting] = useState(false);
+  const leave = useLeaveDeleted();
   const remove = useAction(() => del(`/objectives/${objective!.id}`), {
-    onSuccess: () => navigate({ to: '/objectifs' }),
+    onSuccess: () => {
+      onClose();
+      leave(`/objectifs/${objective!.id}`, '/objectifs');
+    },
     toast: 'Objectif supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
@@ -684,11 +688,11 @@ export function MetaPanel({
     }
     onClose();
   };
-  const navigate = useNavigate();
+  const leave = useLeaveDeleted();
   const remove = useAction(() => del(`/meta-objectives/${meta!.id}`), {
     onSuccess: () => {
       onClose();
-      navigate({ to: '/objectifs' });
+      leave(`/meta-objectifs/${meta!.id}`, '/objectifs');
     },
     toast: 'Méta-objectif supprimé.',
   });

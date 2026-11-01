@@ -650,10 +650,21 @@ describe('D-43 Planifier le mois', () => {
     expect(page.candidates.map((c) => c.title)).toEqual(['Combles']);
     expect(page.budget.inboxReserveMin).toBe(30);
     expect(page.alerts.map((a) => a.code)).toContain('OBJECTIVE_EMPTY');
+    // D-108: the objective is guided (3 h left on its path → presque fini) and its alert is levelled.
+    expect(page.objectives[0]).toMatchObject({
+      focus: 'finish',
+      remainingMin: 180,
+      pathTotal: 1,
+      pathDone: 0,
+    });
+    expect(page.alerts.find((a) => a.code === 'OBJECTIVE_EMPTY')?.level).toBe('warn');
     setProjectMonth(ctx, backlog.id, '2026-11');
     const after = getMonthPlanningPage(ctx, '2026-11');
     expect(after.chosen.map((c) => [c.title, c.remainingMin])).toEqual([['Combles', 120]]);
     expect(after.budget.neededMin).toBe(150);
+    expect(after.alerts.find((a) => a.code === 'OFF_OBJECTIVE')?.items).toEqual([
+      { id: backlog.id, title: 'Combles', type: 'project' },
+    ]);
     expect(getMonthPlanningPage(ctx, '2026-10').chosen.map((c) => c.id)).toEqual([pv.id]);
   });
 });

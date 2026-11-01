@@ -66,12 +66,12 @@ export function MotiveField({
 }
 
 /** Seconds between two sets of « why » (iPhone: one at a time; PC / iPad: three). */
-const TURN_S = { compact: 5, wide: 8 };
+const TURN_S = { compact: 5, wide: 7 };
 
 /**
  * Ma semaine: « why » at a glance — month projects first, then quarter objectives and meta-objectives. The
  * starting set changes each day, then turns by itself (user request 01/11/2026): one at a time every 5 s on
- * iPhone (`compact`), three every 8 s elsewhere; ↻ shows the next ones. Always one line: what does not fit ends
+ * iPhone (`compact`), three every 7 s elsewhere (no manual button, user request 01/11/2026). Always one line: what does not fit ends
  * with « … » (the full text is in the tooltip).
  */
 export function CapLine({ compact = false }: { compact?: boolean }) {
@@ -115,18 +115,6 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
           </span>
         ))}
       </span>
-      {turns && !compact && (
-        <button
-          type="button"
-          className="icon-btn flex-none"
-          aria-label="Autres rappels"
-          title="Autres rappels"
-          onClick={() => setShift((s) => s + 1)}
-          style={{ width: 28, height: 28, minHeight: 28 }}
-        >
-          ↻
-        </button>
-      )}
     </div>
   );
 }

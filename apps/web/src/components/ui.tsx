@@ -101,9 +101,32 @@ export function Kpi({
   );
 }
 
-/** R-06 in plain words, for the (i) of the delay bars (user request 01/11/2026). */
-export const DELAY_HELP =
-  "Pour chaque projet du mois. Temps prévu à ce jour = durée estimée de ses tâches (hors annulées) × part des jours écoulés entre sa date de début et son échéance, aujourd'hui compris. Écart = durée estimée des tâches faites − temps prévu à ce jour : le temps réel passé n'entre pas en compte, une tâche sans durée compte 0. Moins de 15 min d'écart : à l'heure ; la barre est pleine à ±4 h. Sans date de début ou d'échéance, rien n'est prévu : tout ce qui est fait compte en avance. « Replanifier » repart du jour du recalage et du temps déjà fait : la barre revient au centre.";
+/** R-06 in plain words, for the (i) of the delay bars (user request 01/11/2026), laid out to be read quickly. */
+export const DELAY_HELP = (
+  <>
+    <span className="tip-p">
+      <b>Pour chaque projet du mois</b>, on compare ce qui est fait à ce qui aurait dû l'être.
+    </span>
+    <span className="tip-p">
+      <b>Prévu à ce jour</b> = durée estimée des tâches (hors annulées) × part des jours écoulés entre début
+      et échéance.
+    </span>
+    <span className="tip-p">
+      <b>Écart</b> = durée estimée des tâches faites − prévu à ce jour.
+      <span className="tip-li tip-dim">le temps réel passé ne compte pas ;</span>
+      <span className="tip-li tip-dim">une tâche sans durée compte 0.</span>
+    </span>
+    <span className="tip-p">
+      <b>Lecture</b>
+      <span className="tip-li">moins de 15 min d'écart : à l'heure ;</span>
+      <span className="tip-li">barre pleine à ±4 h ;</span>
+      <span className="tip-li">sans début ou échéance : tout ce qui est fait compte en avance.</span>
+    </span>
+    <span className="tip-p">
+      <b>Replanifier</b> repart du jour du recalage et du temps déjà fait : la barre revient au centre.
+    </span>
+  </>
+);
 
 /** The legend of the delay bars, written once above them (user request 01/11/2026). */
 export function DelayLegend() {
