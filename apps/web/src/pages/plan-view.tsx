@@ -595,7 +595,8 @@ function PlanEditor({
     const p = draft.projects[pid];
     return p?.objectiveId ? draft.objectives[p.objectiveId]?.quarter : undefined;
   };
-  const portR = coarse ? 22 : 7;
+  // iPad (user request 01/11/2026): dots 30 % smaller than the former 44 px, still easy to grab.
+  const portR = coarse ? 15 : 7;
   const capOf = (q: string) => live.capacity.find((c) => c.quarter === q);
   const curve = (x1: number, y1: number, x2: number, y2: number) => {
     const dx = Math.max(40, Math.abs(x2 - x1) / 2);
@@ -980,20 +981,45 @@ function PlanEditor({
                         style={{
                           cursor: readOnly ? 'default' : 'pointer',
                           height: '100%',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
                           borderRadius: 14,
-                          padding: '10px 14px',
+                          // iPad: the right padding clears the connection dot that sits on the edge.
+                          padding: coarse ? `12px ${portR + 10}px 12px 14px` : '10px 14px',
                           background: dl.color(band.meta.domainId),
                           color: '#fff',
                           display: 'flex',
                           flexDirection: 'column',
                           justifyContent: 'space-between',
+                          gap: 4,
                           fontFamily: 'var(--font-sans)',
                         }}
                       >
-                        <span className="mono" style={{ fontSize: 11, letterSpacing: 0.6, opacity: 0.9 }}>
+                        <span
+                          className="mono"
+                          style={{
+                            fontSize: 11,
+                            letterSpacing: 0.6,
+                            opacity: 0.9,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                          }}
+                        >
                           MÉTA · {dl.name(band.meta.domainId).toUpperCase()}
                         </span>
-                        <span style={{ fontSize: 16, fontWeight: 600, lineHeight: 1.25 }}>
+                        <span
+                          title={band.meta.title}
+                          style={{
+                            fontSize: coarse ? 15 : 16,
+                            fontWeight: 600,
+                            lineHeight: 1.25,
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                          }}
+                        >
                           {band.meta.title}
                         </span>
                         <span style={{ fontSize: 12, opacity: 0.9 }}>

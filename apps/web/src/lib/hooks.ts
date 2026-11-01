@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useSyncExternalStore } from 'react';
 import { ApiError, get, patch } from './api.ts';
 import type { Domain, Group, Me, Settings } from './types.ts';
@@ -120,3 +121,14 @@ export const useIsTouch = () =>
     },
     () => !!touchMq?.matches,
   );
+
+/**
+ * After a delete from a panel (user request 01/11/2026): leave only when the current page is the deleted
+ * entity's own page; opened from elsewhere (Planifier, Vue Plan…), the panel closes and you stay there.
+ */
+export function useLeaveDeleted() {
+  const navigate = useNavigate();
+  return (ownPage: string, to: string) => {
+    if (window.location.pathname === ownPage) navigate({ to });
+  };
+}

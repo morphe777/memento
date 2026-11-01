@@ -141,6 +141,18 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
+/* A button that looks like a link (opens a panel over the page instead of navigating). */
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.link-btn:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .btn:disabled {
   opacity: 0.45;
 }
@@ -585,6 +597,27 @@ input[type="checkbox"] {
   white-space: normal;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
   cursor: default;
+}
+/* Structured help (user request 01/11/2026): short paragraphs, a bold lead-in, light bullets. */
+.info-pop .tip-p {
+  display: block;
+}
+.info-pop .tip-p + .tip-p {
+  margin-top: 7px;
+}
+.info-pop b {
+  font-weight: 650;
+}
+.info-pop .tip-li {
+  display: block;
+  padding-left: 12px;
+  text-indent: -10px;
+}
+.info-pop .tip-li::before {
+  content: "· ";
+}
+.info-pop .tip-dim {
+  opacity: 0.75;
 }
 
 @media (pointer: coarse) {

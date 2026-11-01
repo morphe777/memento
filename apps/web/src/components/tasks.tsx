@@ -464,6 +464,25 @@ const RECURRENCES = [
   { value: 'FREQ=YEARLY', label: 'Chaque année' },
 ];
 
+/**
+ * Opens a task in a panel over the current page (user request 01/11/2026): closing it, whatever was done
+ * inside, leaves you where you were — no jump to its project or to the Inbox.
+ */
+export function openTask(id: string) {
+  window.dispatchEvent(new CustomEvent('memento:open-task', { detail: id }));
+}
+
+/** Mounted once by the shell: the panel `openTask` opens. */
+export function TaskPeekHost() {
+  const [id, setId] = useState<string | null>(null);
+  useEffect(() => {
+    const on = (e: Event) => setId((e as CustomEvent<string>).detail);
+    window.addEventListener('memento:open-task', on);
+    return () => window.removeEventListener('memento:open-task', on);
+  }, []);
+  return <TaskDrawer taskId={id} onClose={() => setId(null)} />;
+}
+
 /** Side panel for a task (/projets/:id?tache=:tid). */
 export function TaskDrawer({ taskId, onClose }: { taskId: string | null; onClose: () => void }) {
   const q = useQuery({

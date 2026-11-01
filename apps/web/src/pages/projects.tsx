@@ -44,6 +44,7 @@ import {
   useDomainLookup,
   useGroups,
   useIsPhone,
+  useLeaveDeleted,
   useMe,
   useSettings,
 } from '../lib/hooks.ts';
@@ -1204,7 +1205,6 @@ export function ProjectEditPanel({
   footer?: React.ReactNode;
 }) {
   const settings = useSettings();
-  const navigate = useNavigate();
   const dl = useDomainLookup();
   const groups = useGroups();
   const objectives = useQuery({ queryKey: ['objectives'], queryFn: () => get<Objective[]>('/objectives') });
@@ -1265,8 +1265,12 @@ export function ProjectEditPanel({
     }
     onClose();
   };
+  const leave = useLeaveDeleted();
   const remove = useAction(() => del(`/projects/${p.id}`), {
-    onSuccess: () => navigate({ to: '/projets' }),
+    onSuccess: () => {
+      onClose();
+      leave(`/projets/${p.id}`, '/projets');
+    },
     toast: 'Projet supprimé.',
   });
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
