@@ -5,6 +5,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { Fragment, useEffect, useState } from 'react';
+import { PushConfig } from '../components/push.tsx';
 import { Breadcrumb, ThemeSwitch } from '../components/shell.tsx';
 import { useSortSensors } from '../components/tasks.tsx';
 import {
@@ -557,6 +558,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               onChange={(e) => setS({ ...s, 'schedule.reports': { time: e.target.value } })}
             />
           </Field>
+          <PushConfig />
           <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
           <VacationsConfig />
         </>
@@ -1109,6 +1111,7 @@ type NotifyStatus = {
   tokenHint: string | null;
   tokenEnv: string;
   configured: boolean;
+  pushDevices: number;
 };
 
 /** D-77: « Bilan du jour » on Telegram — time, bot token (written, never read back), chat, preview, test sending. */
@@ -1159,7 +1162,7 @@ function NotifyConfig({
   const send = async () => {
     setBusy('send');
     try {
-      const out = await post<{ sent: boolean; ai: boolean; aiError: string | null }>(
+      const out = await post<{ sent: boolean; pushed: number; ai: boolean; aiError: string | null }>(
         '/notify/daily-recap/send',
         {},
       );
@@ -1180,10 +1183,11 @@ function NotifyConfig({
       toast(e instanceof ApiError ? e.message : 'Erreur', 'error');
     }
   };
-  const ready = st?.configured && saved?.['notify.telegram_chat_id'];
+  const telegramReady = st?.configured && saved?.['notify.telegram_chat_id'];
+  const ready = telegramReady || (st?.pushDevices ?? 0) > 0;
   return (
     <div className="flex flex-col gap-4 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
-      <h3 className="h2 m-0">Bilan du jour (Telegram)</h3>
+      <h3 className="h2 m-0">Bilan du jour et Telegram</h3>
       <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
         Chaque soir, un rapport : une phrase qui résume les grandes réalisations, l'avancée de la semaine, les
         semaines d'affilée et le volume des 4 dernières, puis les tâches faites. Un jour sans tâche faite : un
@@ -1262,7 +1266,8 @@ function NotifyConfig({
           {busy === 'send' ? 'Envoi…' : 'Envoyer le bilan du jour maintenant'}
         </button>
         <span className="text-[13px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
-          {ready ? '✓ Telegram prêt' : 'Jeton et chat à enregistrer'}
+          {telegramReady ? '✓ Telegram prêt' : 'Telegram : jeton et chat à enregistrer'}
+          {(st?.pushDevices ?? 0) > 0 ? ` · ${st?.pushDevices} appareil(s) en notification` : ''}
         </span>
       </div>
       {/* User request 01/11/2026: a notice when the weekly, monthly or quarterly report is frozen. */}

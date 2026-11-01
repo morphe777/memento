@@ -17,6 +17,7 @@ export function CaptureSheet({
   onClose,
   isoWeek,
   withProject = false,
+  onUnplanned,
 }: {
   open: boolean;
   onClose: () => void;
@@ -24,6 +25,8 @@ export function CaptureSheet({
   isoWeek?: string;
   /** The task may belong to a project (Inbox when none is chosen). */
   withProject?: boolean;
+  /** Ma semaine on iPhone (D-107): « Hors plan » opens the « Fait hors plan » panel (D-99) instead. */
+  onUnplanned?: () => void;
 }) {
   const dl = useDomainLookup();
   const me = useMe();
@@ -100,10 +103,15 @@ export function CaptureSheet({
         {isoWeek && (
           <Tabs
             value={target}
-            onChange={setTarget}
+            onChange={(v: Target | 'done') => {
+              if (v !== 'done') return setTarget(v);
+              onClose();
+              onUnplanned?.();
+            }}
             options={[
-              { value: 'week', label: 'Plan de la semaine' },
+              { value: 'week', label: 'Plan' },
               { value: 'inbox', label: 'Inbox' },
+              ...(onUnplanned ? [{ value: 'done' as const, label: 'Hors plan' }] : []),
             ]}
           />
         )}

@@ -9,6 +9,7 @@ import { ActualTime } from '../components/tasks.tsx';
 import {
   BonusBadge,
   DelayBar,
+  DelayLegend,
   DomainBars,
   Duration,
   Empty,
@@ -298,11 +299,9 @@ function WeekDesktop({ ex }: { ex: Execution }) {
             </Kpi>
           </div>
           <section className="card flex flex-col gap-4" style={{ padding: '18px 20px' }}>
-            <div className="flex justify-between items-baseline">
-              <h2 className="h2">Projets du mois</h2>
-              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                centre = à l'heure
-              </span>
+            <div className="flex flex-col gap-2">
+              <h2 className="h2">Projets du mois · avance / retard</h2>
+              {ex.monthProjects.length > 0 && <DelayLegend />}
             </div>
             {ex.monthProjects.length === 0 && (
               <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
@@ -557,8 +556,8 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const dl = useDomainLookup();
   const toggle = useToggle();
   const [showBonus, setShowBonus] = useState(false);
-  const [unplannedOpen, setUnplannedOpen] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [unplannedOpen, setUnplannedOpen] = useState(false);
   usePageFab('Ajouter une tâche', () => setAdding(true)); // Inbox or week plan (user request 01/11/2026)
   const view = useWeekView();
   const tasks = useSortedTasks(ex, view);
@@ -600,7 +599,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
             <span className="text-[15px] font-semibold">
               À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
             </span>
-            <UnplannedButton ex={ex} small onClick={() => setUnplannedOpen(true)} />
+            {/* iPhone (D-107): « Fait hors plan » is the « Hors plan » choice of the « + » button. */}
           </span>
           <ViewToggles view={view} />
           <DriftLine ex={ex} />
@@ -697,8 +696,13 @@ function WeekPhone({ ex }: { ex: Execution }) {
             </div>
           ))}
       </div>
+      <CaptureSheet
+        open={adding}
+        onClose={() => setAdding(false)}
+        isoWeek={ex.isoWeek}
+        onUnplanned={() => setUnplannedOpen(true)}
+      />
       <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
-      <CaptureSheet open={adding} onClose={() => setAdding(false)} isoWeek={ex.isoWeek} />
     </div>
   );
 }

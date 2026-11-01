@@ -7,6 +7,7 @@ import {
   useAction,
   useDomainLookup,
   useIsPhone,
+  useIsTouch,
   useMe,
   useResolvedTheme,
   useSetTheme,
@@ -104,6 +105,7 @@ const isActive = (i: NavItem, path: string, vue?: string) =>
 
 export function AppShell({ children }: { children: ReactNode }) {
   const phone = useIsPhone();
+  const touch = useIsTouch();
   const theme = useResolvedTheme();
   const [searchOpen, setSearchOpen] = useState(false);
   // D-68: ?capturer=1 (iOS Shortcut, home-screen bookmark) opens the capture sheet on any page.
@@ -239,7 +241,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="flex-1 box-border"
           style={{
             // No top bar on iPhone: only the status bar / Dynamic Island inset (user request 01/11/2026).
-            padding: phone ? 'calc(env(safe-area-inset-top) + 8px) 12px 88px' : '32px 24px',
+            // iPad (user request 01/11/2026): less room above the title on touch screens.
+            padding: phone
+              ? 'calc(env(safe-area-inset-top) + 8px) 12px 88px'
+              : `${touch ? 'calc(env(safe-area-inset-top) + 14px)' : '32px'} 24px 32px`,
             maxWidth: phone ? undefined : 1408,
             width: '100%',
             margin: '0 auto',

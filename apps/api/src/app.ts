@@ -746,6 +746,30 @@ export async function buildApp(opts: AppOptions) {
       r.post('/notify/telegram-detect', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
         D.detectTelegramChat(ctx(req), process.env),
       );
+      // Web Push (user request 01/11/2026): this device subscribes from Configuration › Planning.
+      r.get('/notify/push/key', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+        D.pushPublicKey(ctx(req)),
+      );
+      r.get('/notify/push/devices', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+        D.listPushDevices(ctx(req)),
+      );
+      r.post(
+        '/notify/push/subscribe',
+        { schema: { ...tag('Réglages'), body: D.pushSubscriptionBody }, preHandler: userOnly },
+        async (req) => D.addPushSubscription(ctx(req), req.body),
+      );
+      r.post(
+        '/notify/push/unsubscribe',
+        { schema: { ...tag('Réglages'), body: D.pushUnsubscribeBody }, preHandler: userOnly },
+        async (req) => D.removePushSubscription(ctx(req), req.body.endpoint),
+      );
+      r.post('/notify/push/test', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+        D.sendPush(ctx(req), {
+          title: 'Mémento',
+          body: 'Les notifications arrivent bien sur cet appareil.',
+          url: '/semaine',
+        }),
+      );
       // Preview: the message as it would be sent now (AI included), without sending it.
       r.post(
         '/notify/daily-recap/preview',
@@ -768,7 +792,7 @@ export async function buildApp(opts: AppOptions) {
             llm: opts.llm,
             date: req.body.date,
           });
-          return { sent: out.sent, ai: out.ai, aiError: out.aiError };
+          return { sent: out.sent, pushed: out.pushed, ai: out.ai, aiError: out.aiError };
         },
       );
       r.get('/reports/:id', { schema: { ...tag('Rapports'), params: D.idParam } }, async (req) =>

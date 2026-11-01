@@ -109,3 +109,14 @@ export const useIsPhone = () =>
     },
     () => !!phoneMq?.matches,
   );
+
+const touchMq = typeof window !== 'undefined' ? window.matchMedia('(pointer: coarse)') : null;
+/** Touch screen (iPhone, iPad): pages sit closer to the top. */
+export const useIsTouch = () =>
+  useSyncExternalStore(
+    (cb) => {
+      touchMq?.addEventListener('change', cb);
+      return () => touchMq?.removeEventListener('change', cb);
+    },
+    () => !!touchMq?.matches,
+  );
