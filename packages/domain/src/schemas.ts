@@ -132,6 +132,15 @@ export const aiCheckBody = z.object({
 export const purgeBody = z.object({ confirm: z.literal('SUPPRIMER'), history: z.boolean().default(false) });
 export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uuid).min(1) });
 export const projectReplanBody = z.object({ dueDate: date.optional() });
+/** D-113: the calendar of the tasks over a range (≤ 121 days). */
+export const calendarQuery = z.object({ from: date, to: date });
+/** D-109: duplicate a project (default title « … (copie) », same objective, at the end of its path). */
+export const projectDuplicateBody = z.object({ title: title.optional() });
+/** D-109: duplicate an objective, with its projects and their path unless withProjects is false. */
+export const objectiveDuplicateBody = z.object({
+  title: title.optional(),
+  withProjects: z.boolean().optional(),
+});
 export const projectListQuery = z.object({
   status: z.string().optional(), // comma-separated
   groupId: uuid.optional(),

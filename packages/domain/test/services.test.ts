@@ -22,9 +22,12 @@ import {
   deleteProject,
   deleteTask,
   describeWithAi,
+  duplicateObjective,
+  duplicateProject,
   exportData,
   generateReport,
   getAiKey,
+  getCalendar,
   getCap,
   getExecution,
   getExperiencesPage,
@@ -456,9 +459,18 @@ describe('L3 planification', () => {
   });
 
   it('alerts on empty Santé / Famille / no experience, and "Rien à signaler" otherwise', () => {
-    const { ctx } = world();
+    const { ctx, pv, inbox } = world();
     const page = getPlanningPage(ctx, '2026-W45');
-    expect(page.alerts.map((a) => a.code)).toEqual(['EMPTY_HEALTH', 'EMPTY_FAMILY', 'NO_EXPERIENCE']);
+    // D-112: sorted by level; the due Inbox task and the idle month project are listed.
+    expect(page.alerts.map((a) => [a.code, a.level])).toEqual([
+      ['DUE_NOT_PLANNED', 'critical'],
+      ['EMPTY_HEALTH', 'critical'],
+      ['EMPTY_FAMILY', 'warn'],
+      ['MONTH_PROJECT_IDLE', 'warn'],
+      ['NO_EXPERIENCE', 'warn'],
+    ]);
+    expect(page.alerts[0].items?.map((i) => i.id)).toEqual([inbox.id]);
+    expect(page.alerts[3].items?.map((i) => i.id)).toEqual([pv.id]);
     const sport = activeProject(ctx, 'Escalade', 'Sport', 1);
     const fam = createProject(ctx, {
       title: 'Balade',
@@ -477,9 +489,11 @@ describe('L3 planification', () => {
     const p2 = setWeekItems(ctx, '2026-W45', [
       { taskId: sport.tasks[0].id, kind: 'week' },
       { taskId: exp.id, kind: 'week' },
+      { taskId: inbox.id, kind: 'week' },
+      { taskId: listTasks(ctx, { projectId: pv.id })[0]!.id, kind: 'week' },
     ]);
     expect(p2.alerts.map((a) => a.code)).toEqual(['OK']);
-    expect(p2.budget.plannedMin).toBe(60); // RB-09: experience out of budget
+    expect(p2.budget.plannedMin).toBe(150); // RB-09: experience out of budget
   });
 });
 
@@ -1314,5 +1328,84 @@ describe('D-62 récurrence', () => {
     });
     updateObjective(ctx, next.id, { status: 'abandoned' });
     expect(listObjectives(ctx).filter((x) => x.title === 'Bilan santé')).toHaveLength(2);
+  });
+});
+
+describe('D-109 duplication', () => {
+  it('a project copy keeps its fields and tasks, all to do, without month nor dates', () => {
+    const ctx = makeCtx();
+    const { project: p, tasks } = activeProject(ctx, 'Salle de bain', 'Travaux', 2, {
+      motive: 'Un **cocon**',
+    });
+    completeTask(ctx, tasks[0]!.id);
+    const copy = duplicateProject(ctx, p.id);
+    expect(copy).toMatchObject({
+      title: 'Salle de bain (copie)',
+      status: 'ready',
+      monthFlag: null,
+      dueDate: null,
+      successCriterion: 'Fait',
+      motive: 'Un **cocon**',
+    });
+    expect(listTasks(ctx, { projectId: copy.id }).map((t) => [t.title, t.status])).toEqual([
+      ['Salle de bain 1', 'todo'],
+      ['Salle de bain 2', 'todo'],
+    ]);
+  });
+
+  it('an objective copy brings its projects and rebuilds their path', () => {
+    const ctx = makeCtx();
+    const { group } = lookups(ctx);
+    const o = createObjective(ctx, {
+      title: 'Courir 10 km',
+      deadline: '2026-12-15',
+      smartTarget: '10',
+      smartCurrent: '4',
+    });
+    const a = createProject(ctx, { title: 'A', groupIds: [group('Travaux').id], objectiveId: o.id });
+    const b = createProject(ctx, { title: 'B', groupIds: [group('Travaux').id], objectiveId: o.id });
+    expect(listProjectDependencies(ctx, b.id)).toEqual([a.id]);
+    const copy = duplicateObjective(ctx, o.id);
+    expect(copy).toMatchObject({ title: 'Courir 10 km (copie)', smartCurrent: '0', quarter: '2026-Q4' });
+    const projects = listProjects(ctx, {}).filter((p) => p.objectiveId === copy.id);
+    expect(projects.map((p) => [p.title, p.status])).toEqual([
+      ['A', 'idea'],
+      ['B', 'idea'],
+    ]);
+    const [ca, cb] = projects;
+    expect(listProjectDependencies(ctx, cb!.id)).toEqual([ca!.id]);
+    expect(listProjectDependencies(ctx, ca!.id)).toEqual([]);
+    const bare = duplicateObjective(ctx, o.id, { title: 'Seul', withProjects: false });
+    expect(listProjects(ctx, {}).filter((p) => p.objectiveId === bare.id)).toHaveLength(0);
+  });
+});
+
+describe('D-113 calendrier', () => {
+  it('places tasks on their deadline, done day and next occurrences; planned ones without a day apart', () => {
+    const ctx = makeCtx('2026-11-02T08:00:00.000Z'); // Monday W45
+    const due = createTask(ctx, { title: 'Assurance', durationMin: 30, dueDate: '2026-11-05' });
+    const late = createTask(ctx, { title: 'Impôts', durationMin: 30, dueDate: '2026-10-30' });
+    const weekly = createTask(ctx, {
+      title: 'Arroser',
+      durationMin: 5,
+      dueDate: '2026-11-03',
+      recurrenceRule: 'FREQ=WEEKLY',
+    });
+    const done = createTask(ctx, { title: 'Courses', durationMin: 30 });
+    completeTask(ctx, done.id);
+    const free = createTask(ctx, { title: 'Ranger', durationMin: 30 });
+    setWeekItems(ctx, '2026-W45', [{ taskId: free.id, kind: 'week' }]);
+    const cal = getCalendar(ctx, '2026-10-26', '2026-11-15');
+    const at = (id: string) =>
+      cal.entries.filter((e) => e.taskId === id).map((e) => [e.date, e.kind, e.late]);
+    expect(at(due.id)).toEqual([['2026-11-05', 'due', false]]);
+    expect(at(late.id)).toEqual([['2026-10-30', 'due', true]]);
+    expect(at(weekly.id)).toEqual([
+      ['2026-11-03', 'due', false],
+      ['2026-11-10', 'occurrence', false],
+    ]);
+    expect(at(done.id)).toEqual([['2026-11-02', 'done', false]]);
+    expect(cal.planned.find((w) => w.isoWeek === '2026-W45')?.tasks.map((t) => t.taskId)).toEqual([free.id]);
+    expect(errCode(() => getCalendar(ctx, '2026-01-01', '2026-12-31'))).toBe('INVALID_RANGE');
   });
 });

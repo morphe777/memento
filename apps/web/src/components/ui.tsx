@@ -128,64 +128,73 @@ export const DELAY_HELP = (
   </>
 );
 
-/** The legend of the delay bars, written once above them (user request 01/11/2026). */
+/** Columns of the one-line delay bars: title, bar, value (user request 02/11/2026, compact like DomainBars). */
+const DELAY_LABEL_W = 'clamp(90px, 36%, 190px)';
+const DELAY_VALUE_W = 64;
+
+/** The legend of the delay bars, written once above them (user request 01/11/2026), over the bar column. */
 export function DelayLegend() {
   return (
-    <div className="flex justify-between items-center text-[11px]" style={{ color: 'var(--text-faint)' }}>
-      <span style={{ color: 'var(--late-text)' }}>← retard</span>
-      <span className="flex items-center gap-1">
-        centre = à l'heure
-        <InfoTip>{DELAY_HELP}</InfoTip>
+    <div className="flex items-center gap-2.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>
+      <span className="flex-none" style={{ width: DELAY_LABEL_W }} />
+      <span className="flex-1 min-w-0 flex justify-between items-center gap-1">
+        <span style={{ color: 'var(--late-text)' }}>← retard</span>
+        <span className="flex items-center gap-1">
+          à l'heure
+          <InfoTip>{DELAY_HELP}</InfoTip>
+        </span>
+        <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
       </span>
-      <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
+      <span className="flex-none" style={{ width: DELAY_VALUE_W }} />
     </div>
   );
 }
 
-/** Centred delay bar (R-06): centre = on time, left = late (orange), right = ahead (blue); ±4 h = half bar. */
+/**
+ * Centred delay bar (R-06): centre = on time, left = late (orange), right = ahead (blue); ±4 h = half bar.
+ * One line: title, bar, value (user request 02/11/2026).
+ */
 export function DelayBar({
   title,
   color,
   deltaMin,
   to,
-  showLegend = false,
 }: {
   title: string;
   color: string;
   deltaMin: number;
   to?: { id: string };
-  showLegend?: boolean;
 }) {
   const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   const late = deltaMin < 0;
   const onTime = Math.abs(deltaMin) < 15;
   const label = onTime ? "à l'heure" : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex justify-between items-center gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <DomainDot color={color} />
-          {to ? (
-            <Link to="/projets/$id" params={{ id: to.id }} className="text-[14px] font-medium truncate">
-              {title}
-            </Link>
-          ) : (
-            <span className="text-[14px] font-medium truncate">{title}</span>
-          )}
-        </div>
-        <span
-          className="mono text-[13px]"
-          style={{ color: onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)' }}
-        >
-          {label}
-        </span>
-      </div>
-      <div className="relative" style={{ height: 10, background: 'var(--track)', borderRadius: 999 }}>
+    <div className="flex items-center gap-2.5 text-[13px]">
+      <span className="flex-none flex items-center gap-2 min-w-0" style={{ width: DELAY_LABEL_W }}>
+        <DomainDot color={color} />
+        {to ? (
+          <Link
+            to="/projets/$id"
+            params={{ id: to.id }}
+            className="truncate"
+            style={{ color: 'var(--text-2)' }}
+            title={title}
+          >
+            {title}
+          </Link>
+        ) : (
+          <span className="truncate" style={{ color: 'var(--text-2)' }} title={title}>
+            {title}
+          </span>
+        )}
+      </span>
+      <div className="relative flex-1" style={{ height: 8, background: 'var(--track)', borderRadius: 999 }}>
         {!onTime && (
           <div
             className="absolute top-0"
             style={{
-              height: 10,
+              height: 8,
               left: late ? `${50 - a}%` : '50%',
               width: `${a}%`,
               background: late ? 'var(--late-bar)' : 'var(--ahead-bar)',
@@ -199,18 +208,21 @@ export function DelayBar({
             top: -3,
             left: '50%',
             width: 2,
-            height: 16,
+            height: 14,
             background: 'var(--text)',
             transform: 'translateX(-1px)',
           }}
         />
       </div>
-      {showLegend && (
-        <div className="flex justify-between text-[11px]" style={{ color: 'var(--text-ghost)' }}>
-          <span>retard</span>
-          <span>avance</span>
-        </div>
-      )}
+      <span
+        className="mono text-right flex-none"
+        style={{
+          width: DELAY_VALUE_W,
+          color: onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)',
+        }}
+      >
+        {label}
+      </span>
     </div>
   );
 }

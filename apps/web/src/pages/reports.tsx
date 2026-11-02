@@ -401,7 +401,6 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
               color={color(d)}
               deltaMin={d.deltaMin}
               to={{ id: d.projectId }}
-              showLegend={false}
             />
           ))}
         </section>

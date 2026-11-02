@@ -152,18 +152,23 @@ const CONFIG_TABS = [
   { value: 'domaines', label: 'Domaines' },
   { value: 'groupes', label: 'Groupes' },
   { value: 'moteur', label: 'Moteur' },
-  { value: 'alertes', label: 'Alertes' },
-  { value: 'planning', label: 'Planning' },
+  { value: 'seuils', label: 'Seuils' },
+  { value: 'calendrier', label: 'Calendrier' },
+  { value: 'notifications', label: 'Notifications' },
   { value: 'templates', label: 'Templates' },
   { value: 'ia', label: 'IA' },
   { value: 'acces', label: 'Accès' },
   { value: 'compte', label: 'Compte' },
 ] as const;
 type ConfigTab = (typeof CONFIG_TABS)[number]['value'];
+/** D-111: former tab names (links, bookmarks) still open the right tab. */
+const OLD_TABS: Record<string, ConfigTab> = { alertes: 'seuils', planning: 'calendrier' };
 
 export function ConfigPage({ onglet }: { onglet: string }) {
   const navigate = useNavigate();
-  const tab = (CONFIG_TABS.find((t) => t.value === onglet)?.value ?? 'budget') as ConfigTab;
+  const tab = (CONFIG_TABS.find((t) => t.value === onglet)?.value ??
+    OLD_TABS[onglet] ??
+    'budget') as ConfigTab;
   const settings = useSettings();
   return (
     <div className="flex flex-col gap-6">
@@ -209,13 +214,17 @@ const SECTION_INFO: Partial<Record<ConfigTab, { title: string; info: string }>> 
     title: 'Moteur du lundi',
     info: 'Règle la façon dont le moteur classe les tâches et construit la proposition de semaine. Déterministe : mêmes données, même proposition.',
   },
-  alertes: {
-    title: 'Alertes et indicateurs',
-    info: 'Seuils des alertes de Planifier et des indicateurs des rapports (vert / orange / rouge).',
+  seuils: {
+    title: 'Seuils',
+    info: "Les limites qui déclenchent les alertes affichées dans Planifier et les couleurs des indicateurs des rapports (vert / orange / rouge). Rien n'est envoyé : ce qui part vers ton téléphone se règle dans Notifications.",
   },
-  planning: {
-    title: 'Planning automatique',
-    info: 'Quand le worker prépare la semaine et génère les rapports, en heure de Paris.',
+  calendrier: {
+    title: 'Calendrier',
+    info: 'Quand le worker prépare la semaine et fige les rapports, en heure de Paris, et tes vacances.',
+  },
+  notifications: {
+    title: 'Notifications',
+    info: "Ce qui t'est envoyé (bilan du soir, rapport prêt) puis par où (cet appareil, Telegram). Chaque message part sur tous les canaux prêts.",
   },
   ia: {
     title: 'IA',
@@ -256,9 +265,10 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ui.show_recalculate',
       'inbox.recurring_horizon_days',
       'ui.projects_default_view',
+      'ui.cap_turn_s',
     ],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
-    alertes: [
+    seuils: [
       'guards.window_weeks',
       'experience.target',
       'experience.window_weeks',
@@ -269,14 +279,8 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'month.max_projects',
       'quarter.max_objectives',
     ],
-    planning: [
-      'schedule.week_plan',
-      'schedule.reports',
-      'notify.daily_recap',
-      'notify.telegram_chat_id',
-      'notify.reports',
-      'notify.app_url',
-    ],
+    calendrier: ['schedule.week_plan', 'schedule.reports'],
+    notifications: ['notify.daily_recap', 'notify.telegram_chat_id', 'notify.reports', 'notify.app_url'],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
     ia: [
       'ai.provider',
@@ -299,7 +303,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
   const [botToken, setBotToken] = useState(''); // D-77, same pattern as the AI key
   const qc = useQueryClient();
   const submit = async () => {
-    if (tab === 'planning' && botToken.trim()) {
+    if (tab === 'notifications' && botToken.trim()) {
       try {
         await put('/notify/telegram-token', { token: botToken });
         setBotToken('');
@@ -364,6 +368,18 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               max={365}
               value={s['inbox.recurring_horizon_days']}
               onChange={(e) => setS({ ...s, 'inbox.recurring_horizon_days': Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Cap : changer de pourquoi toutes les (secondes)"
+            info="Dans Ma semaine, la ligne Cap passe seule aux pourquoi suivants (3 à la fois sur PC et iPad, 1 sur iPhone) à ce rythme, le même partout."
+          >
+            <input
+              type="number"
+              min={2}
+              max={120}
+              value={s['ui.cap_turn_s']}
+              onChange={(e) => setS({ ...s, 'ui.cap_turn_s': Number(e.target.value) })}
             />
           </Field>
           <label className="flex items-center gap-2 text-[14px]">
@@ -452,7 +468,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
           </Field>
         </>
       )}
-      {tab === 'alertes' && (
+      {tab === 'seuils' && (
         <>
           <Field
             label="Garde-fous Santé / Famille : fenêtre (semaines)"
@@ -515,7 +531,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
           </Field>
         </>
       )}
-      {tab === 'planning' && (
+      {tab === 'calendrier' && (
         <>
           <Field
             label="Plan de la semaine : jour (1 = lundi)"
@@ -554,10 +570,11 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               onChange={(e) => setS({ ...s, 'schedule.reports': { time: e.target.value } })}
             />
           </Field>
-          <PushConfig />
-          <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
           <VacationsConfig />
         </>
+      )}
+      {tab === 'notifications' && (
+        <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
       )}
       {tab === 'templates' && (
         <>
@@ -1182,127 +1199,147 @@ function NotifyConfig({
   const telegramReady = st?.configured && saved?.['notify.telegram_chat_id'];
   const ready = telegramReady || (st?.pushDevices ?? 0) > 0;
   return (
-    <div className="flex flex-col gap-4 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
-      <h3 className="h2 m-0">Bilan du jour et Telegram</h3>
-      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-        Chaque soir, un rapport : une phrase qui résume les grandes réalisations, l'avancée de la semaine, les
-        semaines d'affilée et le volume des 4 dernières, puis les tâches faites. Un jour sans tâche faite : un
-        encouragement et ce qui compte ces prochains jours. Rien le samedi ; le dimanche, le bilan du
-        week-end. Avec l'IA, c'est le prompt « Bilan du jour » (onglet IA) qui écrit tout le message.
-      </p>
-      <label className="flex items-center gap-2 text-[14px]">
-        <input type="checkbox" checked={r.enabled} onChange={(e) => setR({ enabled: e.target.checked })} />
-        Envoyer le bilan chaque soir
-      </label>
-      <Field label="Heure d'envoi" hint="Heure de Paris">
-        <input type="time" value={r.time} onChange={(e) => setR({ time: e.target.value })} />
-      </Field>
-      <label className="flex items-center gap-2 text-[14px]">
-        <input type="checkbox" checked={r.ai} onChange={(e) => setR({ ai: e.target.checked })} />
-        Rapport rédigé par l'IA
-        <InfoTip>
-          Si l'IA est configurée (onglet IA), elle écrit tout le message à partir des faits calculés par
-          Mémento, selon le prompt « Bilan du jour ». Sinon, ou en cas d'erreur, le rapport simple est envoyé.
-        </InfoTip>
-      </label>
-      <Field
-        label="Jeton du bot"
-        info="Dans Telegram, écris à @BotFather, commande /newbot : il te donne un jeton du type 123456789:ABC… Gardé dans la base de Mémento, jamais réaffiché ni exporté."
-      >
-        <div className="flex gap-2 items-center flex-wrap">
-          <input
-            type="password"
-            autoComplete="off"
-            value={botToken}
-            onChange={(e) => setBotToken(e.target.value)}
-            placeholder={
-              st?.tokenSource === 'saisie'
-                ? `Enregistré (${st.tokenHint}) — saisir pour remplacer`
-                : st?.tokenSource === 'env'
-                  ? `Variable ${st.tokenEnv} (${st.tokenHint})`
-                  : '123456789:ABC…'
-            }
-            style={{ flex: '1 1 260px' }}
-          />
-          {st?.tokenSource === 'saisie' && !botToken && (
-            <button type="button" className="btn btn-sm" onClick={clearToken}>
-              Effacer le jeton
-            </button>
-          )}
+    <>
+      <div className="flex flex-col gap-4">
+        <h3 className="h2 m-0">Ce que tu reçois</h3>
+        <label className="flex items-center gap-2 text-[14px]">
+          <input type="checkbox" checked={r.enabled} onChange={(e) => setR({ enabled: e.target.checked })} />
+          Le bilan du soir
+          <InfoTip>
+            <span className="tip-p">
+              Une phrase qui résume les grandes réalisations, l'avancée de la semaine, les semaines d'affilée
+              et le volume des 4 dernières, puis les tâches faites. Un jour sans tâche faite : un
+              encouragement et ce qui compte ces prochains jours.
+            </span>
+            <span className="tip-p">
+              Rien le samedi ; le dimanche, le bilan du week-end ; rien en vacances.
+            </span>
+          </InfoTip>
+        </label>
+        <div className="flex flex-wrap gap-4 items-end" style={{ paddingLeft: 24 }}>
+          <Field label="Heure d'envoi" hint="Heure de Paris">
+            <input type="time" value={r.time} onChange={(e) => setR({ time: e.target.value })} />
+          </Field>
+          <label className="flex items-center gap-2 text-[14px]" style={{ minHeight: 44 }}>
+            <input type="checkbox" checked={r.ai} onChange={(e) => setR({ ai: e.target.checked })} />
+            Rédigé par l'IA
+            <InfoTip>
+              Si l'IA est configurée (onglet IA), elle écrit tout le message à partir des faits calculés par
+              Mémento, selon le prompt « Bilan du jour ». Sinon, ou en cas d'erreur, le rapport simple est
+              envoyé.
+            </InfoTip>
+          </label>
         </div>
-      </Field>
-      <Field
-        label="Chat"
-        info="Ouvre ton bot dans Telegram et envoie-lui /start, enregistre le jeton, puis clique « Trouver mon chat »."
-      >
-        <div className="flex gap-2 items-center flex-wrap">
+        {/* User request 01/11/2026: a notice when the weekly, monthly or quarterly report is frozen. */}
+        <label className="flex items-center gap-2 text-[14px]">
           <input
-            value={s['notify.telegram_chat_id']}
-            onChange={(e) => setS({ ...s, 'notify.telegram_chat_id': e.target.value.trim() })}
-            placeholder="ex. 123456789"
-            style={{ flex: '1 1 200px' }}
+            type="checkbox"
+            checked={s['notify.reports']}
+            onChange={(e) => setS({ ...s, 'notify.reports': e.target.checked })}
           />
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={detect}
-            disabled={!st?.tokenSource || busy !== null}
-          >
-            {busy === 'detect' ? 'Recherche…' : 'Trouver mon chat'}
+          Un rapport est prêt
+          <InfoTip>
+            Lundi matin pour la semaine, le 1er pour le mois, au début du trimestre : le verdict du rapport et
+            son lien. Rien pendant les vacances.
+          </InfoTip>
+        </label>
+        <Field
+          label="Adresse de Mémento"
+          hint="Pour le lien vers la page dans le message, ex. https://memento.internal.lcl"
+        >
+          <input
+            type="url"
+            value={s['notify.app_url']}
+            onChange={(e) => setS({ ...s, 'notify.app_url': e.target.value.trim() })}
+            placeholder="https://memento.internal.lcl"
+          />
+        </Field>
+        <div className="flex items-center gap-3 flex-wrap">
+          <button type="button" className="btn self-start" onClick={showPreview} disabled={busy !== null}>
+            {busy === 'preview' ? <AiDots /> : null}
+            {busy === 'preview' ? 'Préparation…' : 'Aperçu du bilan'}
           </button>
-        </div>
-      </Field>
-      <div className="flex items-center gap-3 flex-wrap">
-        <button type="button" className="btn self-start" onClick={showPreview} disabled={busy !== null}>
-          {busy === 'preview' ? <AiDots /> : null}
-          {busy === 'preview' ? 'Préparation…' : 'Aperçu'}
-        </button>
-        <button type="button" className="btn self-start" onClick={send} disabled={!ready || busy !== null}>
-          {busy === 'send' ? <AiDots /> : null}
-          {busy === 'send' ? 'Envoi…' : 'Envoyer le bilan du jour maintenant'}
-        </button>
-        <span className="text-[13px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
-          {telegramReady ? '✓ Telegram prêt' : 'Telegram : jeton et chat à enregistrer'}
-          {(st?.pushDevices ?? 0) > 0 ? ` · ${st?.pushDevices} appareil(s) en notification` : ''}
-        </span>
-      </div>
-      {/* User request 01/11/2026: a notice when the weekly, monthly or quarterly report is frozen. */}
-      <label className="flex items-center gap-2 text-[14px]">
-        <input
-          type="checkbox"
-          checked={s['notify.reports']}
-          onChange={(e) => setS({ ...s, 'notify.reports': e.target.checked })}
-        />
-        Prévenir quand un rapport est prêt
-        <InfoTip>
-          Lundi matin pour la semaine, le 1er pour le mois, au début du trimestre : un message Telegram avec
-          le verdict du rapport et son lien. Rien pendant les vacances.
-        </InfoTip>
-      </label>
-      <Field
-        label="Adresse de Mémento"
-        hint="Pour le lien vers le rapport dans le message, ex. https://memento.internal.lcl"
-      >
-        <input
-          type="url"
-          value={s['notify.app_url']}
-          onChange={(e) => setS({ ...s, 'notify.app_url': e.target.value.trim() })}
-          placeholder="https://memento.internal.lcl"
-        />
-      </Field>
-      {preview && (
-        <div className="flex flex-col gap-1.5">
-          <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-            {preview.ai
-              ? 'Aperçu rédigé par l’IA (prompt enregistré)'
-              : preview.aiError
-                ? `Aperçu : rapport simple (IA indisponible : ${preview.aiError})`
-                : 'Aperçu : rapport simple'}
+          <button type="button" className="btn self-start" onClick={send} disabled={!ready || busy !== null}>
+            {busy === 'send' ? <AiDots /> : null}
+            {busy === 'send' ? 'Envoi…' : 'Envoyer le bilan maintenant'}
+          </button>
+          <span className="text-[13px]" style={{ color: ready ? 'var(--ok)' : 'var(--text-faint)' }}>
+            {ready
+              ? `Envoyé sur : ${[telegramReady ? 'Telegram' : '', st?.pushDevices ? `${st.pushDevices} appareil(s)` : ''].filter(Boolean).join(' · ')}`
+              : 'Aucun canal prêt : active cet appareil ou Telegram ci-dessous'}
           </span>
-          <TelegramText html={preview.text} />
         </div>
-      )}
-    </div>
+        {preview && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+              {preview.ai
+                ? 'Aperçu rédigé par l’IA (prompt enregistré)'
+                : preview.aiError
+                  ? `Aperçu : rapport simple (IA indisponible : ${preview.aiError})`
+                  : 'Aperçu : rapport simple'}
+            </span>
+            <TelegramText html={preview.text} />
+          </div>
+        )}
+      </div>
+      <PushConfig />
+      <div className="flex flex-col gap-4 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
+        <h3 className="h2 m-0">Canal : Telegram</h3>
+        <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          Facultatif : les mêmes messages, dans une conversation avec ton bot.{' '}
+          <span style={{ color: telegramReady ? 'var(--ok)' : undefined }}>
+            {telegramReady ? '✓ Telegram prêt.' : 'Jeton et chat à enregistrer.'}
+          </span>
+        </p>
+        <Field
+          label="Jeton du bot"
+          info="Dans Telegram, écris à @BotFather, commande /newbot : il te donne un jeton du type 123456789:ABC… Gardé dans la base de Mémento, jamais réaffiché ni exporté."
+        >
+          <div className="flex gap-2 items-center flex-wrap">
+            <input
+              type="password"
+              autoComplete="off"
+              value={botToken}
+              onChange={(e) => setBotToken(e.target.value)}
+              placeholder={
+                st?.tokenSource === 'saisie'
+                  ? `Enregistré (${st.tokenHint}) — saisir pour remplacer`
+                  : st?.tokenSource === 'env'
+                    ? `Variable ${st.tokenEnv} (${st.tokenHint})`
+                    : '123456789:ABC…'
+              }
+              style={{ flex: '1 1 260px' }}
+            />
+            {st?.tokenSource === 'saisie' && !botToken && (
+              <button type="button" className="btn btn-sm" onClick={clearToken}>
+                Effacer le jeton
+              </button>
+            )}
+          </div>
+        </Field>
+        <Field
+          label="Chat"
+          info="Ouvre ton bot dans Telegram et envoie-lui /start, enregistre le jeton, puis clique « Trouver mon chat »."
+        >
+          <div className="flex gap-2 items-center flex-wrap">
+            <input
+              value={s['notify.telegram_chat_id']}
+              onChange={(e) => setS({ ...s, 'notify.telegram_chat_id': e.target.value.trim() })}
+              placeholder="ex. 123456789"
+              style={{ flex: '1 1 200px' }}
+            />
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={detect}
+              disabled={!st?.tokenSource || busy !== null}
+            >
+              {busy === 'detect' ? 'Recherche…' : 'Trouver mon chat'}
+            </button>
+          </div>
+        </Field>
+      </div>
+    </>
   );
 }
 

@@ -324,6 +324,20 @@ export function ObjectivePanel({
     },
     toast: 'Objectif supprimé.',
   });
+  // D-109: duplicate, with its projects unless unchecked; on its own page, the copy opens.
+  const [copying, setCopying] = useState(false);
+  const [withProjects, setWithProjects] = useState(true);
+  const duplicate = useAction(
+    () => post<Objective>(`/objectives/${objective!.id}/duplicate`, { withProjects }),
+    {
+      onSuccess: (copy) => {
+        setCopying(false);
+        onClose();
+        toast(`Copie créée : « ${copy.title} ».`);
+        leave(`/objectifs/${objective!.id}`, `/objectifs/${copy.id}`);
+      },
+    },
+  );
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const ai: AiRequest = {
     kind: 'objective',
@@ -612,6 +626,11 @@ export function ObjectivePanel({
         )}
         {footer}
         {objective && (
+          <button type="button" className="btn" onClick={() => setCopying(true)}>
+            Dupliquer
+          </button>
+        )}
+        {objective && (
           <button
             type="button"
             className="btn btn-ghost btn-danger ml-auto"
@@ -635,6 +654,41 @@ export function ObjectivePanel({
             objectif ». Les rapports déjà générés ne changent pas.
           </p>
         </ConfirmDialog>
+      )}
+      {objective && (
+        <Panel
+          open={copying}
+          onClose={() => setCopying(false)}
+          title="Dupliquer l'objectif"
+          side={false}
+          width={480}
+        >
+          <p className="m-0 text-[15px]">
+            Une copie de « {objective.title} » : mêmes champs, même trimestre, mesure remise à 0. Les
+            modifications non enregistrées de cette fiche ne sont pas reprises.
+          </p>
+          <label className="flex items-center gap-2 text-[14px]">
+            <input
+              type="checkbox"
+              checked={withProjects}
+              onChange={(e) => setWithProjects(e.target.checked)}
+            />
+            Avec ses projets et leur ordre (tâches toutes à faire, sans mois ni dates)
+          </label>
+          <div className="flex gap-2 justify-end">
+            <button type="button" className="btn" onClick={() => setCopying(false)}>
+              Annuler
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={duplicate.isPending}
+              onClick={() => duplicate.mutate(undefined)}
+            >
+              Dupliquer
+            </button>
+          </div>
+        </Panel>
       )}
     </Panel>
   );

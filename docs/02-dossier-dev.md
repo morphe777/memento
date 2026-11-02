@@ -235,6 +235,7 @@ Outils nommés en anglais, description en français, chacun = un ou deux appels 
 | `create_objective`, `update_objective` | |
 | `list_projects`, `get_project` | Filtres : statut, groupe, domaine, mois |
 | `create_idea`, `create_project`, `update_project`, `promote_idea`, `complete_project` | promote applique RB-02 et renvoie les manques |
+| `duplicate_project`, `duplicate_objective` | D-109 : copie à neuf (tâches à faire, ni mois ni dates) ; un objectif emporte ses projets et leur chemin |
 | `create_tasks` (lot), `update_task`, `complete_task`, `reorder_tasks` | Création en lot pour découper un projet |
 | `add_inbox_task` | Capture rapide |
 | `get_week_plan`, `propose_week_plan`, `set_week_plan_items` | Base du bouton IA en v2 |
@@ -282,7 +283,8 @@ flowchart LR
 | Idées | /idees | Idées | Filtres domaine / groupe, tri par ancienneté, promotion en 1 action (DM-90) | — |
 | Rapports | /rapports, /rapports/:id | Rapports › Hebdo › S43 | Historique, rapports figés, navigation précédent / suivant | rapport-hebdo.dc.html |
 | À revoir | /a-revoir | À revoir | Créations et modifications récentes, filtre période / auteur, « marquer comme revu » (F-25) | — |
-| Configuration | /configuration/:onglet | Configuration › Onglet | Budget, Domaines, Groupes, Moteur, Alertes, Planning, Templates, Accès (V-14) | — |
+| Calendrier | /calendrier?vue=semaine|mois|trimestre&date= | Calendrier | Tâches à leur deadline / jour fait, occurrences des récurrentes, prévues sans jour ; filtres domaine, Projets / Inbox / Récurrentes, Faites (D-113) | — |
+| Configuration | /configuration/:onglet | Configuration › Onglet | Général, Domaines, Groupes, Moteur, Seuils, Calendrier, Notifications, Templates, IA, Accès, Compte (V-14, D-111) | — |
 
 **Fil d'Ariane** : toujours affiché sous l'en-tête, chaque segment est un lien (G-12). Projet multi-groupes : groupe principal affiché.
 

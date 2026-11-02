@@ -15,6 +15,7 @@ import { Loading } from './components/ui.tsx';
 import { ApiError } from './lib/api.ts';
 import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
+import { CalendarPageView, type CalendarView } from './pages/calendar.tsx';
 import { CapPage } from './pages/cap.tsx';
 import { ExperiencesPage } from './pages/experiences.tsx';
 import {
@@ -90,6 +91,18 @@ const inboxRoute = createRoute({
   },
 });
 const capRoute = route('/cap', CapPage); // D-100
+const calendarRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/calendrier', // D-113
+  validateSearch: (s: Record<string, unknown>): { vue?: CalendarView; date?: string } => ({
+    vue: s.vue === 'semaine' || s.vue === 'trimestre' ? s.vue : undefined,
+    date: typeof s.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s.date) ? s.date : undefined,
+  }),
+  component: function Calendar() {
+    const { vue, date } = calendarRoute.useSearch();
+    return <CalendarPageView vue={vue} date={date} />;
+  },
+});
 const objectivesRoute = route('/objectifs', ObjectivesPage);
 const objectiveRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -189,6 +202,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   weekRoute,
   capRoute,
+  calendarRoute,
   planRoute,
   inboxRoute,
   objectivesRoute,

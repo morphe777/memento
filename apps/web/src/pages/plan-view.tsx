@@ -597,6 +597,7 @@ function PlanEditor({
   };
   // iPad (user request 01/11/2026): dots 30 % smaller than the former 44 px, still easy to grab.
   const portR = coarse ? 15 : 7;
+  const metaSide = { paddingLeft: 14, paddingRight: coarse ? portR + 10 : 14 };
   const capOf = (q: string) => live.capacity.find((c) => c.quarter === q);
   const curve = (x1: number, y1: number, x2: number, y2: number) => {
     const dx = Math.max(40, Math.abs(x2 - x1) / 2);
@@ -984,8 +985,10 @@ function PlanEditor({
                           boxSizing: 'border-box',
                           overflow: 'hidden',
                           borderRadius: 14,
-                          // iPad: the right padding clears the connection dot that sits on the edge.
-                          padding: coarse ? `12px ${portR + 10}px 12px 14px` : '10px 14px',
+                          // iPad Safari draws a line that clips its text (overflow / opacity) without the
+                          // padding of its foreignObject parent (user report 02/11/2026): the side padding is on
+                          // each line. On iPad the right one also clears the connection dot on the edge.
+                          padding: coarse ? '12px 0' : '10px 0',
                           background: dl.color(band.meta.domainId),
                           color: '#fff',
                           display: 'flex',
@@ -998,9 +1001,10 @@ function PlanEditor({
                         <span
                           className="mono"
                           style={{
+                            ...metaSide,
                             fontSize: 11,
                             letterSpacing: 0.6,
-                            opacity: 0.9,
+                            color: 'rgba(255,255,255,0.9)',
                             whiteSpace: 'nowrap',
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
@@ -1011,6 +1015,7 @@ function PlanEditor({
                         <span
                           title={band.meta.title}
                           style={{
+                            ...metaSide,
                             fontSize: coarse ? 15 : 16,
                             fontWeight: 600,
                             lineHeight: 1.25,
@@ -1022,7 +1027,7 @@ function PlanEditor({
                         >
                           {band.meta.title}
                         </span>
-                        <span style={{ fontSize: 12, opacity: 0.9 }}>
+                        <span style={{ ...metaSide, fontSize: 12, color: 'rgba(255,255,255,0.9)' }}>
                           {band.meta.objectiveCount} objectif{band.meta.objectiveCount > 1 ? 's' : ''} ·{' '}
                           {band.meta.projectCount} projet
                           {band.meta.projectCount > 1 ? 's' : ''}
@@ -1132,7 +1137,7 @@ function PlanEditor({
                         title="Clic : modifier l'objectif · glisser : changer de trimestre ou d'ordre"
                         style={{
                           height: '100%',
-                          padding: coarse ? '12px 14px' : '9px 14px',
+                          padding: coarse ? '12px 0' : '9px 0', // side padding on each line (iPad, see above)
                           cursor: readOnly ? 'default' : 'move',
                           display: 'flex',
                           flexDirection: 'column',
@@ -1143,10 +1148,21 @@ function PlanEditor({
                       >
                         <span
                           className="mono"
-                          style={{ fontSize: 11, color: 'var(--text-faint)', display: 'flex', gap: 8 }}
+                          style={{
+                            fontSize: 11,
+                            color: 'var(--text-faint)',
+                            display: 'flex',
+                            gap: 8,
+                            paddingRight: 14,
+                          }}
                         >
                           <span
-                            style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                            style={{
+                              paddingLeft: 14,
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
                           >
                             {readOnly ? '' : '⋮⋮ '}
                             {quarterLabel(o.quarter)} · deadline {fmtDate(o.deadline)}
@@ -1158,6 +1174,7 @@ function PlanEditor({
                         <span
                           title={o.title}
                           style={{
+                            padding: '0 14px',
                             fontSize: 15.5,
                             fontWeight: 600,
                             lineHeight: 1.2,

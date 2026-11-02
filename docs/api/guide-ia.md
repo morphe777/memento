@@ -185,7 +185,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 
 `get_context` (vue d'ensemble), `get_guide` (ce document), `search`, `list_objectives`, `get_objective`,
 `create_objective`, `update_objective`, `set_objective_quarter`, `list_projects`, `get_project`, `create_idea`,
-`create_project`, `update_project`, `promote_idea`, `set_project_month`, `complete_project`, `create_tasks`,
-`update_task`, `complete_task`, `reorder_tasks`, `add_inbox_task`, `get_week_plan`, `propose_week_plan`,
+`create_project`, `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `set_project_month`, `complete_project`, `create_tasks`,
+`update_task`, `complete_task`, `get_calendar`, `reorder_tasks`, `add_inbox_task`, `get_week_plan`, `propose_week_plan`,
 `set_week_plan_items`, `get_experiences`, `add_experience_idea`, `list_reports`, `get_report`, `list_changes`,
 `add_resource`, `list_meta_objectives`, `get_meta_objective`, `create_meta_objective`, `update_meta_objective`, `set_objective_meta`, `set_project_dependencies`, `add_project_dependency`, `remove_project_dependency`, `get_plan_graph`, `preview_plan_changes`, `apply_plan_changes`, `reorder_objectives`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.

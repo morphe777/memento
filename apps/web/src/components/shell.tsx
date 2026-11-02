@@ -34,6 +34,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     items: [
       { to: '/semaine', label: 'Ma semaine' },
       { to: '/cap', label: 'Cap' }, // D-100
+      { to: '/calendrier', label: 'Calendrier' }, // D-113
       {
         to: '/planifier',
         label: 'Planifier',
@@ -996,6 +997,13 @@ const ICON_PATHS: Record<string, ReactNode> = {
     <>
       <path d="M2 4h7M2 8h5M2 12h8" />
       <path d="m11 3 1.5 1.5L15 2" />
+    </>
+  ),
+  '/calendrier': (
+    <>
+      <rect x="2" y="3" width="12" height="11" rx="1.5" />
+      <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3" />
+      <path d="M5 9h1M7.5 9h1M10 9h1M5 11.5h1M7.5 11.5h1" />
     </>
   ),
   '/cap': (

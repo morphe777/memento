@@ -471,6 +471,11 @@ export async function buildApp(opts: AppOptions) {
       r.post('/objectives', { schema: { ...tag('Objectifs'), body: D.objectiveCreate } }, async (req) =>
         D.createObjective(ctx(req), req.body),
       );
+      r.post(
+        '/objectives/:id/duplicate',
+        { schema: { ...tag('Objectifs'), params: D.idParam, body: D.objectiveDuplicateBody } },
+        async (req) => D.duplicateObjective(ctx(req), req.params.id, req.body),
+      );
       r.patch(
         '/objectives/:id',
         { schema: { ...tag('Objectifs'), params: D.idParam, body: D.objectivePatch } },
@@ -528,6 +533,11 @@ export async function buildApp(opts: AppOptions) {
         async (req) => D.completeProject(ctx(req), req.params.id, req.body.success),
       );
       r.post(
+        '/projects/:id/duplicate',
+        { schema: { ...tag('Projets'), params: D.idParam, body: D.projectDuplicateBody } },
+        async (req) => D.duplicateProject(ctx(req), req.params.id, { title: req.body.title }),
+      );
+      r.post(
         '/projects/:id/replan',
         { schema: { ...tag('Projets'), params: D.idParam, body: D.projectReplanBody } },
         async (req) => D.replanProject(ctx(req), req.params.id, req.body.dueDate),
@@ -560,6 +570,9 @@ export async function buildApp(opts: AppOptions) {
       // D-100: Cap, the « why » of the quarter and the month.
       r.get('/cap', { schema: { ...tag('Objectifs'), querystring: D.capQuery } }, async (req) =>
         D.getCap(ctx(req), req.query),
+      );
+      r.get('/calendar', { schema: { ...tag('Tâches'), querystring: D.calendarQuery } }, async (req) =>
+        D.getCalendar(ctx(req), req.query.from, req.query.to),
       );
       r.get('/inbox', { schema: tag('Tâches') }, async (req) => D.listInbox(ctx(req)));
       r.get('/experiences', { schema: tag('Expériences') }, async (req) => D.getExperiencesPage(ctx(req)));
@@ -746,7 +759,7 @@ export async function buildApp(opts: AppOptions) {
       r.post('/notify/telegram-detect', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
         D.detectTelegramChat(ctx(req), process.env),
       );
-      // Web Push (user request 01/11/2026): this device subscribes from Configuration › Planning.
+      // Web Push (user request 01/11/2026): this device subscribes from Configuration › Notifications.
       r.get('/notify/push/key', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
         D.pushPublicKey(ctx(req)),
       );

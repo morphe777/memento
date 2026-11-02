@@ -293,7 +293,7 @@ export function setTelegramToken(ctx: Ctx, token: string) {
   return { ok: true as const };
 }
 
-/** What Configuration › Planning shows: is Telegram usable, never the token itself. */
+/** What Configuration › Notifications shows: is Telegram usable, never the token itself. */
 export function notifyStatus(ctx: Pick<Ctx, 'db'>, env: Env) {
   const stored = storedToken(ctx);
   const token = telegramToken(ctx, env);

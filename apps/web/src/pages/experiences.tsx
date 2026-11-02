@@ -44,7 +44,7 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
             Cible
             <InfoTip>
               Expériences vécues sur les {d.windowWeeks} dernières semaines (depuis le {fmtDate(d.windowFrom)}
-              ), comparées à la cible. Réglable dans Configuration › Alertes.
+              ), comparées à la cible. Réglable dans Configuration › Seuils.
             </InfoTip>
           </span>
           <span className="mono" style={{ fontSize: 34 }}>

@@ -40,6 +40,7 @@ export interface Me {
 export type BoardTask = ReturnType<typeof D.listBoardTasks>[number];
 export type ObjectivesMap = ReturnType<typeof D.getObjectivesMap>;
 export type MonthPlanningPage = ReturnType<typeof D.getMonthPlanningPage>;
+export type CalendarPage = ReturnType<typeof D.getCalendar>; // D-113
 export type InboxPage = ReturnType<typeof D.listInbox>;
 export type QuarterPlanningPage = ReturnType<typeof D.getQuarterPlanningPage>;
 export type PlanGraph = ReturnType<typeof D.getPlanGraph>;

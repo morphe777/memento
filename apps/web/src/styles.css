@@ -768,7 +768,7 @@ input[type="checkbox"] {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-/* iPhone Cap line: the next « why » fades in every 5 s (user request 01/11/2026). */
+/* Cap line: the next « why » fade in at each turn (ui.cap_turn_s, D-110). */
 .cap-turn {
   animation: cap-turn 0.5s ease-out;
 }

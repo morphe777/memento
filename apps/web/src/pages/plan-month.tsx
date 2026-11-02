@@ -4,10 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { AiProposeButton } from '../components/ai.tsx';
+import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
 import { Empty, ErrorBox, InfoTip, Loading, PageHeader, Panel, Section } from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
 import { fmtDate, fmtMin } from '../lib/format.ts';
-import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
+import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { MonthPlanningPage } from '../lib/types.ts';
 
 type Row = MonthPlanningPage['chosen'][number];
@@ -82,7 +83,7 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
           <QuarterObjectives page={page} />
         </div>
         <div className="min-w-0" style={{ flex: '2 1 300px' }}>
-          <Alerts alerts={page.alerts} />
+          <PlanAlerts alerts={page.alerts} okWord="valider le mois" />
         </div>
       </div>
       <section className="bin flex flex-col gap-3">
@@ -123,112 +124,30 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
   );
 }
 
-/** A box that folds from the chevron of its title, remembered on this device (user request 01/11/2026). */
-function useFold(key: string): [boolean, () => void] {
-  const [open, setOpen] = useState(() => {
-    try {
-      return localStorage.getItem(key) !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const toggle = () => {
-    setOpen(!open);
-    try {
-      localStorage.setItem(key, open ? '0' : '1');
-    } catch {
-      // private mode: not remembered
-    }
-  };
-  return [open, toggle];
-}
-
-function FoldButton({ open, onClick, what }: { open: boolean; onClick: () => void; what: string }) {
-  const label = `${open ? 'Masquer' : 'Afficher'} ${what}`;
-  return (
-    <button
-      type="button"
-      className="icon-btn flex-none"
-      aria-expanded={open}
-      aria-label={label}
-      title={label}
-      onClick={onClick}
-      style={{ width: 28, height: 28, minHeight: 28, color: 'var(--text-muted)' }}
-    >
-      <svg
-        aria-hidden="true"
-        width={14}
-        height={14}
-        viewBox="0 0 14 14"
-        style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform 0.15s' }}
-      >
-        <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-      </svg>
-    </button>
-  );
-}
-
-/**
- * Time of the month, at the top (user request 01/11/2026): it moves as projects are added, so it stays in
- * sight while scrolling (PC / iPad); the breakdown is folded behind « Détail ».
- */
+/** Time of the month (D-108), in the banner shared with Planifier › Semaine. */
 function MonthTime({ page }: { page: MonthPlanningPage }) {
-  const phone = useIsPhone();
-  const [detail, setDetail] = useState(false);
   const b = page.budget;
-  const pct = `${Math.min(100, Math.round((b.neededMin / Math.max(1, b.availableMin)) * 100))}%`;
   return (
-    <section
-      className="card flex flex-col gap-2"
-      style={{
-        padding: '14px 20px',
-        ...(phone ? {} : { position: 'sticky', top: 8, zIndex: 5, boxShadow: '0 4px 14px rgba(0,0,0,0.06)' }),
-      }}
-    >
-      <div className="flex items-baseline gap-x-4 gap-y-1 flex-wrap">
-        <h2 className="h2 flex items-center gap-2">
-          Temps du mois
-          <InfoTip>
-            <span className="tip-p">
-              <b>Capacité</b> = budget de chaque semaine (ajusté dans Planifier › Semaine, sinon le budget par
-              défaut), au prorata de ses jours dans le mois.
-            </span>
-            <span className="tip-p">
-              <b>Besoin</b> = travail restant des projets du mois + tâches Inbox à deadline ce mois-ci
-              (réservées d'office).
-            </span>
-          </InfoTip>
-        </h2>
-        <span className="mono text-[22px]">
-          {fmtMin(b.neededMin)}{' '}
-          <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {fmtMin(b.availableMin)}</span>
-        </span>
-        <span
-          className="text-[14px] font-medium"
-          style={{ color: b.overMin ? 'var(--status-red)' : 'var(--ok)' }}
-        >
-          {b.overMin
-            ? `${fmtMin(b.overMin)} de trop : retire un projet ou étale-le`
-            : `Reste ${fmtMin(b.availableMin - b.neededMin)}`}
-        </span>
-        <span className="flex-1" />
-        <button
-          type="button"
-          className="border-0 bg-transparent p-0 cursor-pointer underline underline-offset-2 text-[13px]"
-          style={{ color: 'var(--text-muted)' }}
-          aria-expanded={detail}
-          onClick={() => setDetail(!detail)}
-        >
-          {detail ? 'Masquer le détail' : 'Détail'}
-        </button>
-      </div>
-      <div className="track" style={{ height: 10 }}>
-        <div
-          style={{ height: 10, width: pct, background: b.overMin ? 'var(--status-red)' : 'var(--primary)' }}
-        />
-      </div>
-      {detail && (
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+    <PlanTime
+      title="Temps du mois"
+      info={
+        <>
+          <span className="tip-p">
+            <b>Capacité</b> = budget de chaque semaine (ajusté dans Planifier › Semaine, sinon le budget par
+            défaut), au prorata de ses jours dans le mois.
+          </span>
+          <span className="tip-p">
+            <b>Besoin</b> = travail restant des projets du mois + tâches Inbox à deadline ce mois-ci
+            (réservées d'office).
+          </span>
+        </>
+      }
+      usedMin={b.neededMin}
+      totalMin={b.availableMin}
+      overMin={b.overMin}
+      overText="retire un projet ou étale-le"
+      detail={
+        <>
           <span>Capacité du mois : {fmtMin(b.capacityMin)}</span>
           {b.spentMin > 0 && <span>Déjà fait ce mois-ci : {fmtMin(b.spentMin)}</span>}
           <span>Projets du mois : {fmtMin(b.plannedMin)}</span>
@@ -242,9 +161,9 @@ function MonthTime({ page }: { page: MonthPlanningPage }) {
                 .join(', ')}
             </span>
           )}
-        </div>
-      )}
-    </section>
+        </>
+      }
+    />
   );
 }
 
@@ -392,77 +311,6 @@ function QuarterObjectives({ page }: { page: MonthPlanningPage }) {
           </div>
         );
       })}
-    </Section>
-  );
-}
-
-const LEVEL_COLOR: Record<string, string> = {
-  critical: 'var(--status-red)',
-  warn: 'var(--status-orange)',
-  info: 'var(--text-ghost)',
-  ok: 'var(--status-green)',
-};
-
-/** D-108: alerts on three levels; those that concern projects open their list. */
-function Alerts({ alerts }: { alerts: MonthPlanningPage['alerts'] }) {
-  const [open, setOpen] = useState<string | null>(null);
-  return (
-    <Section
-      title="Alertes"
-      info={
-        <>
-          <span className="tip-li">
-            <b style={{ color: '#f08a80' }}>Rouge</b> : à traiter avant de valider le mois ;
-          </span>
-          <span className="tip-li">
-            <b style={{ color: '#f0b45b' }}>Orange</b> : à surveiller ;
-          </span>
-          <span className="tip-li">
-            <b>Gris</b> : pour information.
-          </span>
-        </>
-      }
-    >
-      <ul className="m-0 p-0 list-none flex flex-col gap-2.5">
-        {alerts.map((a) => {
-          const key = a.code + a.text;
-          const items = a.items ?? [];
-          return (
-            <li key={key} className="flex gap-2.5 text-[14px]">
-              <span className="dot flex-none" style={{ marginTop: 6, background: LEVEL_COLOR[a.level] }} />
-              <div className="flex-1 min-w-0 flex flex-col gap-1">
-                {items.length ? (
-                  <button
-                    type="button"
-                    className="link-btn"
-                    aria-expanded={open === key}
-                    onClick={() => setOpen(open === key ? null : key)}
-                    style={{ fontWeight: a.level === 'critical' ? 600 : undefined }}
-                  >
-                    {a.text} <span style={{ color: 'var(--text-faint)' }}>{open === key ? '▴' : '▾'}</span>
-                  </button>
-                ) : (
-                  <span style={{ fontWeight: a.level === 'critical' ? 600 : undefined }}>{a.text}</span>
-                )}
-                {open === key && (
-                  <ul className="m-0 pl-4 flex flex-col gap-0.5 text-[13px]">
-                    {items.map((p) => (
-                      <li key={p.id}>
-                        <Link
-                          to={p.type === 'objective' ? '/objectifs/$id' : '/projets/$id'}
-                          params={{ id: p.id }}
-                        >
-                          {p.title}
-                        </Link>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
     </Section>
   );
 }
