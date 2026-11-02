@@ -41,6 +41,7 @@ export const settingsSchema = z.object({
   'ui.show_recalculate': z.boolean(),
   'inbox.recurring_horizon_days': z.number().int().min(0).max(365),
   'ui.projects_default_view': z.enum(['tree', 'list', 'kanban']),
+  'ui.cap_turn_s': z.number().int().min(2).max(120),
   'month.max_projects': z.number().int().min(1).max(20),
   'quarter.max_objectives': z.number().int().min(1).max(20),
   'map.no_meta_position': z.number().int().min(0).max(1000),
@@ -100,6 +101,7 @@ export const DEFAULT_SETTINGS: Settings = {
   'ui.show_recalculate': false, // « Recalculer » hidden until the AI proposal replaces it (23/10/2026)
   'inbox.recurring_horizon_days': 14, // D-44: recurring tasks due later than this go to « Plus tard »
   'ui.projects_default_view': 'tree',
+  'ui.cap_turn_s': 7, // D-110: seconds between two sets of « why » in Ma semaine, same on every device
   'month.max_projects': 3, // D-47: alert above this many month projects at once
   'quarter.max_objectives': 3, // D-48: alert above this many objectives in a quarter
   'map.no_meta_position': 0, // D-69: « Sans méta-objectif » lane on top, movable (index among the meta-objectives)

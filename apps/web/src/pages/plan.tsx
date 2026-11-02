@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { AiProposeButton } from '../components/ai.tsx';
+import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { openTask } from '../components/tasks.tsx';
 import {
@@ -16,6 +17,7 @@ import {
   PageHeader,
   Panel,
   SAVE_HINT,
+  Section,
   Tabs,
   useDomainRows,
 } from '../components/ui.tsx';
@@ -98,7 +100,6 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         : [...current.filter((i) => i.taskId !== taskId), { taskId, kind }];
     setItems.mutate(next);
   };
-  const over = page.budget.overMin > 0;
   const mixRows = useDomainRows(page.mix);
 
   return (
@@ -153,125 +154,49 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         />
       </div>
 
+      <WeekTime page={page} onBudget={() => setBudgetOpen(true)} />
+      {/* User request 02/11/2026, like Planifier › Mois: planned mix and alerts side by side, on top. */}
       <div className="flex flex-wrap gap-6 items-start">
-        <div className="min-w-0 flex flex-col gap-6" style={{ flex: '999 1 640px' }}>
-          {page.groups.map((g) => (
-            <section key={g.key} className="bin flex flex-col gap-3">
-              <div className="flex flex-wrap items-baseline gap-2.5" style={{ padding: '0 2px 4px' }}>
-                <h2 className="h2-bin">{g.name}</h2>
-                <span
-                  className="text-[12px] font-semibold rounded-full"
-                  style={{ color: 'var(--text-2)', background: 'var(--surface)', padding: '2px 9px' }}
-                >
-                  {g.countLabel}
-                </span>
-                {g.hint && (
-                  <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-                    {g.hint}
-                  </span>
-                )}
-              </div>
-              {g.cards.length === 0 && (
-                <div className="text-[14px] px-1" style={{ color: 'var(--text-faint)' }}>
-                  {g.key === 'inbox'
-                    ? 'Inbox vide.'
-                    : g.key === 'month'
-                      ? 'Aucun projet du mois : choisis-les dans Planifier › Mois.'
-                      : 'Rien d’autre à proposer.'}
-                </div>
-              )}
-              {g.cards.map((c) => (
-                <ProjectCard
-                  key={c.projectId ?? 'inbox'}
-                  card={c}
-                  color={dl.color(c.domainId)}
-                  domainName={c.projectId ? dl.name(c.domainId) : ''}
-                  onToggle={toggle}
-                  busy={setItems.isPending}
-                />
-              ))}
-              {g.key === 'consider' && page.more.length > 0 && (
-                <button type="button" className="btn btn-sm self-start" onClick={() => setMoreOpen(true)}>
-                  + Tâche d'un autre projet
-                </button>
-              )}
-            </section>
-          ))}
-        </div>
-
-        <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
-          <section className="card flex flex-col gap-2.5" style={{ padding: '18px 20px' }}>
-            <div className="flex justify-between items-baseline">
-              <h2 className="h2">Budget</h2>
-              <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                hors expériences
-              </span>
-            </div>
-            <div className="mono" style={{ fontSize: 28 }}>
-              {page.budget.plannedMin ? fmtMin(page.budget.plannedMin) : '0 h'}{' '}
-              <span style={{ fontSize: 16, color: 'var(--text-faint)' }}>
-                / {fmtMin(page.budget.budgetMin)}
-              </span>
-            </div>
-            <div className="track" style={{ height: 10, background: 'var(--track)' }}>
-              <div
-                style={{
-                  height: 10,
-                  width: `${Math.min(100, Math.round((page.budget.plannedMin / Math.max(1, page.budget.budgetMin)) * 100))}%`,
-                  background: over ? 'var(--warn)' : 'var(--text)',
-                  borderRadius: 999,
-                }}
-              />
-            </div>
-            <div
-              className="text-[13px] font-medium"
-              style={{ color: over ? 'var(--late-text)' : 'var(--ok)' }}
-            >
-              {over
-                ? `+${fmtMin(page.budget.overMin)} au-delà du budget`
-                : `Reste ${fmtMin(page.budget.remainingMin)}`}
-            </div>
-            <div className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
-              {page.counts.week} tâche(s) · {page.counts.experiences} expérience(s) · {page.counts.bonus}{' '}
-              bonus
-            </div>
-            <button
-              type="button"
-              className="text-left text-[12px] border-0 bg-transparent p-0 cursor-pointer underline"
-              style={{ color: 'var(--text-faint)' }}
-              onClick={() => setBudgetOpen(true)}
-            >
-              {page.plan?.budgetReason
-                ? `Budget ajusté : ${page.plan.budgetReason}`
-                : 'Ajuster le budget de cette semaine'}
-            </button>
-          </section>
-
-          <section className="card flex flex-col gap-2.5" style={{ padding: '18px 20px' }}>
-            <h2 className="h2">Alertes</h2>
-            {page.alerts.map((a) => (
-              <div key={a.code + a.text} className="flex gap-2.5 items-start text-[14px]">
-                <span
-                  className="dot"
-                  style={{
-                    marginTop: 6,
-                    background: a.level === 'ok' ? 'var(--status-green)' : 'var(--warn)',
-                  }}
-                />
-                <span style={{ color: 'var(--text-2)' }}>{a.text}</span>
-              </div>
-            ))}
-          </section>
-
-          <section className="card flex flex-col gap-2.5" style={{ padding: '18px 20px' }}>
-            <h2 className="h2">Répartition prévue</h2>
+        <div className="min-w-0" style={{ flex: '3 1 420px' }}>
+          <Section
+            title="Répartition prévue"
+            info="Temps prévu par domaine, dans l'ordre de tes priorités ; les expériences comptent ici."
+          >
             <DomainBars rows={mixRows} />
-            <div className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-              Par ordre de priorité · expériences incluses
-            </div>
-          </section>
-        </aside>
+          </Section>
+        </div>
+        <div className="min-w-0" style={{ flex: '2 1 300px' }}>
+          <PlanAlerts alerts={page.alerts} okWord="valider la semaine" />
+        </div>
       </div>
+      {page.groups.map((g) => (
+        <PlanGroup key={g.key} g={g}>
+          {g.cards.length === 0 && (
+            <div className="text-[14px] px-1" style={{ color: 'var(--text-faint)' }}>
+              {g.key === 'inbox'
+                ? 'Inbox vide.'
+                : g.key === 'month'
+                  ? 'Aucun projet du mois : choisis-les dans Planifier › Mois.'
+                  : 'Rien d’autre à proposer.'}
+            </div>
+          )}
+          {g.cards.map((c) => (
+            <ProjectCard
+              key={c.projectId ?? 'inbox'}
+              card={c}
+              color={dl.color(c.domainId)}
+              domainName={c.projectId ? dl.name(c.domainId) : ''}
+              onToggle={toggle}
+              busy={setItems.isPending}
+            />
+          ))}
+          {g.key === 'consider' && page.more.length > 0 && (
+            <button type="button" className="btn btn-sm self-start" onClick={() => setMoreOpen(true)}>
+              + Tâche d'un autre projet
+            </button>
+          )}
+        </PlanGroup>
+      ))}
       {budgetOpen && <BudgetPanel open onClose={() => setBudgetOpen(false)} page={page} />}
       {moreOpen && (
         <MorePanel
@@ -282,6 +207,73 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         />
       )}
     </div>
+  );
+}
+
+/** Time of the week (user request 02/11/2026), in the banner shared with Planifier › Mois. */
+function WeekTime({ page, onBudget }: { page: PlanningPage; onBudget: () => void }) {
+  const b = page.budget;
+  return (
+    <PlanTime
+      title="Temps de la semaine"
+      info={
+        <>
+          <span className="tip-p">
+            <b>Budget</b> = heures disponibles cette semaine : le budget par défaut (Configuration › Général),
+            ou celui ajusté ici.
+          </span>
+          <span className="tip-p">
+            <b>Prévu</b> = durées des tâches « Semaine ». Les expériences et le bonus n'y comptent pas.
+          </span>
+        </>
+      }
+      usedMin={b.plannedMin}
+      totalMin={b.budgetMin}
+      overMin={b.overMin}
+      overText="passe une tâche en bonus ou retire-la"
+      actions={
+        <button
+          type="button"
+          className="border-0 bg-transparent p-0 cursor-pointer underline underline-offset-2 text-[13px]"
+          style={{ color: page.plan?.budgetReason ? 'var(--text-2)' : 'var(--text-muted)' }}
+          onClick={onBudget}
+          title={page.plan?.budgetReason ? `Budget ajusté : ${page.plan.budgetReason}` : undefined}
+        >
+          {page.plan?.budgetReason ? 'Budget ajusté' : 'Ajuster le budget'}
+        </button>
+      }
+      detail={
+        <>
+          <span>
+            {page.counts.week} tâche{page.counts.week > 1 ? 's' : ''} · {page.counts.experiences} expérience
+            {page.counts.experiences > 1 ? 's' : ''} (hors budget) · {page.counts.bonus} bonus
+          </span>
+          {page.plan?.budgetReason && <span>Budget ajusté : {page.plan.budgetReason}</span>}
+        </>
+      }
+    />
+  );
+}
+
+/** A box of the week (Inbox, Projets du mois, À considérer aussi) that folds from its title, like Mois. */
+function PlanGroup({ g, children }: { g: PlanningPage['groups'][number]; children: React.ReactNode }) {
+  const [open, toggle] = useFold(`memento.week.fold.${g.key}`);
+  return (
+    <section className="bin flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2.5">
+        <FoldButton open={open} onClick={toggle} what={g.name.toLowerCase()} />
+        <h2 className="h2-bin">{g.name}</h2>
+        <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          {g.countLabel}
+        </span>
+        {g.hint && (
+          <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+            · {g.hint}
+          </span>
+        )}
+      </div>
+      {open && children}
+    </section>
   );
 }
 
@@ -311,31 +303,32 @@ function ProjectCard({
       {!inbox && (
         <div
           className="flex flex-wrap items-center gap-2.5"
-          style={{ padding: '14px 18px', borderBottom: '1px solid var(--divider-2)' }}
+          style={{ padding: '10px 16px', borderBottom: '1px solid var(--divider-2)' }}
         >
-          <span className="dot" style={{ width: 10, height: 10, background: color }} />
+          <span className="dot" style={{ background: color }} />
           {card.projectId ? (
-            <Link to="/projets/$id" params={{ id: card.projectId }} className="text-[16px] font-semibold">
+            <Link to="/projets/$id" params={{ id: card.projectId }} className="text-[15px] font-semibold">
               {card.title}
             </Link>
           ) : (
-            <Link to="/inbox" className="text-[16px] font-semibold">
+            <Link to="/inbox" className="text-[15px] font-semibold">
               Inbox
             </Link>
           )}
           {domainName && (
-            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
               {domainName}
             </span>
           )}
           {card.objectiveId && (
-            <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
               · Objectif :{' '}
               <Link to="/objectifs/$id" params={{ id: card.objectiveId }} style={{ color: 'var(--text-2)' }}>
                 {card.objectiveTitle}
               </Link>
             </span>
           )}
+          {card.deltaMin !== null && <PaceBadge deltaMin={card.deltaMin} />}
           {/* DM-106: information only, a prerequisite never blocks the week. */}
           {card.waitingOn.length > 0 && (
             <span className="text-[12px] w-full" style={{ color: 'var(--text-faint)' }}>
@@ -363,11 +356,11 @@ function ProjectCard({
                   key={h.taskId}
                   className="row-line flex items-center gap-3"
                   style={{
-                    padding: '8px 18px',
+                    padding: '7px 16px',
                     color: 'var(--text-faint)',
                   }}
                 >
-                  <span className="flex-1 min-w-0 text-[14px]">{h.title}</span>
+                  <span className="flex-1 min-w-0 text-[13px]">{h.title}</span>
                   <span className="mono flex-none text-[12px]">
                     {h.durationMin ? fmtMin(h.durationMin) : '?'}
                   </span>
@@ -381,8 +374,8 @@ function ProjectCard({
             aria-expanded={open}
             className="flex items-center gap-2 w-full border-0 text-left cursor-pointer"
             style={{
-              minHeight: 40,
-              padding: '0 18px',
+              minHeight: 36,
+              padding: '0 16px',
               background: 'var(--surface)',
               fontSize: 13,
               color: dueHidden && !open ? 'var(--late-text)' : 'var(--text-faint)',
@@ -419,7 +412,7 @@ function PlanTaskRow({
     <div
       className="row-line flex flex-wrap items-center gap-3"
       style={{
-        padding: '10px 18px',
+        padding: '8px 16px',
         background: week ? 'var(--row-week)' : bonus ? 'var(--row-bonus)' : 'var(--surface)',
         opacity: t.locked ? 0.45 : 1,
       }}
@@ -428,7 +421,7 @@ function PlanTaskRow({
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
-            className="link-btn text-[15px] font-medium text-left"
+            className="link-btn text-[14px] font-medium text-left"
             onClick={() => openTask(t.taskId)}
           >
             {t.title}
@@ -597,6 +590,31 @@ function BudgetPanel({ open, onClose, page }: { open: boolean; onClose: () => vo
         </button>
       </div>
     </Panel>
+  );
+}
+
+/**
+ * D-112: where a month project stands on its pace (R-06), on its card: the one that slips gets pushed first,
+ * the way Planifier › Mois shows where each objective stands.
+ */
+function PaceBadge({ deltaMin }: { deltaMin: number }) {
+  const onTime = Math.abs(deltaMin) < 15;
+  const late = deltaMin < 0;
+  return (
+    <span
+      className="mono text-[12px] flex-none"
+      title="Avance / retard du projet sur son rythme prévu (comme dans Ma semaine)"
+      style={{
+        padding: '1px 8px',
+        borderRadius: 999,
+        border: '1px solid var(--btn-border)',
+        color: onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)',
+      }}
+    >
+      {onTime
+        ? "à l'heure"
+        : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))} ${late ? 'de retard' : "d'avance"}`}
+    </span>
   );
 }
 

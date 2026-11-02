@@ -172,162 +172,171 @@ function WeekDesktop({ ex }: { ex: Execution }) {
         <CapLine />
       </div>
 
-      <div className="flex flex-wrap gap-6 items-start">
-        <section className="card overflow-hidden min-w-0" style={{ flex: '999 1 640px' }}>
-          <div
-            className="flex justify-between items-baseline gap-3 flex-wrap"
-            style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
-          >
-            <h2 className="h2">
-              À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
-            </h2>
-            <span className="flex items-center gap-4 flex-wrap">
-              <ViewToggles view={view} />
-              <UnplannedButton ex={ex} onClick={() => setUnplannedOpen(true)} />
-            </span>
-          </div>
-          {!ex.plan || ex.tasks.length === 0 ? (
-            <Empty>
-              Pas encore de plan pour cette semaine.{' '}
-              <Link to="/planifier" search={{ semaine: ex.isoWeek }} className="underline">
-                Planifier la semaine
-              </Link>
-            </Empty>
-          ) : tasks.length === 0 ? (
-            <AllDone ex={ex} />
-          ) : (
-            tasks.map((t) => (
-              <WeekRow
-                key={t.taskId}
-                t={t}
-                onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
-                color={dl.color(t.domainId)}
-                domainName={dl.name(t.domainId)}
-                detail={view.showDetail}
-              />
-            ))
-          )}
-          <button
-            type="button"
-            onClick={() => setShowBonus((v) => !v)}
-            aria-expanded={showBonus}
-            className="w-full flex items-center gap-2.5 border-0 text-left cursor-pointer"
-            style={{
-              padding: '14px 20px',
-              background: 'var(--surface-2)',
-              borderTop: '1px solid var(--divider)',
-              fontSize: 14,
-              color: 'var(--text-faint)',
-            }}
-          >
-            <Chevron open={showBonus} />
-            <span>Bonus · {ex.bonusOpen.length}</span>
-            <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
-              seulement si j'ai du temps ou de l'énergie en plus
-            </span>
-          </button>
-          {showBonus && (
-            <div style={{ background: 'var(--surface-2)' }}>
-              {ex.bonusOpen.map((b) => (
+      {/* User request 02/11/2026: Fait and Expériences between Cap and the list (iPhone keeps the list on top). */}
+      <div
+        className="grid gap-4"
+        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))' }}
+      >
+        <Kpi
+          label="Fait"
+          minWidth={0}
+          foot={
+            <>
+              <div className="track" style={{ height: 6, background: 'var(--track)' }}>
                 <div
-                  key={b.taskId}
-                  className="flex gap-3.5 items-center"
-                  style={{ padding: '12px 20px', borderTop: '1px solid var(--divider)' }}
-                >
-                  <span className="dot" style={{ background: dl.color(b.domainId) }} />
-                  <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                    <span className="text-[15px]" style={{ color: 'var(--text-2)' }}>
-                      {b.title}
-                    </span>
-                    {view.showDetail && (
-                      <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                        {dl.name(b.domainId)} · <ProjectLink r={b} />
-                      </span>
-                    )}
-                  </div>
-                  <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-muted)' }}>
-                    {fmtMin(b.durationMin)}
-                  </span>
-                  <button
-                    type="button"
-                    className="btn btn-sm"
-                    onClick={() => toggle.mutate({ id: b.taskId, done: false })}
-                  >
-                    Fait
-                  </button>
-                </div>
-              ))}
-              {ex.bonusOpen.length === 0 && <Empty>Aucun bonus en attente.</Empty>}
-            </div>
-          )}
-        </section>
-
-        <aside className="flex flex-col gap-4 min-w-0" style={{ flex: '1 1 340px' }}>
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-            <Kpi
-              label="Fait"
-              minWidth={0}
-              foot={
-                <>
-                  <div className="track" style={{ height: 6, background: 'var(--track)' }}>
-                    <div
-                      style={{
-                        height: 6,
-                        width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
-                        background: 'var(--text)',
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
-                  <DriftLine ex={ex} />
-                </>
-              }
-            >
-              {fmtMin(ex.doneMin)}
-            </Kpi>
-            <Kpi
-              label="Expériences"
-              minWidth={0}
-              foot={
-                <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-                  {ex.experiences.windowWeeks} dernières semaines
-                </div>
-              }
-            >
-              {ex.experiences.done}{' '}
-              <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {ex.experiences.target}</span>
-            </Kpi>
-          </div>
-          <section className="card flex flex-col gap-4" style={{ padding: '18px 20px' }}>
-            <div className="flex flex-col gap-2">
-              <h2 className="h2">Projets du mois · avance / retard</h2>
-              {ex.monthProjects.length > 0 && <DelayLegend />}
-            </div>
-            {ex.monthProjects.length === 0 && (
-              <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-                Aucun projet coché « projet du mois ».
+                  style={{
+                    height: 6,
+                    width: `${Math.min(100, Math.round((ex.doneMin / Math.max(1, ex.budget.budgetMin)) * 100))}%`,
+                    background: 'var(--text)',
+                    borderRadius: 999,
+                  }}
+                />
               </div>
-            )}
-            {ex.monthProjects.map((p) => (
-              <DelayBar
-                key={p.projectId}
-                title={p.title}
-                color={dl.color(p.domainId)}
-                deltaMin={p.deltaMin}
-                to={{ id: p.projectId }}
-              />
+              <DriftLine ex={ex} />
+            </>
+          }
+        >
+          {fmtMin(ex.doneMin)}
+        </Kpi>
+        <Kpi
+          label="Expériences"
+          minWidth={0}
+          foot={
+            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
+              {ex.experiences.windowWeeks} dernières semaines
+            </div>
+          }
+        >
+          {ex.experiences.done}{' '}
+          <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {ex.experiences.target}</span>
+        </Kpi>
+      </div>
+      <section className="card overflow-hidden min-w-0">
+        <div
+          className="flex justify-between items-baseline gap-3 flex-wrap"
+          style={{ padding: '16px 20px', borderBottom: '1px solid var(--divider-2)' }}
+        >
+          <h2 className="h2">
+            À faire · {ex.remaining} tâche{ex.remaining > 1 ? 's' : ''}
+          </h2>
+          <span className="flex items-center gap-4 flex-wrap">
+            <ViewToggles view={view} />
+            <UnplannedButton ex={ex} onClick={() => setUnplannedOpen(true)} />
+          </span>
+        </div>
+        {!ex.plan || ex.tasks.length === 0 ? (
+          <Empty>
+            Pas encore de plan pour cette semaine.{' '}
+            <Link to="/planifier" search={{ semaine: ex.isoWeek }} className="underline">
+              Planifier la semaine
+            </Link>
+          </Empty>
+        ) : tasks.length === 0 ? (
+          <AllDone ex={ex} />
+        ) : (
+          tasks.map((t) => (
+            <WeekRow
+              key={t.taskId}
+              t={t}
+              onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
+              color={dl.color(t.domainId)}
+              domainName={dl.name(t.domainId)}
+              detail={view.showDetail}
+            />
+          ))
+        )}
+        <button
+          type="button"
+          onClick={() => setShowBonus((v) => !v)}
+          aria-expanded={showBonus}
+          className="w-full flex items-center gap-2.5 border-0 text-left cursor-pointer"
+          style={{
+            padding: '14px 20px',
+            background: 'var(--surface-2)',
+            borderTop: '1px solid var(--divider)',
+            fontSize: 14,
+            color: 'var(--text-faint)',
+          }}
+        >
+          <Chevron open={showBonus} />
+          <span>Bonus · {ex.bonusOpen.length}</span>
+          <span className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
+            seulement si j'ai du temps ou de l'énergie en plus
+          </span>
+        </button>
+        {showBonus && (
+          <div style={{ background: 'var(--surface-2)' }}>
+            {ex.bonusOpen.map((b) => (
+              <div
+                key={b.taskId}
+                className="flex gap-3.5 items-center"
+                style={{ padding: '12px 20px', borderTop: '1px solid var(--divider)' }}
+              >
+                <span className="dot" style={{ background: dl.color(b.domainId) }} />
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <span className="text-[15px]" style={{ color: 'var(--text-2)' }}>
+                    {b.title}
+                  </span>
+                  {view.showDetail && (
+                    <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+                      {dl.name(b.domainId)} · <ProjectLink r={b} />
+                    </span>
+                  )}
+                </div>
+                <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-muted)' }}>
+                  {fmtMin(b.durationMin)}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  onClick={() => toggle.mutate({ id: b.taskId, done: false })}
+                >
+                  Fait
+                </button>
+              </div>
             ))}
+            {ex.bonusOpen.length === 0 && <Empty>Aucun bonus en attente.</Empty>}
+          </div>
+        )}
+      </section>
+
+      {/* Delay bars and domains side by side, one line per project / domain (user request 02/11/2026). */}
+      <div className="flex flex-wrap gap-4 items-start">
+        <section
+          className="card flex flex-col gap-2.5 min-w-0"
+          style={{ padding: '18px 20px', flex: '3 1 440px' }}
+        >
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="h2">Projets du mois · avance / retard</h2>
             {ex.monthProjects.length > 0 && (
-              <button type="button" className="btn self-start" onClick={() => setReplanOpen(true)}>
+              <button type="button" className="btn btn-sm" onClick={() => setReplanOpen(true)}>
                 Replanifier
               </button>
             )}
-          </section>
-          <section className="card flex flex-col gap-2.5" style={{ padding: '18px 20px' }}>
-            <h2 className="h2">Domaines cette semaine</h2>
-            <DomainBars rows={mixRows} scaleMin={ex.budget.budgetMin} />
-          </section>
-        </aside>
+          </div>
+          {ex.monthProjects.length > 0 && <DelayLegend />}
+          {ex.monthProjects.length === 0 && (
+            <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+              Aucun projet coché « projet du mois ».
+            </div>
+          )}
+          {ex.monthProjects.map((p) => (
+            <DelayBar
+              key={p.projectId}
+              title={p.title}
+              color={dl.color(p.domainId)}
+              deltaMin={p.deltaMin}
+              to={{ id: p.projectId }}
+            />
+          ))}
+        </section>
+        <section
+          className="card flex flex-col gap-2.5 min-w-0"
+          style={{ padding: '18px 20px', flex: '2 1 320px' }}
+        >
+          <h2 className="h2">Domaines cette semaine</h2>
+          <DomainBars rows={mixRows} scaleMin={ex.budget.budgetMin} />
+        </section>
       </div>
       <ReplanPanel open={replanOpen} onClose={() => setReplanOpen(false)} projects={ex.monthProjects} />
       <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
@@ -533,7 +542,7 @@ function ReplanPanel({
       {projects.map((p) => (
         <div key={p.projectId} className="card flex items-center gap-3 p-3">
           <div className="flex-1 min-w-0">
-            <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} showLegend={false} />
+            <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} />
           </div>
           <button
             type="button"

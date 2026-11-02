@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { get } from '../lib/api.ts';
-import { useMe } from '../lib/hooks.ts';
+import { useMe, useSettings } from '../lib/hooks.ts';
 import type { Cap } from '../lib/types.ts';
 import { type AiRequest, WithWand } from './ai-fill.tsx';
 import { Field } from './ui.tsx';
@@ -65,17 +65,15 @@ export function MotiveField({
   );
 }
 
-/** Seconds between two sets of « why » (iPhone: one at a time; PC / iPad: three). */
-const TURN_S = { compact: 5, wide: 7 };
-
 /**
  * Ma semaine: « why » at a glance — month projects first, then quarter objectives and meta-objectives. The
- * starting set changes each day, then turns by itself (user request 01/11/2026): one at a time every 5 s on
- * iPhone (`compact`), three every 7 s elsewhere (no manual button, user request 01/11/2026). Always one line: what does not fit ends
- * with « … » (the full text is in the tooltip).
+ * starting set changes each day, then turns by itself every `ui.cap_turn_s` seconds (D-110, Configuration ›
+ * Général), the same on every device: one at a time on iPhone (`compact`), three elsewhere. Always one line:
+ * what does not fit ends with « … » (the full text is in the tooltip).
  */
 export function CapLine({ compact = false }: { compact?: boolean }) {
   const me = useMe();
+  const turnS = useSettings().data?.['ui.cap_turn_s'] ?? 7;
   const q = useQuery({ queryKey: ['cap'], queryFn: () => get<Cap>('/cap') });
   const day = Number((me.data?.today ?? '').replaceAll('-', '')) || 0;
   const [shift, setShift] = useState(0);
@@ -84,9 +82,9 @@ export function CapLine({ compact = false }: { compact?: boolean }) {
   const turns = all.length > SHOWN;
   useEffect(() => {
     if (!turns) return;
-    const t = setInterval(() => setShift((s) => s + 1), (compact ? TURN_S.compact : TURN_S.wide) * 1000);
+    const t = setInterval(() => setShift((s) => s + 1), turnS * 1000);
     return () => clearInterval(t);
-  }, [turns, compact]);
+  }, [turns, turnS]);
   if (!q.data) return null;
   if (!all.length)
     return (

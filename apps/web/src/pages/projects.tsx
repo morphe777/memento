@@ -1273,6 +1273,21 @@ export function ProjectEditPanel({
     },
     toast: 'Projet supprimé.',
   });
+  // D-109: the copy is made from what is saved, so pending changes are saved first; on its own page, the copy opens.
+  const duplicate = useAction(
+    async () => {
+      if (snapshot() !== initial.current && f.title.trim() && groupIds.length)
+        await save.mutateAsync(undefined);
+      return post<Project>(`/projects/${p.id}/duplicate`, {});
+    },
+    {
+      onSuccess: (copy) => {
+        onClose();
+        toast(`Copie créée : « ${copy.title} ».`);
+        leave(`/projets/${p.id}`, `/projets/${copy.id}`);
+      },
+    },
+  );
   const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
   const ai: AiRequest = { kind: 'project', id: p.id, values: f };
   const two = { gridTemplateColumns: 'repeat(auto-fit, minmax(min(200px, 100%), 1fr))' };
@@ -1427,6 +1442,15 @@ export function ProjectEditPanel({
         style={{ borderTop: '1px solid var(--border)' }}
       >
         {footer}
+        <button
+          type="button"
+          className="btn"
+          disabled={duplicate.isPending}
+          onClick={() => duplicate.mutate(undefined)}
+          title="Une copie avec les mêmes champs et toutes les tâches à faire, sans mois ni dates"
+        >
+          Dupliquer
+        </button>
         <button
           type="button"
           className="btn btn-ghost btn-danger ml-auto"

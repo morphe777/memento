@@ -205,6 +205,18 @@ export function buildServer(call: Call) {
     ({ id, ...rest }) => call('PATCH', `/projects/${id}`, rest),
   );
   tool(
+    'duplicate_project',
+    'Duplique un projet (D-109) : mêmes groupes, objectif, critère, description, tâches toutes à faire ; ni mois, ni dates, ni récurrence. Titre par défaut « … (copie) ». Une idée reste une idée, sinon la copie est « prête ».',
+    { id: S.uuid, title: S.projectDuplicateBody.shape.title },
+    ({ id, ...rest }) => call('POST', `/projects/${id}/duplicate`, rest),
+  );
+  tool(
+    'duplicate_objective',
+    'Duplique un objectif (D-109) : mêmes champs, mesure remise à 0, même trimestre ; avec ses projets (hors abandonnés) et l’ordre de leur chemin, sauf withProjects: false.',
+    { id: S.uuid, ...S.objectiveDuplicateBody.shape },
+    ({ id, ...rest }) => call('POST', `/objectives/${id}/duplicate`, rest),
+  );
+  tool(
     'promote_idea',
     'Promeut une idée en projet « prêt » (backlog). Jamais bloquant : les manques RB-02 sont renvoyés dans gaps.',
     { id: S.uuid },
@@ -383,6 +395,12 @@ export function buildServer(call: Call) {
     'Trace une tâche déjà faite sans avoir été prévue (« Fait hors plan », D-99) : la crée dans le projet (projectId absent = Inbox) et la coche ; elle compte dans la dérive des rapports.',
     S.taskCreate.shape,
     (a) => call('POST', '/tasks/done', a),
+  );
+  tool(
+    'get_calendar',
+    'Calendrier des tâches (D-113) de from à to (AAAA-MM-JJ, 121 jours max) : entries = tâches à faire à leur deadline (late si dépassée), faites au jour où elles l’ont été, prochaines occurrences des récurrentes (kind occurrence) ; planned = tâches prévues dans le plan d’une semaine sans jour dans cette semaine.',
+    S.calendarQuery.shape,
+    (a) => call('GET', `/calendar?from=${a.from}&to=${a.to}`),
   );
   tool(
     'get_cap',

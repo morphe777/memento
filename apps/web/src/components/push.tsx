@@ -114,11 +114,10 @@ export function PushConfig() {
     : null;
   return (
     <div className="flex flex-col gap-3 pt-2" style={{ borderTop: '1px solid var(--divider)' }}>
-      <h3 className="h2 m-0">Notifications sur cet appareil</h3>
+      <h3 className="h2 m-0">Canal : cet appareil</h3>
       <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-        Le bilan du soir et « rapport prêt » arrivent aussi en notification, comme une app : un toucher ouvre
-        la page. Mêmes réglages que Telegram ci-dessous (heure, vacances, case « Prévenir quand un rapport est
-        prêt ») ; Telegram n’est pas nécessaire.
+        Les messages cochés plus haut arrivent en notification, comme une app : un toucher ouvre la page. À
+        activer sur chaque appareil (iPhone, iPad, PC).
       </p>
       {blocker ? (
         <div className="text-[13px]" style={{ color: 'var(--late-text)' }}>

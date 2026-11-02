@@ -338,6 +338,8 @@ export interface PageCard {
   hiddenTasks: PageTask[];
   /** Inbox only: folded tasks whose deadline falls this week or earlier (warning on the fold). */
   hiddenDueCount: number;
+  /** D-112: month projects only, ahead (+) / late (−) on their pace (R-06), to choose which one to push. */
+  deltaMin: number | null;
 }
 
 /** Inbox bin shows this many tasks (closest deadlines first); chosen tasks always stay visible (D-37). */
@@ -351,11 +353,19 @@ export interface PageGroup {
   cards: PageCard[];
 }
 
+/**
+ * D-112: like Planifier › Mois (D-108), three levels — critical (red), warn (orange), info (grey) — and `items`
+ * for the tasks / projects concerned (a clickable list).
+ */
 export interface Alert {
-  level: 'warn' | 'ok';
+  level: 'critical' | 'warn' | 'info' | 'ok';
   code: string;
   text: string;
+  items?: { id: string; title: string; type: 'task' | 'project' }[];
 }
+
+/** D-112: a budget overrun above this share of the budget is critical. */
+export const WEEK_OVER_CRITICAL = 0.1;
 
 export interface PlanningPage {
   groups: PageGroup[];
@@ -459,6 +469,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         hidden: pending.slice(k).map((t) => ({ taskId: t.id, title: t.title, durationMin: t.durationMin })),
         hiddenTasks: [],
         hiddenDueCount: 0,
+        deltaMin: isMonthProject(P, p) ? projectDelayMin(p, ptasks, input.today) : null,
       },
     };
   };
@@ -529,6 +540,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
                 const due = dueById.get(r.taskId);
                 return !!due && due <= P.sunday;
               }).length,
+              deltaMin: null,
             },
           ]
         : [],
@@ -578,18 +590,34 @@ export function summarize(
   const experiences = weekTasks.filter((t) => t.isExperience).length;
 
   const alerts: Alert[] = [];
+  const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
   if (overMin > 0) {
     alerts.push({
-      level: 'warn',
+      level: overMin > input.budgetMin * WEEK_OVER_CRITICAL ? 'critical' : 'warn',
       code: 'BUDGET_OVER',
       text: `Dépassement de ${fmtMin(overMin)} au-delà de ${fmtMin(input.budgetMin)}. Tu peux valider quand même.`,
     });
   }
+  // D-112: a task due by Sunday (or already late) that is not in the week.
+  const live = (t: EngineTask) => {
+    const p = t.projectId ? P.projectById.get(t.projectId) : undefined;
+    return t.status === 'todo' && (!t.projectId || (!!p && eligibleProject(p)));
+  };
+  const dueLeft = input.tasks.filter(
+    (t) => live(t) && chosen.get(t.id) !== 'week' && !!t.dueDate && t.dueDate <= P.sunday,
+  );
+  if (dueLeft.length)
+    alerts.push({
+      level: 'critical',
+      code: 'DUE_NOT_PLANNED',
+      text: `${plural(dueLeft.length, 'tâche à deadline', 'tâches à deadline')} d'ici dimanche hors de la semaine`,
+      items: dueLeft.map((t) => ({ id: t.id, title: t.title, type: 'task' })),
+    });
   for (const name of GUARDED_DOMAIN_NAMES) {
     const d = input.domains.find((x) => x.name === name);
     if (d && !(mixMap.get(d.id) ?? 0)) {
       alerts.push({
-        level: 'warn',
+        level: d.priorityRank === 1 ? 'critical' : 'warn',
         code: `EMPTY_${name === 'Santé' ? 'HEALTH' : 'FAMILY'}`,
         text:
           d.priorityRank === 1
@@ -598,20 +626,44 @@ export function summarize(
       });
     }
   }
-  if (experiences === 0) {
+  // D-112: a month project with work left and nothing this week falls behind its pace (R).
+  const planned = new Set(weekTasks.map((t) => t.projectId));
+  const idle = input.projects.filter(
+    (p) =>
+      eligibleProject(p) &&
+      isMonthProject(P, p) &&
+      !planned.has(p.id) &&
+      (P.tasksByProject.get(p.id) ?? []).some((t) => t.status === 'todo'),
+  );
+  if (idle.length)
     alerts.push({
       level: 'warn',
+      code: 'MONTH_PROJECT_IDLE',
+      text: `${plural(idle.length, 'projet du mois', 'projets du mois')} sans tâche cette semaine`,
+      items: idle.map((p) => ({ id: p.id, title: p.title, type: 'project' })),
+    });
+  if (experiences === 0) {
+    const reached = input.experiencesDone >= input.experienceTarget;
+    alerts.push({
+      level: reached ? 'info' : 'warn',
       code: 'NO_EXPERIENCE',
-      text: `Aucune expérience prévue (${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines).`,
+      text: `Aucune expérience prévue (${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines${reached ? ', cible atteinte' : ''}).`,
     });
   }
   const avoided = weekTasks.filter((t) => t.postponeCount >= 3);
-  for (const t of avoided)
+  if (avoided.length)
     alerts.push({
       level: 'warn',
       code: 'AVOIDANCE',
-      text: `« ${t.title} » reportée ${t.postponeCount} fois.`,
+      text:
+        avoided.length === 1
+          ? `« ${avoided[0]!.title} » reportée ${avoided[0]!.postponeCount} fois : à découper ?`
+          : `${avoided.length} tâches reportées 3 fois ou plus : à découper ?`,
+      items:
+        avoided.length > 1 ? avoided.map((t) => ({ id: t.id, title: t.title, type: 'task' })) : undefined,
     });
+  const rank = { critical: 0, warn: 1, info: 2, ok: 3 };
+  alerts.sort((x, y) => rank[x.level] - rank[y.level]);
   if (alerts.length === 0)
     alerts.push({ level: 'ok', code: 'OK', text: 'Rien à signaler : semaine équilibrée.' });
 
