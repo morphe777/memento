@@ -74,6 +74,7 @@ export async function buildApp(opts: AppOptions) {
 
   // Authentication for every /api/v1 route except login, health and the OpenAPI document.
   const PUBLIC = new Set(['/api/v1/auth/login', '/api/v1/health', '/api/v1/openapi.json']);
+  const READ_POSTS = new Set(['/api/v1/plan/preview', '/api/v1/tasks/parse']);
   // /auth/me answers 200 { authenticated: false } instead of 401 (no console noise before login).
   const SOFT = new Set(['/api/v1/auth/me']);
   app.addHook('onRequest', async (req, reply) => {
@@ -86,8 +87,8 @@ export async function buildApp(opts: AppOptions) {
     if (!req.principal && SOFT.has(path)) return;
     if (!req.principal)
       return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'Connexion requise.' });
-    // A read token may simulate a plan draft (POST /plan/preview writes nothing, 03 §Jetons).
-    if (!req.principal.canWrite && req.method !== 'GET' && path !== '/api/v1/plan/preview') {
+    // A read token may simulate a plan draft or read a task text: these POSTs write nothing (03 §Jetons).
+    if (!req.principal.canWrite && req.method !== 'GET' && !READ_POSTS.has(path)) {
       return reply.code(403).send({ code: 'READ_ONLY_TOKEN', message: 'Jeton en lecture seule.' });
     }
   });
@@ -593,6 +594,10 @@ export async function buildApp(opts: AppOptions) {
       });
       r.post('/tasks', { schema: { ...tag('Tâches'), body: D.taskCreate } }, async (req) =>
         D.createTask(ctx(req), req.body),
+      );
+      // D-115: plain French → title, deadline, recurrence, duration, domain (writes nothing).
+      r.post('/tasks/parse', { schema: { ...tag('Tâches'), body: D.taskParseBody } }, async (req) =>
+        D.parseTask(ctx(req), req.body),
       );
       // D-99: « Fait hors plan » (Ma semaine): a task created already done, traced as unplanned.
       r.post('/tasks/done', { schema: { ...tag('Tâches'), body: D.taskCreate } }, async (req) =>

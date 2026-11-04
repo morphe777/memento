@@ -134,6 +134,17 @@ export const projectReorderBody = z.object({ objectiveId: uuid, ids: z.array(uui
 export const projectReplanBody = z.object({ dueDate: date.optional() });
 /** D-113: the calendar of the tasks over a range (≤ 121 days). */
 export const calendarQuery = z.object({ from: date, to: date });
+/** D-115: read a task typed in plain French (writes nothing). */
+export const taskParseBody = z.object({
+  text: z.string().max(500),
+  /** Inbox task (default): recurrence, #domain and « cette semaine » are read. */
+  inbox: z.boolean().optional(),
+  /** Kinds the user undid: their words stay in the title. */
+  ignore: z
+    .array(z.enum(['date', 'recurrence', 'duration', 'domain', 'week']))
+    .max(5)
+    .optional(),
+});
 /** D-109: duplicate a project (default title « … (copie) », same objective, at the end of its path). */
 export const projectDuplicateBody = z.object({ title: title.optional() });
 /** D-109: duplicate an objective, with its projects and their path unless withProjects is false. */

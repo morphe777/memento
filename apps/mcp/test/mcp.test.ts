@@ -74,6 +74,7 @@ describe('MCP L6', () => {
       'duplicate_project',
       'duplicate_objective',
       'get_calendar',
+      'parse_task',
       'create_tasks',
       'add_inbox_task',
       'get_week_plan',

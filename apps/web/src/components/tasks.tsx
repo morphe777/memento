@@ -24,6 +24,7 @@ import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail, TaskDuration } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
+import { addToWeekPlan, NaturalBar, useNaturalTask } from './natural.tsx';
 import {
   ConfirmDialog,
   Duration,
@@ -349,14 +350,22 @@ export function QuickAdd({
   const [duration, setDuration] = useState<string>(defaultDuration ? String(defaultDuration) : '');
   const [dueDate, setDueDate] = useState('');
   const [rule, setRule] = useState('');
+  // D-115: plain French; recurrence, #domain and « cette semaine » for an Inbox task only.
+  const inbox = projectId === null;
+  const nat = useNaturalTask(title, inbox);
+  const parsed = nat.parsed;
   const add = useAction(
-    (t: string) =>
-      post('/tasks', {
-        title: t,
+    async (t: string) => {
+      const p = await nat.parseNow();
+      const created = await post<Task>('/tasks', {
+        title: p.title || t,
         projectId,
-        durationMin: duration ? Number(duration) : null,
-        ...(withSchedule ? { dueDate: dueDate || null, recurrenceRule: rule || null } : {}),
-      }),
+        durationMin: p.durationMin ?? (duration ? Number(duration) : null),
+        dueDate: p.dueDate ?? (dueDate || null),
+        ...(inbox ? { recurrenceRule: p.recurrenceRule ?? (rule || null), domainId: p.domainId } : {}),
+      });
+      if (p.isoWeek) await addToWeekPlan(p.isoWeek, created.id);
+    },
     {
       onSuccess: () => {
         setTitle('');
@@ -366,66 +375,85 @@ export function QuickAdd({
     },
   );
   return (
-    <form
-      className={compact ? 'flex gap-2 items-center' : 'flex flex-wrap gap-2 items-center'}
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (title.trim()) add.mutate(title.trim());
-      }}
-    >
-      <input
-        id={inputId}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder={placeholder}
-        aria-label={placeholder}
-        enterKeyHint="done"
-        style={{ flex: compact ? '1 1 0' : '1 1 240px', minWidth: 0 }}
-      />
-      <select
-        value={duration}
-        onChange={(e) => setDuration(e.target.value)}
-        aria-label="Durée"
-        style={compact ? { flex: 'none', width: 76 } : { flex: '0 1 112px', minWidth: 0 }}
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <form
+        className={compact ? 'flex gap-2 items-center' : 'flex flex-wrap gap-2 items-center'}
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (title.trim()) add.mutate(title.trim());
+        }}
       >
-        <option value="">Durée ?</option>
-        <DurationOptions />
-      </select>
-      {withSchedule && (
-        <>
-          <input
-            type="date"
-            value={dueDate}
-            onChange={(e) => setDueDate(e.target.value)}
-            aria-label="Deadline"
-            title="Deadline (facultative)"
-            style={{ flex: '1 1 150px', minWidth: 0 }}
-          />
-          <select
-            value={rule}
-            onChange={(e) => setRule(e.target.value)}
-            aria-label="Récurrence"
-            style={{ flex: '1 1 170px', minWidth: 0 }}
-          >
-            {RECURRENCES.map((r) => (
-              <option key={r.value} value={r.value}>
-                {r.value ? r.label : 'Pas de récurrence'}
-              </option>
-            ))}
-          </select>
-        </>
+        <input
+          id={inputId}
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={placeholder}
+          aria-label={placeholder}
+          enterKeyHint="done"
+          style={{ flex: compact ? '1 1 0' : '1 1 240px', minWidth: 0 }}
+        />
+        <select
+          value={parsed?.durationMin ? String(parsed.durationMin) : duration}
+          onChange={(e) => {
+            setDuration(e.target.value);
+            if (parsed?.durationMin) nat.undo('duration');
+          }}
+          aria-label="Durée"
+          style={compact ? { flex: 'none', width: 76 } : { flex: '0 1 112px', minWidth: 0 }}
+        >
+          <option value="">Durée ?</option>
+          <DurationOptions />
+        </select>
+        {withSchedule && (
+          <>
+            <input
+              type="date"
+              value={parsed?.dueDate ?? dueDate}
+              onChange={(e) => {
+                setDueDate(e.target.value);
+                if (parsed?.dueDate) nat.undo(parsed.recurrenceRule ? 'recurrence' : 'date');
+              }}
+              aria-label="Deadline"
+              title="Deadline (facultative)"
+              style={{ flex: '1 1 150px', minWidth: 0 }}
+            />
+            <select
+              value={parsed?.recurrenceRule ?? rule}
+              onChange={(e) => {
+                setRule(e.target.value);
+                if (parsed?.recurrenceRule) nat.undo('recurrence');
+              }}
+              aria-label="Récurrence"
+              style={{ flex: '1 1 170px', minWidth: 0 }}
+            >
+              {parsed?.recurrenceRule && !RECURRENCES.some((r) => r.value === parsed.recurrenceRule) && (
+                <option value={parsed.recurrenceRule}>
+                  {parsed.parts.find((p) => p.kind === 'recurrence')?.label.split(',')[0] ?? 'Récurrente'}
+                </option>
+              )}
+              {RECURRENCES.map((r) => (
+                <option key={r.value} value={r.value}>
+                  {r.value ? r.label : 'Pas de récurrence'}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <button
+          type="submit"
+          className="btn"
+          disabled={!title.trim() || add.isPending}
+          aria-label="Ajouter"
+          title="Ajouter"
+          style={compact ? { flex: 'none', width: 44, padding: 0 } : undefined}
+        >
+          {compact ? '+' : 'Ajouter'}
+        </button>
+      </form>
+      {(!compact || parsed?.parts.length) && (
+        <NaturalBar parsed={parsed} onUndo={nat.undo} inbox={inbox} hint={withSchedule} />
       )}
-      <button
-        type="submit"
-        className="btn"
-        disabled={!title.trim() || add.isPending}
-        aria-label="Ajouter"
-        title="Ajouter"
-        style={compact ? { flex: 'none', width: 44, padding: 0 } : undefined}
-      >
-        {compact ? '+' : 'Ajouter'}
-      </button>
-    </form>
+    </div>
   );
 }
 
