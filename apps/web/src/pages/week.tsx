@@ -642,15 +642,15 @@ function WeekPhone({ ex }: { ex: Execution }) {
                 onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
               />
               <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
-                {/* User request 04/11/2026: no room for a column, the project sits above the title. */}
-                <span className="text-[11px] truncate" style={{ color: 'var(--text-faint)' }}>
-                  {t.projectTitle ?? 'Inbox'}
-                </span>
                 <span
                   className="text-[15px] font-semibold"
                   style={{ textDecoration: t.done ? 'line-through' : 'none' }}
                 >
                   {t.title} {t.unplanned && <UnplannedBadge />}
+                </span>
+                {/* User request 04/11/2026: no room for a column, the project sits under the title. */}
+                <span className="text-[12px] truncate" style={{ color: 'var(--text-faint)' }}>
+                  {t.projectTitle ?? 'Inbox'}
                 </span>
                 {view.showDetail && (
                   <span

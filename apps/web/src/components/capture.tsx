@@ -4,9 +4,10 @@
 // Tâches it can go to a project (`withProject`).
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { get, post, put } from '../lib/api.ts';
+import { get, post } from '../lib/api.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { Project, Task } from '../lib/types.ts';
+import { addToWeekPlan, NaturalBar, useNaturalTask } from './natural.tsx';
 import { DurationOptions } from './tasks.tsx';
 import { Panel, Tabs } from './ui.tsx';
 
@@ -38,6 +39,10 @@ export function CaptureSheet({
   const [projectId, setProjectId] = useState('');
   const input = useRef<HTMLInputElement>(null);
   const pickProject = withProject || target === 'week';
+  // D-115: recurrence, #domain and « cette semaine » for an Inbox task only.
+  const inbox = !(pickProject && projectId);
+  const nat = useNaturalTask(title, inbox);
+  const parsed = nat.parsed;
   const projects = useQuery({
     queryKey: ['projects', 'capture-picker'],
     // The week plan takes ready or active projects only (setWeekItems).
@@ -55,22 +60,21 @@ export function CaptureSheet({
   };
   const add = useAction(
     async () => {
+      const p = await nat.parseNow();
       const t = await post<Task>('/tasks', {
-        title: title.trim(),
+        title: p.title || title.trim(),
         projectId: (pickProject && projectId) || null,
-        durationMin: duration ? Number(duration) : null,
-        domainId: (!projectId && domainId) || null,
+        durationMin: p.durationMin ?? (duration ? Number(duration) : null),
+        domainId: (!projectId && (p.domainId ?? domainId)) || null,
+        dueDate: p.dueDate,
+        recurrenceRule: inbox ? p.recurrenceRule : null,
       });
-      if (target === 'week' && isoWeek) {
-        const plan = await get<{ items: { taskId: string; kind: string }[] }>(`/week-plans/${isoWeek}`);
-        await put(`/week-plans/${isoWeek}/items`, {
-          items: [...plan.items, { taskId: t.id, kind: 'week' }],
-        });
-      }
+      const week = target === 'week' && isoWeek ? isoWeek : p.isoWeek;
+      if (week) await addToWeekPlan(week, t.id);
     },
     {
       toast:
-        target === 'week'
+        target === 'week' || parsed?.week
           ? 'Ajouté au plan de la semaine.'
           : projectId
             ? 'Tâche ajoutée.'
@@ -125,6 +129,7 @@ export function CaptureSheet({
           aria-label="Titre"
           enterKeyHint="done"
         />
+        <NaturalBar parsed={parsed} onUndo={nat.undo} inbox={inbox} hint />
         {pickProject && (
           <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="Projet">
             <option value="">Sans projet (Inbox)</option>
@@ -137,12 +142,26 @@ export function CaptureSheet({
           </select>
         )}
         <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
-          <select value={duration} onChange={(e) => setDuration(e.target.value)} aria-label="Durée">
+          <select
+            value={parsed?.durationMin ? String(parsed.durationMin) : duration}
+            onChange={(e) => {
+              setDuration(e.target.value);
+              if (parsed?.durationMin) nat.undo('duration');
+            }}
+            aria-label="Durée"
+          >
             <option value="">Durée ?</option>
             <DurationOptions />
           </select>
           {!projectId && (
-            <select value={domainId} onChange={(e) => setDomainId(e.target.value)} aria-label="Domaine">
+            <select
+              value={parsed?.domainId ?? domainId}
+              onChange={(e) => {
+                setDomainId(e.target.value);
+                if (parsed?.domainId) nat.undo('domain');
+              }}
+              aria-label="Domaine"
+            >
               <option value="">Domaine ?</option>
               {dl.domains.map((d) => (
                 <option key={d.id} value={d.id}>

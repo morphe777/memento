@@ -210,7 +210,7 @@ Préfixe `/api/v1`, JSON, contrat OpenAPI généré depuis les schémas Zod et s
 | Méta-objectifs | CRUD /meta-objectives | |
 | Objectifs | CRUD /objectives, GET /objectives/{id}/path | path = chemin ordonné des projets (V-02) |
 | Projets / idées | CRUD /projects, POST /projects/{id}/promote, POST /projects/{id}/complete, PUT /projects/{id}/groups, POST /projects/reorder | promote applique RB-02 ; complete applique RB-12 |
-| Tâches | CRUD /tasks, POST /tasks/{id}/complete, POST /tasks/{id}/uncomplete, POST /tasks/reorder, POST /tasks/{id}/move | project_id null = Inbox |
+| Tâches | CRUD /tasks, POST /tasks/{id}/complete, POST /tasks/{id}/uncomplete, POST /tasks/reorder, POST /tasks/{id}/move, POST /tasks/parse | project_id null = Inbox ; /tasks/parse lit une tâche en français courant sans rien écrire (D-115, permis à un jeton lecture) |
 | Dépendances | POST/DELETE /tasks/{id}/dependencies, POST/DELETE /projects/{id}/dependencies | RB-07 |
 | Ressources | POST/DELETE /resources | |
 | Planification | GET /week-plans/{iso_week}, POST /week-plans/{iso_week}/propose, PUT /week-plans/{iso_week}/items, PATCH /week-plans/{iso_week} (budget), POST /week-plans/{iso_week}/validate | GET renvoie la page prête à afficher : groupes, tâches visibles, pourquoi, budget, répartition, alertes |
@@ -236,6 +236,7 @@ Outils nommés en anglais, description en français, chacun = un ou deux appels 
 | `list_projects`, `get_project` | Filtres : statut, groupe, domaine, mois |
 | `create_idea`, `create_project`, `update_project`, `promote_idea`, `complete_project` | promote applique RB-02 et renvoie les manques |
 | `duplicate_project`, `duplicate_objective` | D-109 : copie à neuf (tâches à faire, ni mois ni dates) ; un objectif emporte ses projets et leur chemin |
+| `parse_task` | D-115 : lit « Sortir les poubelles tous les mardis 5 min #maison » → titre, deadline, RRULE, durée, domaine, semaine, sans rien créer |
 | `create_tasks` (lot), `update_task`, `complete_task`, `reorder_tasks` | Création en lot pour découper un projet |
 | `add_inbox_task` | Capture rapide |
 | `get_week_plan`, `propose_week_plan`, `set_week_plan_items` | Base du bouton IA en v2 |

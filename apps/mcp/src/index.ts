@@ -403,6 +403,12 @@ export function buildServer(call: Call) {
     (a) => call('GET', `/calendar?from=${a.from}&to=${a.to}`),
   );
   tool(
+    'parse_task',
+    'Lit une tâche écrite en français courant (D-115) sans rien créer : title nettoyé, dueDate, recurrenceRule (RRULE), durationMin (arrondie à 5/15/30/60/120), domainId (#domaine), week (« cette semaine » = plan de la semaine, isoWeek), parts = ce qui a été reconnu avec d’éventuels avertissements. inbox=false pour une tâche de projet (ni récurrence, ni domaine, ni semaine). Ex. « Sortir les poubelles tous les mardis 5 min #maison ».',
+    S.taskParseBody.shape,
+    (a) => call('POST', '/tasks/parse', a),
+  );
+  tool(
     'get_cap',
     'Cap (D-100) : objectifs du trimestre par méta-objectif et projets du mois, chacun avec son pourquoi en quelques mots (motive, mot-clé entre **…**). month = AAAA-MM, défaut = mois en cours. Le pourquoi se modifie par update_meta_objective / update_objective / update_project (champ motive).',
     { month: S.monthKey.optional() },
