@@ -441,8 +441,6 @@ function WeekRow({
               <span className="font-medium" style={{ color: 'var(--text-2)' }}>
                 {domainName}
               </span>
-              <span>·</span>
-              <ProjectLink r={t} />
             </div>
             {t.why && !t.done && (
               <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
@@ -453,8 +451,19 @@ function WeekRow({
         )}
         {t.done && <ActualTime taskId={t.taskId} durationMin={t.durationMin} actualMin={t.actualMin} />}
       </div>
-      <UrgencyTag t={t} />
-      <Duration min={t.durationMin} />
+      {/* User request 04/11/2026: the project gives the task its context, as a column. */}
+      <span
+        className="flex-none truncate text-[13px]"
+        style={{ width: 'clamp(110px, 24%, 240px)', color: 'var(--text-muted)', paddingTop: detail ? 3 : 0 }}
+        title={t.projectTitle ?? 'Inbox'}
+      >
+        <ProjectLink r={t} />
+      </span>
+      {/* Fixed width so the project column stays aligned whatever the tag. */}
+      <span className="flex-none flex items-center justify-end gap-2" style={{ width: 170 }}>
+        <UrgencyTag t={t} />
+        <Duration min={t.durationMin} />
+      </span>
     </div>
   );
 }
@@ -633,6 +642,10 @@ function WeekPhone({ ex }: { ex: Execution }) {
                 onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
               />
               <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
+                {/* User request 04/11/2026: no room for a column, the project sits above the title. */}
+                <span className="text-[11px] truncate" style={{ color: 'var(--text-faint)' }}>
+                  {t.projectTitle ?? 'Inbox'}
+                </span>
                 <span
                   className="text-[15px] font-semibold"
                   style={{ textDecoration: t.done ? 'line-through' : 'none' }}
