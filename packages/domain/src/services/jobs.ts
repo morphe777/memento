@@ -15,7 +15,7 @@ import {
   shiftWeek,
   TZ,
 } from '../time.ts';
-import { notifyReportReady, notifyStatus, sendDailyRecap } from './daily.ts';
+import { getDailyFacts, notifyReportReady, notifyStatus, sendDailyRecap } from './daily.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
 import type { PushSender } from './push.ts';
@@ -117,7 +117,8 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
 /**
  * D-77: evening recap « Ta journée » on Telegram, once per day from the configured time until midnight (no
  * catch-up the next day). Waits, without recording anything, while Telegram is not set up.
- * D-116: every day, weekend included (D-78 skipped Saturday); never on a holiday.
+ * D-116: nothing on Sunday (the week report comes that evening), Saturday only when something was done, never
+ * on a holiday.
  */
 export async function runDailyRecapJob(
   ctx: Ctx,
@@ -129,7 +130,8 @@ export async function runDailyRecapJob(
   const { date, time } = parisClock(ctxNow(ctx));
   const st = notifyStatus(ctx, env);
   if (!r.enabled || time < r.time || (!st.configured && !st.pushDevices)) return 'skipped';
-  if (isOnVacation(date, s['notify.vacations'])) return 'skipped';
+  if (isoDay(date) === 7 || isOnVacation(date, s['notify.vacations'])) return 'skipped';
+  if (isoDay(date) === 6 && getDailyFacts(ctx, date).nothingDone) return 'skipped';
   const { jobRun } = schema;
   if (
     ctx.db

@@ -1,6 +1,6 @@
 // D-76: urgency tag of « Ma semaine ». D-77 / D-78: the evening report (« Bilan du jour »): a sentence summing up
 // the main achievements, the week KPIs, then the done tasks; encouragement and leads when nothing was done; the
-// same every day (D-116). Pure functions: the service gathers the data.
+// weekend (D-116: Saturday, encouragement only). Pure functions: the service gathers the data.
 import { addDays, fmtMin, frDay, frShort } from '../time.ts';
 
 export type Urgency = 'late' | 'today' | 'soon' | null;
@@ -50,6 +50,8 @@ export interface FocusItem {
 export interface RecapFacts {
   date: string;
   dayLabel: string; // e.g. « mercredi 28 octobre »
+  /** D-116: `weekend` on Saturday (and Sunday asked by hand, then Saturday + Sunday). */
+  mode: 'day' | 'weekend';
   period: { from: string; to: string };
   nothingDone: boolean;
   done: { tasks: RecapTask[]; doneTasks: number; doneMin: number; completedProjects: string[] };
@@ -83,6 +85,7 @@ export interface Kpi {
 
 export interface Recap {
   date: string;
+  mode: 'day' | 'weekend';
   nothingDone: boolean;
   title: string;
   summary: string;
@@ -152,21 +155,27 @@ const pct = (doneMin: number, budgetMin: number) => `${Math.round((doneMin / bud
 /**
  * D-77 / D-78: the plain report (also the fallback when the AI is off or fails). Something done: the
  * achievements, the week KPIs, the done tasks. Nothing done: encouragement and what matters in the coming days,
- * never a zero.
+ * never a zero. On the weekend, encouragement (D-116).
  */
 export function composeDailyRecap(f: RecapFacts, lowPct = 80): Recap {
-  const title = f.nothingDone ? `🌱 ${capitalize(f.dayLabel)}` : `📊 Bilan du ${f.dayLabel}`;
+  const weekend = f.mode === 'weekend';
+  const title = weekend
+    ? `🌿 ${capitalize(f.dayLabel)}`
+    : f.nothingDone
+      ? `🌱 ${capitalize(f.dayLabel)}`
+      : `📊 Bilan du ${f.dayLabel}`;
   const kpis: Kpi[] = [];
-  if (f.week.budgetMin > 0 && f.week.doneMin > 0)
+  // D-116: the weekend is sacred: no figure, no lead, just encouragement.
+  if (!weekend && f.week.budgetMin > 0 && f.week.doneMin > 0)
     kpis.push({
       icon: '📈',
       label: 'Semaine',
       value: `${fmtMin(f.week.doneMin)} / ${fmtMin(f.week.budgetMin)}`,
       note: pct(f.week.doneMin, f.week.budgetMin),
     });
-  if (f.weekStreak > 0)
+  if (!weekend && f.weekStreak > 0)
     kpis.push({ icon: '🗓', label: 'Semaines d’affilée', value: String(f.weekStreak), note: `≥ ${lowPct} %` });
-  if (!f.nothingDone && f.weeks.length > 1)
+  if (!weekend && !f.nothingDone && f.weeks.length > 1)
     kpis.push({
       icon: '📦',
       label: `${f.weeks.length} semaines`,
@@ -176,14 +185,18 @@ export function composeDailyRecap(f: RecapFacts, lowPct = 80): Recap {
     (t) =>
       `${t.title}${t.projectTitle ? ` · ${t.projectTitle}` : ''}${t.durationMin ? ` (${fmtMin(t.durationMin)})` : ''}`,
   );
-  const focus = f.nothingDone
-    ? f.focus.map(
-        (x) =>
-          `${x.title}${x.projectTitle ? ` · ${x.projectTitle}` : ''}${x.deadline ? ` (${deadlineLabel(x.deadline, f.date)})` : ''}`,
-      )
-    : [];
+  const focus =
+    f.nothingDone && !weekend
+      ? f.focus.map(
+          (x) =>
+            `${x.title}${x.projectTitle ? ` · ${x.projectTitle}` : ''}${x.deadline ? ` (${deadlineLabel(x.deadline, f.date)})` : ''}`,
+        )
+      : [];
   let summary: string;
-  if (!f.nothingDone) summary = achievementsSentence(f);
+  if (!f.nothingDone) {
+    const s = achievementsSentence(f);
+    summary = weekend ? `Ce week-end : ${s.charAt(0).toLowerCase()}${s.slice(1)} Bien joué.` : s;
+  } else if (weekend) summary = 'Week-end de repos : profite.';
   else {
     const already = f.week.doneTasks
       ? ` Déjà ${plural(f.week.doneTasks, 'tâche faite', 'tâches faites')} cette semaine.`
@@ -196,7 +209,7 @@ export function composeDailyRecap(f: RecapFacts, lowPct = 80): Recap {
           : ' Rien d’urgent en vue : avance à ton rythme.';
     summary = `Pas de tâche cochée aujourd'hui, ça arrive : la semaine se joue sur plusieurs jours.${already}${rest}`;
   }
-  return { date: f.date, nothingDone: f.nothingDone, title, summary, kpis, done, focus };
+  return { date: f.date, mode: f.mode, nothingDone: f.nothingDone, title, summary, kpis, done, focus };
 }
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -209,9 +222,19 @@ export function recapToTelegramHtml(r: Recap): string {
     lines.push(
       `${k.icon} ${escapeHtml(k.label)} : <b>${escapeHtml(k.value)}</b>${k.note ? ` (${escapeHtml(k.note)})` : ''}`,
     );
-  if (r.done.length) lines.push('', '<b>Fait aujourd’hui</b>', ...r.done.map((d) => `✓ ${escapeHtml(d)}`));
+  const weekend = r.mode === 'weekend';
+  if (r.done.length)
+    lines.push(
+      '',
+      `<b>${weekend ? 'Fait ce week-end' : 'Fait aujourd’hui'}</b>`,
+      ...r.done.map((d) => `✓ ${escapeHtml(d)}`),
+    );
   if (r.focus.length)
-    lines.push('', '<b>Ce qui compte ces prochains jours</b>', ...r.focus.map((d) => `→ ${escapeHtml(d)}`));
+    lines.push(
+      '',
+      `<b>${weekend ? 'En ligne de mire cette semaine' : 'Ce qui compte ces prochains jours'}</b>`,
+      ...r.focus.map((d) => `→ ${escapeHtml(d)}`),
+    );
   return lines.join('\n');
 }
 

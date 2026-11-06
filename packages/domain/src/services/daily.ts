@@ -2,8 +2,8 @@
 // week, projects). With the AI on, the « Bilan du jour » prompt writes the whole message from those facts
 // (Telegram HTML, cleaned up before sending); otherwise a plain report: achievements sentence, KPIs, done tasks.
 // D-78: no day streak but a week streak and the 4-week volume; encouragement and leads when nothing was done;
-// D-116: the same report every day, weekend included (the week report comes on Sunday evening); nothing
-// during holidays (jobs.ts).
+// D-116: Saturday only when something was done (encouragement), nothing on Sunday (the week report comes then)
+// nor during holidays (jobs.ts).
 import { and, eq, gte, inArray, schema } from '@memento/db';
 import { z } from 'zod';
 import { parseJsonObject } from '../ai/propose.ts';
@@ -54,6 +54,9 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   if (!isValidDate(day)) throw new DomainError('VALIDATION', 'Date invalide (AAAA-MM-JJ).');
   const s = schema;
   const settings = getSettings(ctx);
+  // D-116: Saturday and Sunday are the weekend (on Sunday, asked by hand, it covers both days).
+  const mode = isoDay(day) >= 6 ? ('weekend' as const) : ('day' as const);
+  const from = isoDay(day) === 7 ? addDays(day, -1) : day;
   // Done tasks of the last year: the period, the last 7 days and the weekly volumes of the week streak.
   const since = new Date(Date.parse(`${addDays(day, -7 * STREAK_WEEKS)}T00:00:00Z`)).toISOString();
   const recent = ctx.db
@@ -67,7 +70,7 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
     const d = doneDate(t.doneAt) as string;
     byDay.set(d, [...(byDay.get(d) ?? []), t]);
   }
-  const done = recent.filter((t) => (doneDate(t.doneAt) as string) === day);
+  const done = recent.filter((t) => (doneDate(t.doneAt) as string) >= from);
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(day, i - 7);
     const ts = byDay.get(d) ?? [];
@@ -135,7 +138,7 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   const completedProjects = allProjects
     .filter((p) => {
       const d = p.status === 'done' ? doneDate(p.completedAt) : null;
-      return !!d && d === day;
+      return !!d && d >= from && d <= day;
     })
     .map((p) => p.title);
   const nothingDone = done.length === 0 && completedProjects.length === 0;
@@ -146,7 +149,8 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   return {
     date: day,
     dayLabel: `${frDay(day)} ${d === 1 ? '1er' : d} ${frMonth(day)}`,
-    period: { from: day, to: day },
+    mode,
+    period: { from, to: day },
     nothingDone,
     done: {
       tasks,
@@ -169,7 +173,7 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
       budgetMin: ex.budget.budgetMin,
       daysLeftAfterToday: 7 - isoDay(day),
     },
-    focus: nothingDone ? focusLeads(ctx, thisWeek, ex) : [],
+    focus: nothingDone ? focusLeads(ctx, mode, thisWeek, ex) : [],
     projects: {
       active: allProjects.filter((p) => p.status === 'active').length,
       month: ex.monthProjects.filter((p) => p.status === 'active').length,
@@ -183,14 +187,21 @@ const STREAK_WEEKS = 52;
 const FOCUS_COUNT = 3;
 
 /**
- * D-78: up to 3 leads for the coming days, from the engine's ranking. The open tasks of this week's
+ * D-78: up to 3 leads for the coming days, from the engine's ranking. Weekday: the open tasks of this week's
  * plan, those due within a week first (none when the plan is all done); without a plan, the best candidates.
+ * Sunday: the best candidates for next week (its plan comes on Monday).
  */
-function focusLeads(ctx: Ctx, isoWeek: string, ex: ReturnType<typeof getExecution>): FocusItem[] {
-  const input = buildEngineInput(ctx, isoWeek);
+function focusLeads(
+  ctx: Ctx,
+  mode: 'day' | 'weekend',
+  isoWeek: string,
+  ex: ReturnType<typeof getExecution>,
+): FocusItem[] {
+  const week = mode === 'weekend' ? shiftWeek(isoWeek, 1) : isoWeek;
+  const input = buildEngineInput(ctx, week);
   const scored = scoreCandidates(input);
   const open = ex.tasks.filter((t) => !t.done && t.kind === 'week');
-  if (ex.plan && ex.tasks.some((t) => t.kind === 'week')) {
+  if (mode === 'day' && ex.plan && ex.tasks.some((t) => t.kind === 'week')) {
     const score = new Map(scored.map((x) => [x.taskId, x.score]));
     const soon = addDays(input.today, 7);
     const dueSoon = (t: (typeof open)[number]) => !!t.deadline && t.deadline <= soon;

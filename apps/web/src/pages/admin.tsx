@@ -1223,8 +1223,8 @@ function NotifyConfig({
               encouragement et ce qui compte ces prochains jours.
             </span>
             <span className="tip-p">
-              Le même tous les jours, week-end compris ; rien en vacances. Le bilan de la semaine arrive le
-              dimanche soir (onglet Calendrier).
+              Le samedi, seulement si tu as fait quelque chose : un mot d'encouragement, sans chiffres. Rien
+              le dimanche : le bilan de la semaine arrive le soir (onglet Calendrier). Rien en vacances.
             </span>
           </InfoTip>
         </label>

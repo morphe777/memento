@@ -255,15 +255,15 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
       ['V', w.value * V],
     ];
     const [key, val] = contrib.reduce((best, c) => (c[1] > best[1] ? c : best));
-    if (val === 0) why = project ? 'Prochaine étape du projet' : 'À caser quand tu peux';
+    // D-116: nothing worth saying (no deadline, delay, continuity…) = no line at all.
+    if (val === 0) why = '';
     else if (key === 'A') why = `Reportée ${t.postponeCount} fois`;
     else if (key === 'R') why = `Projet du mois, ${fmtMin(lateMin)} de retard`;
     else if (key === 'U' && deadline)
       why = t.dueDate ? `Deadline ${frShort(deadline)}` : `Fin du projet le ${frShort(deadline)}`;
     else if (key === 'C') why = 'Suite logique : projet entamé';
     else if (project?.importance === 'high') why = 'Projet d’importance haute';
-    // D-116: no « Famille = priorité n°2 »: the domain is already the colour of the card.
-    else why = project ? 'Prochaine étape du projet' : 'À caser quand tu peux';
+    else why = ''; // D-116: no « Famille = priorité n°2 », the domain is already the colour of the card
   }
   return { taskId: t.id, score, parts, mandatory, why };
 }
