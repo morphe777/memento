@@ -28,6 +28,7 @@ import {
   weekMonday,
   weekSunday,
 } from '../time.ts';
+import { paceCalendar } from './planning.ts';
 import { serializeProjects } from './projects.ts';
 
 const { report, task, project, objective, metaObjective, domain, weekPlan, weekPlanItem, auditLog } = schema;
@@ -232,6 +233,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
 
   // R-06: month projects at the end of the week.
   const asOf = weekSunday(isoWeek);
+  const calendar = paceCalendar(ctx);
   const monthProjects = serializeProjects(
     ctx,
     ctx.db
@@ -256,7 +258,8 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
           waitingOn: [],
         } as EngineProject,
         ptasks,
-        asOf,
+        addDays(asOf, 1), // D-118: judged by the week, the reported week counts as ended
+        calendar,
       ),
     };
   });

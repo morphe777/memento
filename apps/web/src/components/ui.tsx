@@ -108,19 +108,29 @@ export const DELAY_HELP = (
       <b>Pour chaque projet du mois</b>, on compare ce qui est fait à ce qui aurait dû l'être.
     </span>
     <span className="tip-p">
-      <b>Prévu à ce jour</b> = durée estimée des tâches (hors annulées) × part des jours écoulés entre début
-      et échéance.
+      <b>La période</b> : du début à l'échéance du projet ; sans dates, le mois du projet.
     </span>
     <span className="tip-p">
-      <b>Écart</b> = durée estimée des tâches faites − prévu à ce jour.
+      <b>Le travail attendu</b> (durée estimée des tâches, hors annulées) est réparti sur la période selon ton{' '}
+      <b>temps disponible</b> : le budget de chaque semaine (celui du plan, sinon le budget par défaut), rien
+      les jours de vacances. Une grosse semaine attend plus qu'une petite.
+    </span>
+    <span className="tip-p">
+      <b>Jugé à la semaine</b> : est attendu ce qui tombe dans les semaines déjà finies. La semaine en cours
+      ne compte qu'à sa fin, dimanche soir : pas de faux retard le mardi.
+      <span className="tip-li">
+        « encore X cette semaine » : ce qu'il reste à faire d'ici dimanche pour être à l'heure.
+      </span>
+    </span>
+    <span className="tip-p">
+      <b>Écart</b> = durée estimée des tâches faites − attendu.
       <span className="tip-li tip-dim">le temps réel passé ne compte pas ;</span>
       <span className="tip-li tip-dim">une tâche sans durée compte 0.</span>
     </span>
     <span className="tip-p">
       <b>Lecture</b>
       <span className="tip-li">moins de 15 min d'écart : à l'heure ;</span>
-      <span className="tip-li">barre pleine à ±4 h ;</span>
-      <span className="tip-li">sans début ou échéance : tout ce qui est fait compte en avance.</span>
+      <span className="tip-li">barre pleine à ±4 h.</span>
     </span>
     <span className="tip-p">
       <b>Replanifier</b> repart du jour du recalage et du temps déjà fait : la barre revient au centre.
@@ -158,18 +168,21 @@ export function DelayBar({
   title,
   color,
   deltaMin,
+  weekToDoMin = 0,
   to,
 }: {
   title: string;
   color: string;
   deltaMin: number;
+  /** D-118: left to do this week to be on time on Sunday; nothing shown at 0. */
+  weekToDoMin?: number;
   to?: { id: string };
 }) {
   const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   const late = deltaMin < 0;
   const onTime = Math.abs(deltaMin) < 15;
   const label = onTime ? "à l'heure" : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
-  return (
+  const bar = (
     <div className="flex items-center gap-2.5 text-[13px]">
       <span className="flex-none flex items-center gap-2 min-w-0" style={{ width: DELAY_LABEL_W }}>
         <DomainDot color={color} />
@@ -222,6 +235,18 @@ export function DelayBar({
         }}
       >
         {label}
+      </span>
+    </div>
+  );
+  if (weekToDoMin < 15) return bar;
+  return (
+    <div className="flex flex-col gap-0.5">
+      {bar}
+      <span
+        className="text-[12px]"
+        style={{ paddingLeft: `calc(${DELAY_LABEL_W} + 10px)`, color: 'var(--text-faint)' }}
+      >
+        encore {fmtMin(weekToDoMin)} cette semaine pour être à l'heure dimanche
       </span>
     </div>
   );

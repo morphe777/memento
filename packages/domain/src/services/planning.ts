@@ -4,12 +4,14 @@ import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { availableTaskIds, blockedProjectIds } from '../rules/availability.ts';
 import { deadlineUrgency } from '../rules/daily.ts';
+import type { PaceCalendar } from '../rules/delay.ts';
 import {
   buildPlanningPage,
   type EngineInput,
   type EngineProject,
   type EngineTask,
   projectDelayMin,
+  projectWeekToDoMin,
   propose,
   type Selection,
   scoreCandidates,
@@ -112,6 +114,15 @@ function plannedAhead(ctx: Ctx, isoWeek: string): Set<string> {
   return new Set(rows.map((r) => r.taskId).filter((id) => !kept.has(id)));
 }
 
+/** D-118: time available per week (plan budget, else the default one) and holidays, for the delay (R-06). */
+export function paceCalendar(ctx: Ctx): PaceCalendar {
+  const s = getSettings(ctx);
+  const weekBudgets: Record<string, number> = {};
+  for (const p of ctx.db.select({ w: weekPlan.isoWeek, b: weekPlan.budgetMin }).from(weekPlan).all())
+    if (p.b !== null) weekBudgets[p.w] = p.b;
+  return { weekBudgets, defaultBudgetMin: s['budget.weekly_min'], vacations: s['notify.vacations'] };
+}
+
 export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number): EngineInput {
   const s = getSettings(ctx);
   const monday = weekMonday(isoWeek);
@@ -193,6 +204,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     projects,
     tasks,
     taskDeps: ctx.db.select().from(taskDependency).all(),
+    paceCalendar: paceCalendar(ctx),
   };
 }
 
@@ -591,24 +603,19 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
     .from(project)
     .where(and(eq(project.monthFlag, month), inArray(project.status, ['active', 'paused', 'done'])))
     .all();
+  const calendar = paceCalendar(ctx);
   const monthProjects = serializeProjects(ctx, monthRows).map((p) => {
     const ptasks = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all() as EngineTask[];
+    const ep = { ...p, objectiveTitle: null, objectiveCriticality: null, blocked: false, waitingOn: [] };
     return {
       projectId: p.id,
       title: p.title,
       domainId: p.domainIds[0] ?? null,
       status: p.status,
-      deltaMin: projectDelayMin(
-        {
-          ...p,
-          objectiveTitle: null,
-          objectiveCriticality: null,
-          blocked: false,
-          waitingOn: [],
-        } as EngineProject,
-        ptasks,
-        today,
-      ),
+      deltaMin: projectDelayMin(ep as EngineProject, ptasks, today, calendar),
+      // D-118: left to do this week to be on time on Sunday evening (none for a finished or paused project).
+      weekToDoMin:
+        p.status === 'active' ? projectWeekToDoMin(ep as EngineProject, ptasks, today, calendar) : 0,
     };
   });
 
