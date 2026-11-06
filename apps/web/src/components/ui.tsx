@@ -118,9 +118,6 @@ export const DELAY_HELP = (
     <span className="tip-p">
       <b>Jugé à la semaine</b> : est attendu ce qui tombe dans les semaines déjà finies. La semaine en cours
       ne compte qu'à sa fin, dimanche soir : pas de faux retard le mardi.
-      <span className="tip-li">
-        « encore X cette semaine » : ce qu'il reste à faire d'ici dimanche pour être à l'heure.
-      </span>
     </span>
     <span className="tip-p">
       <b>Écart</b> = durée estimée des tâches faites − attendu.
@@ -168,21 +165,18 @@ export function DelayBar({
   title,
   color,
   deltaMin,
-  weekToDoMin = 0,
   to,
 }: {
   title: string;
   color: string;
   deltaMin: number;
-  /** D-118: left to do this week to be on time on Sunday; nothing shown at 0. */
-  weekToDoMin?: number;
   to?: { id: string };
 }) {
   const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   const late = deltaMin < 0;
   const onTime = Math.abs(deltaMin) < 15;
   const label = onTime ? "à l'heure" : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
-  const bar = (
+  return (
     <div className="flex items-center gap-2.5 text-[13px]">
       <span className="flex-none flex items-center gap-2 min-w-0" style={{ width: DELAY_LABEL_W }}>
         <DomainDot color={color} />
@@ -235,18 +229,6 @@ export function DelayBar({
         }}
       >
         {label}
-      </span>
-    </div>
-  );
-  if (weekToDoMin < 15) return bar;
-  return (
-    <div className="flex flex-col gap-0.5">
-      {bar}
-      <span
-        className="text-[12px]"
-        style={{ paddingLeft: `calc(${DELAY_LABEL_W} + 10px)`, color: 'var(--text-faint)' }}
-      >
-        encore {fmtMin(weekToDoMin)} cette semaine pour être à l'heure dimanche
       </span>
     </div>
   );
