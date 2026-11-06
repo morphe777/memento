@@ -373,7 +373,8 @@ function Rail({
         {moreOpen && (
           <div
             className="card absolute flex flex-col p-1"
-            style={{ left: 'calc(100% + 10px)', top: -4, minWidth: 170, zIndex: 60 }}
+            // Opens upward: the « ⋯ » sits low in the rail, a downward menu left the screen.
+            style={{ left: 'calc(100% + 10px)', bottom: -4, minWidth: 170, zIndex: 60 }}
           >
             {extra.map((i) => (
               <Link
@@ -491,14 +492,14 @@ function Sidebar({
         <div className="flex items-center gap-1.5">
           <button
             type="button"
-            className={`btn btn-sm flex-1 ${touch ? 'justify-start' : 'justify-between'}`}
+            className="btn btn-sm flex-1 justify-between"
             onClick={onSearch}
             style={{ color: 'var(--text-faint)' }}
           >
             <span className="flex items-center gap-1.5">
               <NavIcon name="search" /> Rechercher
             </span>
-            {!touch && <span className="mono text-[11px]">⌘K</span>}
+            <span className="mono text-[11px]">⌘K</span>
           </button>
           <button
             type="button"
