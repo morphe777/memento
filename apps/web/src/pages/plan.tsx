@@ -504,12 +504,14 @@ function PlanTaskRow({
             </span>
           )}
         </div>
-        <span
-          className="text-[12px]"
-          style={{ color: t.mandatory ? 'var(--late-text)' : 'var(--text-faint)' }}
-        >
-          {t.why}
-        </span>
+        {t.why && (
+          <span
+            className="text-[12px]"
+            style={{ color: t.mandatory ? 'var(--late-text)' : 'var(--text-faint)' }}
+          >
+            {t.why}
+          </span>
+        )}
       </div>
       <Duration min={t.durationMin} />
       <button

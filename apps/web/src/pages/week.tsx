@@ -657,7 +657,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
                     className="text-[12px] flex flex-wrap gap-1.5 items-center"
                     style={{ color: 'var(--text-muted)' }}
                   >
-                    {dl.name(t.domainId)} · {t.isExperience ? 'Expérience' : t.why}
+                    {[dl.name(t.domainId), t.isExperience ? 'Expérience' : t.why].filter(Boolean).join(' · ')}
                     {t.kind === 'bonus' && <BonusBadge />}
                   </span>
                 )}

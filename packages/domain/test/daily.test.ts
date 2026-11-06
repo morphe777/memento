@@ -54,6 +54,7 @@ const task = (over: Partial<RecapTask> = {}): RecapTask => ({
 const facts = (tasks: RecapTask[], over: Partial<RecapFacts> = {}): RecapFacts => ({
   date: '2026-10-28',
   dayLabel: 'mercredi 28 octobre',
+  mode: 'day',
   period: { from: '2026-10-28', to: '2026-10-28' },
   nothingDone: tasks.length === 0,
   done: {
@@ -184,6 +185,29 @@ describe('D-77 « Bilan du jour »', () => {
     expect(allDone).toContain('Ta semaine est déjà bouclée.');
   });
 
+  it('D-116 Saturday: encouragement only, no figure nor lead', () => {
+    const saturday = {
+      mode: 'weekend' as const,
+      date: '2026-10-31',
+      dayLabel: 'samedi 31 octobre',
+      period: { from: '2026-10-31', to: '2026-10-31' },
+    };
+    const done = composeDailyRecap(facts([task(), task({ title: 'Ranger' })], saturday));
+    expect(done.title).toBe('🌿 Samedi 31 octobre');
+    expect(done.summary).toBe('Ce week-end : 2 tâches faites (1 h). Bien joué.');
+    expect(done.kpis).toEqual([]);
+    const html = recapToTelegramHtml(done);
+    expect(html).toContain('<b>Fait ce week-end</b>');
+    expect(html).not.toMatch(/Semaine|Ce qui compte|En ligne de mire/);
+    const rest = composeDailyRecap(
+      facts([], {
+        ...saturday,
+        focus: [{ title: 'Devis', projectTitle: 'Cuisine', deadline: '2026-11-12', durationMin: 30 }],
+      }),
+    );
+    expect(rest.focus).toEqual([]);
+  });
+
   it('D-78 week streak: reached weeks in a row, the current week never breaks it, holidays are neutral', () => {
     const w = (doneMin: number, over: Partial<WeekVolume> = {}): WeekVolume => ({
       isoWeek: 'x',
@@ -286,7 +310,7 @@ describe('D-77 « Bilan du jour »', () => {
     }
   });
 
-  it('D-116 the same report every day, weekend included, nothing during holidays, leads from the week plan', async () => {
+  it('D-116 Saturday only when something was done, nothing on Sunday nor during holidays, leads from the week plan', async () => {
     const ctx = makeCtx('2026-10-26T08:00:00.000Z'); // Monday W44
     const { group } = lookups(ctx);
     const p = createProject(ctx, {
@@ -314,12 +338,10 @@ describe('D-77 « Bilan du jour »', () => {
     ctx.setNow('2026-10-31T10:00:00.000Z'); // Saturday
     completeTask(ctx, a.id);
     const saturday = getDailyRecap(ctx);
+    expect(saturday.facts.mode).toBe('weekend');
+    expect(saturday.facts.period).toEqual({ from: '2026-10-31', to: '2026-10-31' });
     expect(saturday.done).toEqual(['Mesurer · Cuisine (1 h)']);
-    expect(saturday.title).toBe('📊 Bilan du samedi 31 octobre');
-    ctx.setNow('2026-11-01T10:00:00.000Z'); // Sunday: only Sunday
-    const sunday = getDailyRecap(ctx);
-    expect(sunday.facts.period).toEqual({ from: '2026-11-01', to: '2026-11-01' });
-    expect(sunday.nothingDone).toBe(true);
+    expect(saturday.title).toBe('🌿 Samedi 31 octobre');
 
     setTelegramToken(ctx, '123456:ABC-def');
     patchSettings(ctx, {
@@ -333,12 +355,13 @@ describe('D-77 « Bilan du jour »', () => {
       return new Response(JSON.stringify({ ok: true, result: {} }));
     }) as typeof fetch;
     try {
-      ctx.setNow('2026-10-31T19:00:00.000Z'); // Saturday 20:00
+      ctx.setNow('2026-10-24T19:00:00.000Z'); // Saturday 21:00 (CEST), nothing done that day: silence
+      expect(await runDailyRecapJob(ctx, {})).toBe('skipped');
+      ctx.setNow('2026-10-31T19:00:00.000Z'); // Saturday 20:00, something done
       expect(await runDailyRecapJob(ctx, {})).toBe('done');
-      expect(sent[0]).toContain('<b>📊 Bilan du samedi 31 octobre</b>');
-      ctx.setNow('2026-11-01T19:00:00.000Z'); // Sunday 20:00
-      expect(await runDailyRecapJob(ctx, {})).toBe('done');
-      expect(sent[1]).toContain('ça arrive');
+      expect(sent[0]).toContain('<b>🌿 Samedi 31 octobre</b>');
+      ctx.setNow('2026-11-01T19:00:00.000Z'); // Sunday 20:00: the week report instead
+      expect(await runDailyRecapJob(ctx, {})).toBe('skipped');
       // Holidays: nothing sent, the period is listed and can be removed.
       expect(addVacation(ctx, { from: '2026-11-02', to: '2026-11-08' }).periods).toHaveLength(1);
       expect(() => addVacation(ctx, { from: '2026-11-10', to: '2026-11-09' })).toThrow(/précède/);
@@ -347,7 +370,8 @@ describe('D-77 « Bilan du jour »', () => {
       expect(await runDailyRecapJob(ctx, {})).toBe('skipped');
       ctx.setNow('2026-11-09T19:00:00.000Z'); // back on Monday
       expect(await runDailyRecapJob(ctx, {})).toBe('done');
-      expect(sent).toHaveLength(3);
+      expect(sent).toHaveLength(2);
+      expect(sent[1]).toContain('ça arrive');
       expect(removeVacation(ctx, '2026-11-02').periods).toEqual([]);
     } finally {
       globalThis.fetch = realFetch;
@@ -382,7 +406,6 @@ describe('D-77 « Bilan du jour »', () => {
       // Telegram not set up: nothing sent, nothing fails.
       const first = runDueJobs(ctx);
       expect(first.week).toBe('done');
-      expect(first.week_report).toBe('done'); // D-116: catch-up, the worker was down on Sunday evening
       expect(await notifyFrozenReports(ctx, {}, first)).toMatchObject({ notify_week: 'skipped' });
       setTelegramToken(ctx, '123456:ABC-def');
       patchSettings(ctx, {

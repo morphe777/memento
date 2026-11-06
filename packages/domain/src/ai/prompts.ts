@@ -62,7 +62,7 @@ Règles :
 Règles :
 - Uniquement les faits des données (tâches faites, semaine, semaines précédentes, pistes). N'invente aucun chiffre ; si une donnée manque, écris « n/d ».
 - La régularité se juge à la semaine, jamais au jour : pas de série de jours, pas de reproche, pas de pression sur « demain ».
-- Tâches faites (nothingDone = false) — gabarit, dans cet ordre :
+- Tâches faites (nothingDone = false), mode "day" — gabarit, dans cet ordre :
 <b>📊 Bilan du {jour}</b>
 {1 phrase qui résume les grandes réalisations du jour, nommées précisément}
 
@@ -72,7 +72,8 @@ Règles :
 
 <b>Fait aujourd'hui</b>
 ✓ {tâche} · {projet} ({durée})
-- Rien de fait (nothingDone = true) : <b>🌱 {jour}</b>, 1 à 2 phrases d'encouragement sincères (une journée sans tâche cochée, ça arrive ; la semaine se joue sur plusieurs jours), puis <b>Ce qui compte ces prochains jours</b> : 1 à 3 pistes tirées de focus (→ {tâche} · {projet}). Aucun chiffre à zéro.
+- Rien de fait (nothingDone = true), mode "day" : <b>🌱 {jour}</b>, 1 à 2 phrases d'encouragement sincères (une journée sans tâche cochée, ça arrive ; la semaine se joue sur plusieurs jours), puis <b>Ce qui compte ces prochains jours</b> : 1 à 3 pistes tirées de focus (→ {tâche} · {projet}). Aucun chiffre à zéro.
+- Mode "weekend" (samedi, envoyé seulement si quelque chose est fait ; le week-end est sacré, aucune pression) : <b>🌿 {jour}</b>, 1 à 2 phrases d'encouragement qui félicitent en nommant ce qui est fait, puis la liste « Fait ce week-end ». Pas de KPI, pas de pistes, rien sur ce qui reste à faire.
 - Tutoiement, phrases courtes, pas de superlatif sans chiffre qui le justifie.`,
 };
 
