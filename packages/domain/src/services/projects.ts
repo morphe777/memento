@@ -14,7 +14,7 @@ import {
 } from '../rules/projects.ts';
 import { upcomingObjectiveOccurrences } from '../rules/recurrence.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
-import { getSettings, withTemplate } from '../settings.ts';
+import { getSettings } from '../settings.ts';
 import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
 import {
   allDependencies,
@@ -254,7 +254,7 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
         id,
         createdBy: ctx.actor,
         ...fields,
-        description: withTemplate(ctx, 'project', fields.description),
+        description: fields.description ?? '', // D-119: the template only guides the AI
         status: 'idea', // RB-01: an idea only needs a title (and a group, D-04)
         primaryDomainId,
         positionInObjective: nextPositionInObjective(ctx, fields.objectiveId),

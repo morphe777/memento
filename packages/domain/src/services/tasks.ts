@@ -7,7 +7,7 @@ import { assertNoCycle } from '../rules/graph.ts';
 import { checkRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
-import { getSettings, withTemplate } from '../settings.ts';
+import { getSettings } from '../settings.ts';
 import { addDays, currentWeek, parisDate } from '../time.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
@@ -124,7 +124,7 @@ export function createTask(ctx: Ctx, input: TaskCreate) {
         id,
         createdBy: ctx.actor,
         ...fields,
-        description: withTemplate(ctx, 'task', fields.description),
+        description: fields.description ?? '', // D-119: the template only guides the AI
         projectId,
         domainId: projectId ? null : (input.domainId ?? null),
         position: position ?? nextPosition(ctx, projectId),

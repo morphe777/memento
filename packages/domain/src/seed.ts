@@ -52,6 +52,39 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
           .where(eq(schema.setting.key, key))
           .run();
     }
+    clearTemplateDescriptions(ctx);
     return { domains, groups };
   });
+}
+
+/**
+ * D-119: the description templates were copied into every new item (D-35, abandoned): a description that is
+ * still exactly a template (the current one or the default one) is emptied. Idempotent, at every start.
+ */
+function clearTemplateDescriptions(ctx: Ctx) {
+  const stored = new Map(
+    ctx.db
+      .select()
+      .from(schema.setting)
+      .all()
+      .map((r) => [r.key, r.value]),
+  );
+  const tables = {
+    task: schema.task,
+    project: schema.project,
+    objective: schema.objective,
+    meta_objective: schema.metaObjective,
+  } as const;
+  for (const [kind, table] of Object.entries(tables)) {
+    const key = `templates.${kind}` as keyof typeof DEFAULT_SETTINGS;
+    const templates = new Set(
+      [stored.get(key), DEFAULT_SETTINGS[key]]
+        .filter((v): v is string => typeof v === 'string' && v.trim() !== '')
+        .map((v) => v.trim()),
+    );
+    if (!templates.size) continue;
+    for (const r of ctx.db.select({ id: table.id, d: table.description }).from(table).all())
+      if (templates.has(r.d.trim()))
+        ctx.db.update(table).set({ description: '' }).where(eq(table.id, r.id)).run();
+  }
 }

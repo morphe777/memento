@@ -1359,6 +1359,9 @@ type DailyMessage = { ai: boolean; text: string; aiError: string | null };
 
 type Vacations = { onVacation: boolean; periods: { from: string; to: string }[] };
 
+/** D-119: an empty date field shrinks in a flex row (Safari): the same width filled or empty. */
+const DATE_W = { width: 170 };
+
 /** D-78: holiday periods, saved at once (own endpoint, also open to the AI through the MCP). */
 function VacationsConfig() {
   const qc = useQueryClient();
@@ -1408,10 +1411,16 @@ function VacationsConfig() {
       )}
       <div className="flex items-end gap-2 flex-wrap">
         <Field label="Du">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={DATE_W} />
         </Field>
         <Field label="Au (inclus)">
-          <input type="date" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          <input
+            type="date"
+            value={to}
+            min={from || undefined}
+            onChange={(e) => setTo(e.target.value)}
+            style={DATE_W}
+          />
         </Field>
         <button type="button" className="btn" onClick={add} disabled={!from}>
           Ajouter
