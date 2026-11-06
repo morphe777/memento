@@ -293,7 +293,7 @@ export function ObjectivePanel({
             : me.data
               ? quarterEnd(quarterOfDate(me.data.today))
               : '',
-          description: settings.data?.['templates.objective'] ?? '',
+          description: '',
         };
     initial.current = JSON.stringify(start);
     setF(start);
@@ -718,7 +718,7 @@ export function MetaPanel({
   const [motive, setMotive] = useState(meta?.motive ?? '');
   const [deleting, setDeleting] = useState(false);
   useEffect(() => {
-    if (open && !meta) setDescription(settings.data?.['templates.meta_objective'] ?? '');
+    if (open && !meta) setDescription('');
   }, [open]);
   const initial = useRef(
     JSON.stringify({ title, horizonDate, status, primaryDomainId, description, motive }),

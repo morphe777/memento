@@ -19,7 +19,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useEffect, useRef, useState } from 'react';
-import { del, get, patch, post } from '../lib/api.ts';
+import { del, get, patch, post, put } from '../lib/api.ts';
 import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail, TaskDuration } from '../lib/types.ts';
@@ -568,6 +568,10 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     onClose();
   };
   const complete = useAction(() => post(`/tasks/${t.id}/${t.status === 'done' ? 'uncomplete' : 'complete'}`));
+  // D-119: add to / remove from the current week from the task itself.
+  const toWeek = useAction(() => put(`/tasks/${t.id}/current-week`, { inWeek: !t.inPlan }), {
+    toast: t.inPlan ? 'Retirée de la semaine en cours.' : 'Ajoutée à la semaine en cours.',
+  });
   const cancel = useAction(
     () => patch(`/tasks/${t.id}`, { status: t.status === 'cancelled' ? 'todo' : 'cancelled' }),
     { onSuccess: onClose },
@@ -671,6 +675,17 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         <button type="button" className="btn" onClick={() => complete.mutate(undefined)}>
           {t.status === 'done' ? 'Rouvrir' : 'Marquer faite'}
         </button>
+        {t.status === 'todo' && (
+          <button
+            type="button"
+            className="btn"
+            onClick={() => toWeek.mutate(undefined)}
+            disabled={toWeek.isPending || (t.locked && !t.inPlan)}
+            title={t.locked && !t.inPlan ? 'Elle attend la tâche précédente.' : undefined}
+          >
+            {t.inPlan ? 'Retirer de la semaine' : '+ Semaine en cours'}
+          </button>
+        )}
         <button type="button" className="btn" onClick={() => cancel.mutate(undefined)}>
           {t.status === 'cancelled' ? 'Réactiver' : 'Annuler la tâche'}
         </button>

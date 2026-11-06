@@ -41,6 +41,7 @@ import {
   getProjectReadiness,
   getQuarterPlanningPage,
   getSettings,
+  getTask,
   importData,
   listBoardTasks,
   listChanges,
@@ -587,7 +588,7 @@ describe('vues Tableau / Kanban des tâches (D-33)', () => {
 });
 
 describe('modèles de description et suppression (D-35)', () => {
-  it('applies the description template on every creation unless a description is given', () => {
+  it('D-119: the template is never copied into a new item; a description still equal to it is emptied', () => {
     const ctx = makeCtx();
     patchSettings(ctx, {
       'templates.task': 'T',
@@ -596,11 +597,16 @@ describe('modèles de description et suppression (D-35)', () => {
       'templates.meta_objective': 'M',
     });
     const g = lookups(ctx).group('Travaux').id;
-    expect(createTask(ctx, { title: 'a' }).description).toBe('T');
+    expect(createTask(ctx, { title: 'a' }).description).toBe('');
     expect(createTask(ctx, { title: 'b', description: 'mine' }).description).toBe('mine');
-    expect(createProject(ctx, { title: 'p', groupIds: [g] }).description).toBe('P');
-    expect(createObjective(ctx, { title: 'o', deadline: '2026-12-20' }).description).toBe('O');
-    expect(createMetaObjective(ctx, { title: 'm', description: '  ' }).description).toBe('M');
+    expect(createProject(ctx, { title: 'p', groupIds: [g] }).description).toBe('');
+    expect(createObjective(ctx, { title: 'o', deadline: '2026-12-20' }).description).toBe('');
+    // Items created earlier with the template (D-35): emptied at start, the others kept.
+    const old = createTask(ctx, { title: 'c', description: 'T\n' });
+    const kept = createTask(ctx, { title: 'd', description: 'T et la suite' });
+    seed(ctx);
+    expect(getTask(ctx, old.id).description).toBe('');
+    expect(getTask(ctx, kept.id).description).toBe('T et la suite');
   });
 
   it('deletes a task, a project with its tasks, an objective and a meta-objective, journaled', () => {

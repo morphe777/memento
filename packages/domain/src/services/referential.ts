@@ -15,7 +15,6 @@ import type {
   ObjectivePatch,
   ResourceCreate,
 } from '../schemas.ts';
-import { withTemplate } from '../settings.ts';
 import { recomputeProjectDomains } from './projects.ts';
 import { renewObjective } from './recurrence.ts';
 
@@ -238,7 +237,7 @@ export function createMetaObjective(ctx: Ctx, input: MetaObjectiveCreate) {
         id,
         createdBy: ctx.actor,
         ...input,
-        description: withTemplate(ctx, 'meta_objective', input.description),
+        description: input.description ?? '', // D-119
       })
       .run();
     const after = getMetaObjective(ctx, id);
@@ -292,7 +291,7 @@ export function createObjective(ctx: Ctx, input: ObjectiveCreate) {
         id,
         createdBy: ctx.actor,
         ...input,
-        description: withTemplate(ctx, 'objective', input.description),
+        description: input.description ?? '', // D-119
         quarter,
       })
       .run();

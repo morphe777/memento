@@ -184,51 +184,53 @@ function OpenNotification({ id, onClose }: { id: string; onClose: () => void }) 
   );
 }
 
-/** The bell (sidebar, rail, iPhone menu) with the number of unread notices. */
-export function NotifyBell({ label = false, onClick }: { label?: boolean; onClick?: () => void }) {
+/** D-119: a plain dot (no number) when something new arrived. */
+export function NewDot() {
+  return (
+    <span
+      aria-hidden
+      className="absolute rounded-full"
+      style={{
+        top: -2,
+        right: -3,
+        width: 8,
+        height: 8,
+        background: 'var(--late-bar)',
+        boxShadow: '0 0 0 2px var(--surface-2)',
+      }}
+    />
+  );
+}
+
+/** The bell, next to Configuration and logout (D-119), with a dot when there are unread notices. */
+export function NotifyBell({ onClick }: { onClick?: () => void }) {
   const q = useNotifications();
-  const unread = q.data?.unread ?? 0;
+  const unread = (q.data?.unread ?? 0) > 0;
   return (
     <Link
       to="/notifications"
-      aria-label={unread ? `Notifications, ${unread} non lues` : 'Notifications'}
+      aria-label={unread ? 'Notifications, nouvelles non lues' : 'Notifications'}
       title="Notifications"
       onClick={onClick}
-      className={label ? 'btn gap-2 hover:no-underline' : 'icon-btn relative hover:no-underline'}
-      style={{ color: 'var(--text-2)', position: 'relative' }}
+      className="icon-btn hover:no-underline"
     >
-      <svg
-        width={18}
-        height={18}
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden
-      >
-        <path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1.5H3z" />
-        <path d="M6.5 14.5a1.6 1.6 0 0 0 3 0" />
-      </svg>
-      {label && <span className="text-[14px]">Notifications</span>}
-      {unread > 0 && (
-        <span
-          className="mono text-[10px] font-semibold rounded-full grid place-items-center"
-          style={{
-            position: label ? 'static' : 'absolute',
-            top: 2,
-            right: 2,
-            minWidth: 16,
-            height: 16,
-            padding: '0 4px',
-            background: 'var(--primary)',
-            color: 'var(--primary-text)',
-          }}
+      <span className="relative grid place-items-center">
+        <svg
+          width={16}
+          height={16}
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
         >
-          {unread}
-        </span>
-      )}
+          <path d="M4 11.5V7a4 4 0 0 1 8 0v4.5l1 1.5H3z" />
+          <path d="M6.5 14.5a1.6 1.6 0 0 0 3 0" />
+        </svg>
+        {unread && <NewDot />}
+      </span>
     </Link>
   );
 }

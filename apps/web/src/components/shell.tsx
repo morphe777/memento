@@ -15,7 +15,7 @@ import {
   useToasts,
 } from '../lib/hooks.ts';
 import type { Project, SearchResult } from '../lib/types.ts';
-import { NotifyBell } from '../pages/notifications.tsx';
+import { NewDot, NotifyBell, useNotifications } from '../pages/notifications.tsx';
 import { CaptureSheet, PlusIcon } from './capture.tsx';
 import { openTask, TaskPeekHost } from './tasks.tsx';
 import { DomainDot, Panel } from './ui.tsx';
@@ -176,7 +176,6 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link to="/semaine" aria-label="Mémento" className="hover:no-underline">
               <img src="/icon.svg" alt="" width={26} height={26} />
             </Link>
-            <NotifyBell />
             <button
               type="button"
               className="icon-btn rail-item"
@@ -232,6 +231,9 @@ export function AppShell({ children }: { children: ReactNode }) {
                 })}
               </div>
             ))}
+            <div className="mt-auto">
+              <NotifyBell />
+            </div>
           </nav>
         ) : (
           <Sidebar
@@ -342,7 +344,6 @@ function Sidebar({
           <img src="/icon.svg" alt="" width={26} height={26} />
           <span className="text-[19px] font-bold tracking-tight">Mémento</span>
         </Link>
-        <NotifyBell />
         <button
           type="button"
           className="icon-btn"
@@ -443,6 +444,7 @@ function Sidebar({
         <ThemeSwitch />
         <div className="flex items-center gap-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
           <span className="flex-1 min-w-0 truncate font-medium">{me.data?.login}</span>
+          <NotifyBell />
           <SettingsLink active={path.startsWith('/configuration')} />
           <button
             type="button"
@@ -645,6 +647,7 @@ function LogoutIcon() {
 }
 
 function BottomTabs({ onMenu }: { onMenu: () => void }) {
+  const unread = (useNotifications().data?.unread ?? 0) > 0; // D-117: new notifications behind ☰
   const path = useRouterState({ select: (s) => s.location.pathname });
   const tab = {
     minHeight: 40,
@@ -683,12 +686,15 @@ function BottomTabs({ onMenu }: { onMenu: () => void }) {
         type="button"
         className="grid place-items-center border-0 bg-transparent cursor-pointer"
         style={{ ...tab, color: 'var(--text-muted)' }}
-        aria-label="Menu"
+        aria-label={unread ? 'Menu, nouvelles notifications' : 'Menu'}
         onClick={onMenu}
       >
-        <svg {...ICON} width={18} height={18} aria-hidden>
-          <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
-        </svg>
+        <span className="relative grid place-items-center">
+          <svg {...ICON} width={18} height={18} aria-hidden>
+            <path d="M2.5 4.5h11M2.5 8h11M2.5 11.5h11" />
+          </svg>
+          {unread && <NewDot />}
+        </span>
       </button>
     </nav>
   );
@@ -712,12 +718,9 @@ function PhoneMenu({
   });
   return (
     <Panel open={open} onClose={onClose} title="Menu" side={false} width={420}>
-      <div className="flex items-center gap-2">
-        <button type="button" className="btn justify-start flex-1" onClick={onSearch}>
-          <NavIcon name="search" /> Rechercher
-        </button>
-        <NotifyBell label onClick={onClose} />
-      </div>
+      <button type="button" className="btn justify-start" onClick={onSearch}>
+        <NavIcon name="search" /> Rechercher
+      </button>
       {NAV.map((s) => (
         <div key={s.section} className="flex flex-col">
           <div className="label-caps pb-1">{s.section}</div>
@@ -749,6 +752,7 @@ function PhoneMenu({
       <ThemeSwitch />
       <div className="flex items-center gap-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
         <span className="flex-1 min-w-0 truncate font-medium">{me.data?.login}</span>
+        <NotifyBell onClick={onClose} />
         <SettingsLink active={path.startsWith('/configuration')} onClick={onClose} />
         <button
           type="button"
