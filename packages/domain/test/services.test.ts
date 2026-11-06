@@ -1438,6 +1438,9 @@ describe('D-116 week report on Sunday evening, planning a future week', () => {
     expect(titles('2026-W46')).toContain('Garage 1');
     expect(titles('2026-W48')).not.toContain('Garage 1');
     expect(titles('2026-W48')).toContain('Garage 2'); // after « Garage 1 », available anyway
+    // …and it can be chosen: planning is not doing.
+    const garage2 = setWeekItems(ctx, '2026-W48', [{ taskId: tasks[1].id, kind: 'week' }]);
+    expect(garage2.items.map((i) => i.taskId)).toEqual([tasks[1].id]);
     // Chosen again in the planned week itself: it stays.
     setWeekItems(ctx, '2026-W48', [{ taskId: tasks[0].id, kind: 'week' }]);
     expect(titles('2026-W48')).toContain('Garage 1');

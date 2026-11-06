@@ -213,7 +213,7 @@ describe('Vue Plan — model and rules', () => {
     expect(res.waitingOn).toEqual([pre.id]);
   });
 
-  it('CA-06 tasks of a waiting project join the week plan; the 2nd task of a sequential project stays locked', () => {
+  it('CA-06 tasks of a waiting project join the week plan; the 2nd task of a sequential project waits for the 1st (done, chosen or planned before)', () => {
     const ctx = makeCtx();
     const pre = activeProject(ctx, 'Prérequis', 3).project;
     const next = activeProject(ctx, 'Suite', 3, { dependsOn: [pre.id], sequenceMode: 'sequential' });
@@ -221,7 +221,16 @@ describe('Vue Plan — model and rules', () => {
     expect(
       errCode(() => setWeekItems(ctx, '2026-W44', [{ taskId: next.tasks[0].id, kind: 'week' }])),
     ).toBeNull();
-    expect(errCode(() => setWeekItems(ctx, '2026-W45', [{ taskId: next.tasks[1].id, kind: 'week' }]))).toBe(
+    // Not chosen nor planned before: locked.
+    expect(errCode(() => setWeekItems(ctx, '2026-W44', [{ taskId: next.tasks[1].id, kind: 'week' }]))).toBe(
+      'TASK_LOCKED',
+    );
+    // D-116: the 1st one planned in W44, the 2nd can be planned in W45 (planning is not doing).
+    setWeekItems(ctx, '2026-W44', [{ taskId: next.tasks[0].id, kind: 'week' }]);
+    expect(
+      errCode(() => setWeekItems(ctx, '2026-W45', [{ taskId: next.tasks[1].id, kind: 'week' }])),
+    ).toBeNull();
+    expect(errCode(() => setWeekItems(ctx, '2026-W45', [{ taskId: next.tasks[2].id, kind: 'week' }]))).toBe(
       'TASK_LOCKED',
     );
   });

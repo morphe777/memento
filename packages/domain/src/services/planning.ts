@@ -401,6 +401,7 @@ export function setWeekItems(
       throw new DomainError('TASK_NOT_FOUND', 'Tâche inconnue dans la sélection.');
     const chosen = new Set(ids);
     const deps = ctx.db.select().from(taskDependency).all();
+    const ahead = plannedAhead(ctx, isoWeek); // D-116: planned in a week in between = done by then
     for (const t of rows.filter((r) => !beforeIds.has(r.id))) {
       if (t.status !== 'todo') throw new DomainError('TASK_NOT_TODO', `« ${t.title} » n'est plus à faire.`);
       if (!t.projectId) continue;
@@ -408,7 +409,7 @@ export function setWeekItems(
       if (p.status !== 'active' && p.status !== 'ready')
         throw new DomainError('PROJECT_NOT_ACTIVE', `« ${p.title} » n'est ni prêt ni projet du mois.`);
       const siblings = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all();
-      if (!availableTaskIds(siblings, p.sequenceMode, chosen, deps).has(t.id)) {
+      if (!availableTaskIds(siblings, p.sequenceMode, chosen, deps, ahead).has(t.id)) {
         throw new DomainError('TASK_LOCKED', `« ${t.title} » attend la tâche précédente.`);
       }
     }

@@ -32,7 +32,8 @@ export function availableTaskIds(
     if (t.status !== 'todo') continue;
     const orderOk = mode === 'parallel' || t.isFree || chainOpen;
     if (orderOk && depsOk(t.id)) out.add(t.id);
-    if (mode === 'sequential' && !chosen.has(t.id)) chainOpen = false;
+    // D-116: a task planned in an earlier week (doneElsewhere) is done by then: the chain goes on.
+    if (mode === 'sequential' && !chosen.has(t.id) && !doneElsewhere.has(t.id)) chainOpen = false;
   }
   return out;
 }
