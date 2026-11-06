@@ -326,7 +326,6 @@ function WeekDesktop({ ex }: { ex: Execution }) {
               title={p.title}
               color={dl.color(p.domainId)}
               deltaMin={p.deltaMin}
-              weekToDoMin={p.weekToDoMin}
               to={{ id: p.projectId }}
             />
           ))}
