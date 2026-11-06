@@ -1,4 +1,4 @@
-// Scheduled jobs (WF-01 to WF-03, G-04): Monday plan + weekly report, monthly and quarterly reports.
+// Scheduled jobs (WF-01 to WF-03, G-04): Sunday evening weekly report, Monday plan, monthly and quarterly reports.
 // Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time.
 import { and, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, newId } from '../context.ts';
@@ -80,12 +80,23 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
       rollMonth(ctx, month);
     });
   }
+  // D-116: the week report is frozen on Sunday evening (the weekend counts); on the other days, catch-up of
+  // the last week's one if the worker was down then. Before the Monday close, as before (R-07 reads the reports).
+  const sundayEvening = isoDay(date) === 7 && time >= s['schedule.week_report'].time;
+  if (sundayEvening || isoDay(date) !== 7) {
+    const key = sundayEvening ? week : shiftWeek(week, -1);
+    let created = false;
+    const r = once(ctx, 'week_report', key, () => {
+      created = generateReport(ctx, 'week', key).created;
+    });
+    // Already frozen by hand or by an earlier version: nothing new to announce.
+    out.week_report = r === 'done' && !created ? 'skipped' : r;
+  }
   const plan = s['schedule.week_plan'];
   // Weekly: from the configured day/time until the end of the ISO week (catch-up).
   if (isoDay(date) > plan.day || (isoDay(date) === plan.day && time >= plan.time)) {
     out.week = once(ctx, 'week', week, () => {
       closeWeek(ctx, shiftWeek(week, -1)); // RB-10
-      generateReport(ctx, 'week', shiftWeek(week, -1)); // WF-01
       try {
         proposeWeek(ctx, week); // §6
       } catch {
@@ -106,7 +117,7 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
 /**
  * D-77: evening recap « Ta journée » on Telegram, once per day from the configured time until midnight (no
  * catch-up the next day). Waits, without recording anything, while Telegram is not set up.
- * D-78: never on Saturday (Sunday's report covers the weekend) nor on a holiday.
+ * D-116: every day, weekend included (D-78 skipped Saturday); never on a holiday.
  */
 export async function runDailyRecapJob(
   ctx: Ctx,
@@ -118,7 +129,7 @@ export async function runDailyRecapJob(
   const { date, time } = parisClock(ctxNow(ctx));
   const st = notifyStatus(ctx, env);
   if (!r.enabled || time < r.time || (!st.configured && !st.pushDevices)) return 'skipped';
-  if (isoDay(date) === 6 || isOnVacation(date, s['notify.vacations'])) return 'skipped';
+  if (isOnVacation(date, s['notify.vacations'])) return 'skipped';
   const { jobRun } = schema;
   if (
     ctx.db
@@ -166,13 +177,14 @@ export async function notifyFrozenReports(
 ): Promise<Record<string, string>> {
   const { date } = parisClock(ctxNow(ctx));
   const periods = {
-    week: shiftWeek(isoWeekOf(date), -1),
+    // D-116: on Sunday the week that ends, otherwise the last one (catch-up).
+    week: isoDay(date) === 7 ? isoWeekOf(date) : shiftWeek(isoWeekOf(date), -1),
     month: shiftMonth(monthOf(date), -1),
     quarter: shiftQuarter(quarterOf(date), -1),
   };
   const out: Record<string, string> = {};
   for (const kind of ['week', 'month', 'quarter'] as const) {
-    if (ran[kind] !== 'done') continue;
+    if (ran[kind === 'week' ? 'week_report' : kind] !== 'done') continue;
     try {
       out[`notify_${kind}`] = await notifyReportReady(ctx, env, kind, periods[kind], pushSender);
     } catch (e) {

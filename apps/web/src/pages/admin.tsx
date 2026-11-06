@@ -279,7 +279,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'month.max_projects',
       'quarter.max_objectives',
     ],
-    calendrier: ['schedule.week_plan', 'schedule.reports'],
+    calendrier: ['schedule.week_plan', 'schedule.week_report', 'schedule.reports'],
     notifications: ['notify.daily_recap', 'notify.telegram_chat_id', 'notify.reports', 'notify.app_url'],
     templates: ['templates.meta_objective', 'templates.objective', 'templates.project', 'templates.task'],
     ia: [
@@ -561,7 +561,18 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             />
           </Field>
           <Field
-            label="Rapports : heure (lundi, 1er du mois, 1er jour du trimestre)"
+            label="Bilan de la semaine : heure (dimanche)"
+            hint="Heure de Paris"
+            info="Le rapport de la semaine est figé le dimanche à cette heure, week-end compris. Si le serveur était arrêté, il est rattrapé dans la semaine qui suit."
+          >
+            <input
+              type="time"
+              value={s['schedule.week_report'].time}
+              onChange={(e) => setS({ ...s, 'schedule.week_report': { time: e.target.value } })}
+            />
+          </Field>
+          <Field
+            label="Rapports du mois et du trimestre : heure (1er du mois, 1er jour du trimestre)"
             info="Heure de génération des rapports figés. Si le serveur était arrêté, ils sont rattrapés au redémarrage."
           >
             <input
@@ -1212,7 +1223,8 @@ function NotifyConfig({
               encouragement et ce qui compte ces prochains jours.
             </span>
             <span className="tip-p">
-              Rien le samedi ; le dimanche, le bilan du week-end ; rien en vacances.
+              Le même tous les jours, week-end compris ; rien en vacances. Le bilan de la semaine arrive le
+              dimanche soir (onglet Calendrier).
             </span>
           </InfoTip>
         </label>

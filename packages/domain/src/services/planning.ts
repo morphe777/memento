@@ -21,6 +21,7 @@ import {
   addDays,
   daysBetween,
   frWeekRange,
+  isoWeekOf,
   isValidIsoWeek,
   monthOf,
   parisDate,
@@ -92,6 +93,25 @@ function doneStats(ctx: Ctx, from: string, to: string) {
 }
 
 /** Snapshot of the data the engine needs (deterministic for a given database state and day). */
+/**
+ * D-116: planning a future week, the tasks of the weeks in between (from the current one) are counted as done:
+ * they are off the list, and the tasks waiting for them (order of the project, dependencies) come up. A task
+ * chosen in the planned week itself stays.
+ */
+function plannedAhead(ctx: Ctx, isoWeek: string): Set<string> {
+  const current = isoWeekOf(parisDate(ctxNow(ctx)));
+  if (isoWeek <= current) return new Set();
+  const rows = ctx.db
+    .select({ taskId: weekPlanItem.taskId, week: weekPlan.isoWeek })
+    .from(weekPlanItem)
+    .innerJoin(weekPlan, eq(weekPlan.id, weekPlanItem.weekPlanId))
+    .where(and(gte(weekPlan.isoWeek, current), lt(weekPlan.isoWeek, isoWeek), eq(weekPlanItem.kind, 'week')))
+    .all();
+  const own = getPlanRow(ctx, isoWeek);
+  const kept = new Set(own ? planItems(ctx, own.id).map((i) => i.taskId) : []);
+  return new Set(rows.map((r) => r.taskId).filter((id) => !kept.has(id)));
+}
+
 export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number): EngineInput {
   const s = getSettings(ctx);
   const monday = weekMonday(isoWeek);
@@ -141,6 +161,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
       ),
     )
     .all();
+  const ahead = plannedAhead(ctx, isoWeek);
   const tasks: EngineTask[] = taskRows.map((t) => ({
     id: t.id,
     projectId: t.projectId,
@@ -149,11 +170,12 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     position: t.position,
     isFree: t.isFree,
     isExperience: t.isExperience,
-    status: t.status,
+    status: t.status === 'todo' && ahead.has(t.id) ? 'done' : t.status,
     dueDate: t.dueDate,
     domainId: t.domainId,
     postponeCount: t.postponeCount,
     doneAt: t.doneAt,
+    recurring: !!t.recurrenceRule,
   }));
   const expWindow = s['experience.window_weeks'];
   return {

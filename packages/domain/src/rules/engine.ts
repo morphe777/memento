@@ -65,6 +65,8 @@ export interface EngineTask {
   domainId: string | null;
   postponeCount: number;
   doneAt: string | null; // ISO timestamp
+  /** D-116: an Inbox task with a recurrence rule (its next occurrence is created when it is done). */
+  recurring?: boolean;
 }
 
 export interface EngineWeights {
@@ -253,7 +255,6 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
       ['V', w.value * V],
     ];
     const [key, val] = contrib.reduce((best, c) => (c[1] > best[1] ? c : best));
-    const primary = domainIds[0] ? P.domainById.get(domainIds[0]) : undefined;
     if (val === 0) why = project ? 'Prochaine étape du projet' : 'À caser quand tu peux';
     else if (key === 'A') why = `Reportée ${t.postponeCount} fois`;
     else if (key === 'R') why = `Projet du mois, ${fmtMin(lateMin)} de retard`;
@@ -261,7 +262,8 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
       why = t.dueDate ? `Deadline ${frShort(deadline)}` : `Fin du projet le ${frShort(deadline)}`;
     else if (key === 'C') why = 'Suite logique : projet entamé';
     else if (project?.importance === 'high') why = 'Projet d’importance haute';
-    else why = primary ? `${primary.name} = priorité n°${primary.priorityRank}` : 'À caser quand tu peux';
+    // D-116: no « Famille = priorité n°2 »: the domain is already the colour of the card.
+    else why = project ? 'Prochaine étape du projet' : 'À caser quand tu peux';
   }
   return { taskId: t.id, score, parts, mandatory, why };
 }
@@ -322,6 +324,8 @@ export interface PageTask {
   mandatory: boolean;
   locked: boolean;
   selection: Selection | null;
+  /** D-116: discreet icon on the row. */
+  recurring: boolean;
 }
 
 export interface PageCard {
@@ -338,6 +342,8 @@ export interface PageCard {
   hiddenTasks: PageTask[];
   /** Inbox only: folded tasks whose deadline falls this week or earlier (warning on the fold). */
   hiddenDueCount: number;
+  /** D-116, Inbox only: recurring tasks due after the week (not chosen), shown on demand by the page. */
+  laterRecurring: PageTask[];
   /** D-112: month projects only, ahead (+) / late (−) on their pace (R-06), to choose which one to push. */
   deltaMin: number | null;
 }
@@ -424,6 +430,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       mandatory: s.mandatory,
       locked,
       selection: locked ? null : (chosen.get(t.id) ?? null),
+      recurring: !!t.recurring,
     };
   };
 
@@ -436,7 +443,11 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         allScored(b).score - allScored(a).score ||
         a.id.localeCompare(b.id),
     );
-  const inboxRows = inboxSorted.map((t) => row(t, false));
+  // D-116: a recurring task due after the week is a future occurrence: off the list unless chosen.
+  const isLater = (t: EngineTask) =>
+    !!t.recurring && !!t.dueDate && t.dueDate > P.sunday && !chosen.has(t.id);
+  const laterRecurring = inboxSorted.filter(isLater).map((t) => row(t, false));
+  const inboxRows = inboxSorted.filter((t) => !isLater(t)).map((t) => row(t, false));
   const inboxShown = inboxRows.filter((r, i) => i < INBOX_VISIBLE || r.selection);
   const inboxFolded = inboxRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection));
   const dueById = new Map(inboxSorted.map((t) => [t.id, t.dueDate]));
@@ -469,6 +480,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         hidden: pending.slice(k).map((t) => ({ taskId: t.id, title: t.title, durationMin: t.durationMin })),
         hiddenTasks: [],
         hiddenDueCount: 0,
+        laterRecurring: [],
         deltaMin: isMonthProject(P, p) ? projectDelayMin(p, ptasks, input.today) : null,
       },
     };
@@ -520,30 +532,32 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       name: 'Inbox',
       hint: '',
       countLabel: `${inboxRows.length} tâche${inboxRows.length > 1 ? 's' : ''}`,
-      cards: inboxRows.length
-        ? [
-            {
-              projectId: null,
-              title: 'Inbox',
-              domainId: null,
-              objectiveId: null,
-              objectiveTitle: null,
-              waitingOn: [],
-              tasks: inboxShown,
-              hidden: inboxFolded.map((r) => ({
-                taskId: r.taskId,
-                title: r.title,
-                durationMin: r.durationMin,
-              })),
-              hiddenTasks: inboxFolded,
-              hiddenDueCount: inboxFolded.filter((r) => {
-                const due = dueById.get(r.taskId);
-                return !!due && due <= P.sunday;
-              }).length,
-              deltaMin: null,
-            },
-          ]
-        : [],
+      cards:
+        inboxRows.length || laterRecurring.length
+          ? [
+              {
+                projectId: null,
+                title: 'Inbox',
+                domainId: null,
+                objectiveId: null,
+                objectiveTitle: null,
+                waitingOn: [],
+                tasks: inboxShown,
+                hidden: inboxFolded.map((r) => ({
+                  taskId: r.taskId,
+                  title: r.title,
+                  durationMin: r.durationMin,
+                })),
+                hiddenTasks: inboxFolded,
+                hiddenDueCount: inboxFolded.filter((r) => {
+                  const due = dueById.get(r.taskId);
+                  return !!due && due <= P.sunday;
+                }).length,
+                laterRecurring,
+                deltaMin: null,
+              },
+            ]
+          : [],
     },
     {
       key: 'month',

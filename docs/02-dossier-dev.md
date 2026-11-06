@@ -113,7 +113,8 @@ Versions : prendre les dernières versions stables au moment du dev ; ne pas fig
 | engine.consider_also_count | 3 | §6 |
 | guards.window_weeks | 4 | CH-05 |
 | schedule.week_plan | lundi 07:00 Europe/Paris | WF-01 |
-| schedule.reports | lundi 07:00 ; 1er du mois ; 1er jour du trimestre | WF-01 à 03 |
+| schedule.week_report | dimanche 20:00 Europe/Paris (rattrapage dans la semaine) | WF-01, D-116 |
+| schedule.reports | 1er du mois ; 1er jour du trimestre, 07:00 | WF-02, WF-03 |
 | theme | auto | NF-06 |
 
 **Données initiales (seed)** : les 8 domaines dans l'ordre Santé, Famille, Carrière, Patrimoine, Sécurité, Maison, Amis & Social, Loisirs & Découverte, avec leurs couleurs (§11), et les groupes proposés en Specs §3.10.
