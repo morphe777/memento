@@ -299,7 +299,7 @@ function PlanGroup({
             · {g.hint}
           </span>
         )}
-        {extra}
+        {extra && <span className="ml-auto">{extra}</span>}
       </div>
       {open && children}
     </section>

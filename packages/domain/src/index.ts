@@ -24,6 +24,7 @@ export * from './services/export.ts';
 export * from './services/jobs.ts';
 export * from './services/month.ts';
 export * from './services/natural.ts';
+export * from './services/notifications.ts';
 export * from './services/plan.ts';
 export * from './services/planning.ts';
 export * from './services/projects.ts';

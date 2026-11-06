@@ -813,6 +813,23 @@ export async function buildApp(opts: AppOptions) {
           return { sent: out.sent, pushed: out.pushed, ai: out.ai, aiError: out.aiError };
         },
       );
+      // D-117: the notices sent (bell): list, read one in full (marks it read), mark all read.
+      r.get(
+        '/notifications',
+        {
+          schema: {
+            ...tag('Réglages'),
+            querystring: z.object({ limit: z.coerce.number().int().min(1).max(200).optional() }),
+          },
+        },
+        async (req) => D.listNotifications(ctx(req), req.query.limit),
+      );
+      r.get('/notifications/:id', { schema: { ...tag('Réglages'), params: D.idParam } }, async (req) =>
+        D.readNotification(ctx(req), req.params.id),
+      );
+      r.post('/notifications/read-all', { schema: tag('Réglages') }, async (req) =>
+        D.readAllNotifications(ctx(req)),
+      );
       r.get('/reports/:id', { schema: { ...tag('Rapports'), params: D.idParam } }, async (req) =>
         D.getReport(ctx(req), req.params.id),
       );

@@ -15,6 +15,7 @@ import {
   useToasts,
 } from '../lib/hooks.ts';
 import type { Project, SearchResult } from '../lib/types.ts';
+import { NotifyBell } from '../pages/notifications.tsx';
 import { CaptureSheet, PlusIcon } from './capture.tsx';
 import { openTask, TaskPeekHost } from './tasks.tsx';
 import { DomainDot, Panel } from './ui.tsx';
@@ -175,6 +176,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Link to="/semaine" aria-label="Mémento" className="hover:no-underline">
               <img src="/icon.svg" alt="" width={26} height={26} />
             </Link>
+            <NotifyBell />
             <button
               type="button"
               className="icon-btn rail-item"
@@ -340,6 +342,7 @@ function Sidebar({
           <img src="/icon.svg" alt="" width={26} height={26} />
           <span className="text-[19px] font-bold tracking-tight">Mémento</span>
         </Link>
+        <NotifyBell />
         <button
           type="button"
           className="icon-btn"
@@ -709,9 +712,12 @@ function PhoneMenu({
   });
   return (
     <Panel open={open} onClose={onClose} title="Menu" side={false} width={420}>
-      <button type="button" className="btn justify-start" onClick={onSearch}>
-        <NavIcon name="search" /> Rechercher
-      </button>
+      <div className="flex items-center gap-2">
+        <button type="button" className="btn justify-start flex-1" onClick={onSearch}>
+          <NavIcon name="search" /> Rechercher
+        </button>
+        <NotifyBell label onClick={onClose} />
+      </div>
       {NAV.map((s) => (
         <div key={s.section} className="flex flex-col">
           <div className="label-caps pb-1">{s.section}</div>

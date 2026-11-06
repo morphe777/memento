@@ -18,6 +18,7 @@ import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
 import { CalendarPageView, type CalendarView } from './pages/calendar.tsx';
 import { CapPage } from './pages/cap.tsx';
 import { ExperiencesPage } from './pages/experiences.tsx';
+import { NotificationsPage } from './pages/notifications.tsx';
 import {
   DomainPage,
   DomainsPage,
@@ -185,6 +186,15 @@ const reportRoute = createRoute({
     return <ReportPage id={reportRoute.useParams().id} />;
   },
 });
+// D-117: notices sent (bell); the push opens one in full.
+const notificationsRoute = route('/notifications', () => <NotificationsPage />);
+const notificationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/notifications/$id',
+  component: function Notification() {
+    return <NotificationsPage id={notificationRoute.useParams().id} />;
+  },
+});
 const reviewRoute = route('/journal', ReviewPage);
 const oldReviewRoute = route('/a-revoir', () => <Navigate to="/journal" />);
 const configIndexRoute = route('/configuration', () => (
@@ -200,6 +210,8 @@ const configRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([
   indexRoute,
+  notificationsRoute,
+  notificationRoute,
   weekRoute,
   capRoute,
   calendarRoute,

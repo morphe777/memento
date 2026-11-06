@@ -24,6 +24,7 @@ import {
   setTelegramToken,
 } from '../src/services/daily.ts';
 import { notifyFrozenReports, runDailyRecapJob, runDueJobs } from '../src/services/jobs.ts';
+import { listNotifications, readAllNotifications, readNotification } from '../src/services/notifications.ts';
 import { getExecution, setWeekItems } from '../src/services/planning.ts';
 import { completeProject, createProject, promoteProject, setProjectMonth } from '../src/services/projects.ts';
 import {
@@ -470,8 +471,18 @@ describe('D-77 « Bilan du jour »', () => {
     ctx.setNow('2026-11-02T18:31:00.000Z'); // 19:31 Paris
     patchSettings(ctx, { 'notify.daily_recap': { enabled: true, time: '19:30', ai: false } });
     expect(await runDailyRecapJob(ctx, {}, sender)).toBe('done');
-    expect(got.at(-1)!.payload.url).toBe('/semaine');
+    // D-117: the push opens the notice in full, kept in the app with the report one (bell).
+    const url = got.at(-1)!.payload.url;
+    expect(url).toMatch(/^\/notifications\/\S+$/);
     expect(got.at(-1)!.payload.title).toBe('🌱 Lundi 2 novembre');
+    const list = listNotifications(ctx);
+    expect(list.unread).toBe(4); // week, month and quarter reports frozen this Monday, then the recap
+    expect(list.items.map((n) => n.kind)).toEqual(['daily', 'report', 'report', 'report']);
+    expect(list.items[1].url).toMatch(/^\/rapports\//);
+    const read = readNotification(ctx, url.split('/').at(-1)!);
+    expect(read.html).toContain('<b>🌱 Lundi 2 novembre</b>');
+    expect(read.readAt).toBeTruthy();
+    expect(readAllNotifications(ctx).unread).toBe(0);
     expect(await sendDailyRecap(ctx, { env: {}, llm: null, pushSender: sender })).toMatchObject({
       pushed: 1,
     });

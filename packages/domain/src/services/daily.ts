@@ -38,6 +38,7 @@ import {
   shiftWeek,
   weekMonday,
 } from '../time.ts';
+import { recordNotification } from './notifications.ts';
 import { buildEngineInput, getExecution } from './planning.ts';
 import { serializeProjects } from './projects.ts';
 import { hasPushDevices, listPushDevices, type PushMessage, type PushSender, sendPush } from './push.ts';
@@ -406,7 +407,15 @@ export async function sendDailyRecap(ctx: Ctx, opts: SendRecapOptions) {
       'Aucun canal : configure Telegram (jeton du bot et chat) ou active les notifications sur un appareil.',
     );
   const msg = await buildDailyMessage(ctx, opts);
-  const pushed = push ? await sendPush(ctx, htmlToPush(msg.text, '/semaine'), opts.pushSender) : null;
+  // D-117: kept in the app; the push opens it in full.
+  const id = recordNotification(ctx, {
+    kind: 'daily',
+    title: htmlToPush(msg.text, '').title,
+    html: msg.text,
+  });
+  const pushed = push
+    ? await sendPush(ctx, htmlToPush(msg.text, `/notifications/${id}`), opts.pushSender)
+    : null;
   if (token && chatId) await sendTelegramHtml(token, chatId, msg.text);
   return { sent: true, pushed: pushed?.sent ?? 0, ...msg };
 }
@@ -445,6 +454,12 @@ export async function notifyReportReady(
     global: payload.global ?? null,
     appUrl: s['notify.app_url'],
   });
+  recordNotification(ctx, {
+    kind: 'report',
+    title: htmlToPush(html, '').title,
+    html,
+    url: `/rapports/${row.id}`,
+  }); // D-117
   // The push opens the report itself: no address needed, the link stays inside the app.
   if (push) {
     const p = htmlToPush(html, `/rapports/${row.id}`);

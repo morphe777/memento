@@ -299,6 +299,21 @@ export const session = sqliteTable('session', {
   previousSeenAt: text('previous_seen_at'), // user's previous visit, for "À revoir · depuis ma dernière visite"
 });
 
+// D-117: every notice sent (evening recap, report ready), readable in the app (bell) and opened by the push.
+export const notification = sqliteTable(
+  'notification',
+  {
+    id: text('id').primaryKey(),
+    kind: text('kind', { enum: ['daily', 'report'] }).notNull(),
+    title: text('title').notNull(),
+    html: text('html').notNull(), // Telegram HTML subset, as sent
+    url: text('url'), // what it is about (a report), if anything
+    createdAt: text('created_at').notNull().default(now),
+    readAt: text('read_at'),
+  },
+  (t) => [index('notification_created_idx').on(t.createdAt)],
+);
+
 // Worker bookkeeping: one row per executed scheduled job and period (idempotence).
 export const jobRun = sqliteTable(
   'job_run',
