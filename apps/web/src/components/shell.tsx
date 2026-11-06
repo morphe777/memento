@@ -28,8 +28,8 @@ interface NavItem {
   icon?: string;
   /** D-120: kept out of the sidebar's main list, under « Autres pages » (always shown on the iPhone menu). */
   more?: boolean;
-  /** D-120: shown as a sub-link of the item above it (Journal under Rapports). */
-  sub?: boolean;
+  /** D-120: in the folded rail, only in the « ⋯ » menu (Journal); a page like the others when unfolded. */
+  railMore?: boolean;
   active?: (path: string, vue?: string) => boolean;
 }
 const under = (path: string, to: string) => path === to || path.startsWith(`${to}/`);
@@ -73,7 +73,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Suivi',
     items: [
       { to: '/rapports', label: 'Rapports' },
-      { to: '/journal', label: 'Journal', sub: true },
+      { to: '/journal', label: 'Journal', railMore: true },
     ],
   },
 ];
@@ -297,7 +297,7 @@ function Rail({
   }, [moreOpen]);
   useEffect(() => setMoreOpen(false), [location.pathname]);
   const vue = vueOf(location.search);
-  const extra = NAV.flatMap((s) => s.items.filter((i) => i.more || i.sub));
+  const extra = NAV.flatMap((s) => s.items.filter((i) => i.more || i.railMore));
   const railLink = (i: NavItem) => {
     const active = isActive(i, location.pathname, vue);
     return (
@@ -353,7 +353,7 @@ function Rail({
       {NAV.map((s) => (
         <div key={s.section} className="flex flex-col items-center gap-1 w-full">
           <span aria-hidden style={{ height: 1, width: 24, background: 'var(--border)', margin: '3px 0' }} />
-          {s.items.filter((i) => !i.more && !i.sub).map(railLink)}
+          {s.items.filter((i) => !i.more && !i.railMore).map(railLink)}
         </div>
       ))}
       <div ref={moreRef} className="relative">
@@ -436,18 +436,15 @@ function Sidebar({
         search={i.search as never}
         className="flex-1 min-w-0 flex items-center gap-2.5 px-2 rounded-md hover:no-underline nav-link"
         style={{
-          minHeight: i.sub ? 30 : 34,
-          fontSize: i.sub ? 13 : 14,
-          paddingLeft: i.sub ? 36 : undefined,
+          minHeight: 34,
+          fontSize: 14,
           fontWeight: active ? 600 : 400,
-          ...(active ? ACTIVE_STYLE : { color: i.sub ? 'var(--text-muted)' : 'var(--text-2)' }),
+          ...(active ? ACTIVE_STYLE : { color: 'var(--text-2)' }),
         }}
       >
-        {!i.sub && (
-          <span className="grid place-items-center" style={{ opacity: active ? 1 : 0.75 }}>
-            <NavIcon name={i.icon ?? i.to} />
-          </span>
-        )}
+        <span className="grid place-items-center" style={{ opacity: active ? 1 : 0.75 }}>
+          <NavIcon name={i.icon ?? i.to} />
+        </span>
         <span className="flex-1 min-w-0 truncate">{i.label}</span>
         {extra}
       </Link>
