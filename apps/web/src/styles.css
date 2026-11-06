@@ -112,6 +112,8 @@
 html,
 body {
   margin: 0;
+  /* User request 06/11/2026 (iPad): no rubber band dragging the whole screen. */
+  overscroll-behavior: none;
   background: var(--bg);
   color: var(--text);
   font-family: "IBM Plex Sans", system-ui, sans-serif;
@@ -650,6 +652,47 @@ input[type="checkbox"] {
   color: var(--text);
   border-color: var(--text-muted);
   background: var(--surface);
+}
+
+/* D-120: the sidebar, a hint of the violet accent; it and the page scroll each in their own column. */
+:root {
+  --nav-bg: color-mix(in srgb, var(--primary) 4%, var(--surface-2));
+  --nav-active: color-mix(in srgb, var(--primary) 13%, var(--surface));
+  --nav-active-text: color-mix(in srgb, var(--primary) 75%, var(--text));
+  --nav-section: color-mix(in srgb, var(--primary) 55%, var(--text-faint));
+}
+:root[data-theme="dark"] {
+  --nav-bg: color-mix(in srgb, var(--primary) 5%, var(--surface-2));
+  --nav-active: color-mix(in srgb, var(--primary) 22%, var(--surface));
+  --nav-active-text: color-mix(in srgb, var(--primary) 40%, var(--text));
+}
+.nav-pane {
+  background: var(--nav-bg);
+  border-right: 1px solid var(--border);
+  overscroll-behavior: contain;
+}
+.page-scroll {
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.nav-section {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--nav-section);
+}
+.nav-link:hover {
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+}
+.capture-btn {
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, var(--surface));
+  border-color: color-mix(in srgb, var(--primary) 35%, transparent);
+}
+.capture-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--primary) 18%, var(--surface));
 }
 
 /* Folded sidebar rail: the page name shows next to its icon on hover, the bar itself does not unfold. */

@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { CapLine } from '../components/cap.tsx';
 import { CaptureSheet } from '../components/capture.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
-import { ActualTime } from '../components/tasks.tsx';
+import { ActualTime, openTask } from '../components/tasks.tsx';
 import {
   BonusBadge,
   DelayBar,
@@ -274,9 +274,14 @@ function WeekDesktop({ ex }: { ex: Execution }) {
               >
                 <span className="dot" style={{ background: dl.color(b.domainId) }} />
                 <div className="flex-1 min-w-0 flex flex-col gap-0.5">
-                  <span className="text-[15px]" style={{ color: 'var(--text-2)' }}>
+                  <button
+                    type="button"
+                    className="link-btn text-[15px]"
+                    style={{ color: 'var(--text-2)' }}
+                    onClick={() => openTask(b.taskId)}
+                  >
                     {b.title}
-                  </span>
+                  </button>
                   {view.showDetail && (
                     <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
                       {dl.name(b.domainId)} · <ProjectLink r={b} />
@@ -424,12 +429,14 @@ function WeekRow({
       <TaskCheck done={t.done} color={color} onToggle={onToggle} label={t.title} />
       <div className="flex-1 min-w-0 flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-2">
-          <span
-            className="text-[16px] font-semibold"
-            style={{ textDecoration: t.done ? 'line-through' : 'none' }}
+          <button
+            type="button"
+            className="link-btn text-[16px] font-semibold"
+            style={{ color: 'inherit', textDecoration: t.done ? 'line-through' : undefined }}
+            onClick={() => openTask(t.taskId)}
           >
             {t.title}
-          </span>
+          </button>
           {t.isExperience && <ExperienceBadge />}
           {t.kind === 'bonus' && <BonusBadge />}
           {t.unplanned && <UnplannedBadge />}
@@ -642,11 +649,16 @@ function WeekPhone({ ex }: { ex: Execution }) {
                 onToggle={() => toggle.mutate({ id: t.taskId, done: t.done })}
               />
               <div className="flex-1 min-w-0 flex flex-col gap-[3px]">
-                <span
-                  className="text-[15px] font-semibold"
-                  style={{ textDecoration: t.done ? 'line-through' : 'none' }}
-                >
-                  {t.title} {t.unplanned && <UnplannedBadge />}
+                <span className="text-[15px] font-semibold">
+                  <button
+                    type="button"
+                    className="link-btn"
+                    style={{ color: 'inherit', textDecoration: t.done ? 'line-through' : undefined }}
+                    onClick={() => openTask(t.taskId)}
+                  >
+                    {t.title}
+                  </button>{' '}
+                  {t.unplanned && <UnplannedBadge />}
                 </span>
                 {/* User request 04/11/2026: no room for a column, the project sits under the title. */}
                 <span className="text-[12px] truncate" style={{ color: 'var(--text-faint)' }}>
@@ -699,9 +711,14 @@ function WeekPhone({ ex }: { ex: Execution }) {
             >
               <span className="dot" style={{ background: dl.color(b.domainId) }} />
               <div className="flex-1 min-w-0 flex flex-col">
-                <span className="text-[14px]" style={{ color: 'var(--text-2)' }}>
+                <button
+                  type="button"
+                  className="link-btn text-[14px]"
+                  style={{ color: 'var(--text-2)' }}
+                  onClick={() => openTask(b.taskId)}
+                >
                   {b.title}
-                </span>
+                </button>
                 {view.showDetail && (
                   <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
                     {dl.name(b.domainId)} · {fmtMin(b.durationMin)}

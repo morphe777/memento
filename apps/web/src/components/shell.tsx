@@ -26,6 +26,10 @@ interface NavItem {
   search?: Record<string, string>;
   /** Folded-rail icon (defaults to `to`). */
   icon?: string;
+  /** D-120: kept out of the sidebar's main list, under « Autres pages » (always shown on the iPhone menu). */
+  more?: boolean;
+  /** D-120: shown as a sub-link of the item above it (Journal under Rapports). */
+  sub?: boolean;
   active?: (path: string, vue?: string) => boolean;
 }
 const under = (path: string, to: string) => path === to || path.startsWith(`${to}/`);
@@ -34,8 +38,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Exécuter',
     items: [
       { to: '/semaine', label: 'Ma semaine' },
-      { to: '/cap', label: 'Cap' }, // D-100
-      { to: '/calendrier', label: 'Calendrier' }, // D-113
+      { to: '/cap', label: 'Cap', more: true }, // D-100
+      { to: '/calendrier', label: 'Calendrier', more: true }, // D-113
       {
         to: '/planifier',
         label: 'Planifier',
@@ -59,8 +63,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
           (path === '/planifier' && vue === 'trimestre'),
       },
       { to: '/projets', label: 'Projets' },
-      { to: '/taches', label: 'Tâches' },
-      { to: '/domaines', label: 'Domaines' },
+      { to: '/taches', label: 'Tâches', more: true },
+      { to: '/domaines', label: 'Domaines', more: true },
       { to: '/idees', label: 'Idées' },
       { to: '/experiences', label: 'Expériences' },
     ],
@@ -69,7 +73,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
     section: 'Suivi',
     items: [
       { to: '/rapports', label: 'Rapports' },
-      { to: '/journal', label: 'Journal' },
+      { to: '/journal', label: 'Journal', sub: true },
     ],
   },
 ];
@@ -101,6 +105,8 @@ export function usePageFab(label: string, run: () => void) {
     return () => set(null);
   }, [set, label]);
 }
+
+const MORE = NAV.flatMap((s) => s.items.filter((i) => i.more));
 
 const vueOf = (search: unknown) => (search as { vue?: string } | undefined)?.vue;
 const isActive = (i: NavItem, path: string, vue?: string) =>
@@ -158,83 +164,24 @@ export function AppShell({ children }: { children: ReactNode }) {
   const location = useRouterState({ select: (s) => s.location });
   // D-104 (replaces D-95): every page, Planifier included, keeps 1 408 px at most; the Vue Plan has its own
   // « Plein écran ». Folding the menu only gives its width back.
+  // User request 06/11/2026 (iPad): the window itself never scrolls on PC / iPad — the page scrolls in its own
+  // column and the sidebar in its own, so a swipe on one never drags the other (nor the whole screen).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo(0, 0);
+  }, [location.pathname]);
   return (
-    <div className="min-h-screen flex" style={{ background: 'var(--bg)' }}>
+    <div
+      className={phone ? 'min-h-screen flex' : 'flex overflow-hidden'}
+      style={{ background: 'var(--bg)', height: phone ? undefined : '100dvh' }}
+    >
       {!phone &&
         (folded ? (
-          <nav
-            aria-label="Navigation principale (réduite)"
-            className="flex-none flex flex-col items-center gap-1.5 sticky top-0 h-screen box-border"
-            style={{
-              width: 52,
-              padding: '24px 6px',
-              zIndex: 30,
-              borderRight: '1px solid var(--border)',
-              background: 'var(--surface-2)',
-            }}
-          >
-            <Link to="/semaine" aria-label="Mémento" className="hover:no-underline">
-              <img src="/icon.svg" alt="" width={26} height={26} />
-            </Link>
-            <button
-              type="button"
-              className="icon-btn rail-item"
-              aria-label="Déplier le menu"
-              data-label="Déplier le menu"
-              onClick={() => fold(false)}
-            >
-              »
-            </button>
-            <button
-              type="button"
-              className="icon-btn rail-item"
-              aria-label="Rechercher"
-              data-label="Rechercher (⌘K)"
-              onClick={() => setSearchOpen(true)}
-            >
-              <NavIcon name="search" />
-            </button>
-            <button
-              type="button"
-              className="icon-btn rail-item"
-              aria-label="Capturer dans l’Inbox"
-              data-label="Capturer dans l’Inbox"
-              onClick={() => setCaptureOpen(true)}
-            >
-              <NavIcon name="plus" />
-            </button>
-            {NAV.map((s) => (
-              <div key={s.section} className="flex flex-col items-center gap-1 w-full">
-                <span
-                  aria-hidden
-                  style={{ height: 1, width: 24, background: 'var(--border)', margin: '4px 0' }}
-                />
-                {s.items.map((i) => {
-                  const active = isActive(i, location.pathname, vueOf(location.search));
-                  return (
-                    <Link
-                      key={i.label}
-                      to={i.to}
-                      search={i.search as never}
-                      aria-label={i.label}
-                      data-label={i.label}
-                      className="icon-btn rail-item hover:no-underline"
-                      style={
-                        active
-                          ? { background: 'var(--bin)', color: 'var(--text)' }
-                          : { color: 'var(--text-2)' }
-                      }
-                    >
-                      <NavIcon name={i.icon ?? i.to} />
-                    </Link>
-                  );
-                })}
-              </div>
-            ))}
-            <div className="mt-auto">
-              <NotifyBell />
-            </div>
-          </nav>
+          <Rail
+            onSearch={() => setSearchOpen(true)}
+            onCapture={() => setCaptureOpen(true)}
+            onUnfold={() => fold(false)}
+          />
         ) : (
           <Sidebar
             onSearch={() => setSearchOpen(true)}
@@ -242,7 +189,10 @@ export function AppShell({ children }: { children: ReactNode }) {
             onFold={() => fold(true)}
           />
         ))}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div
+        ref={scroller}
+        className={phone ? 'flex-1 min-w-0 flex flex-col' : 'page-scroll flex-1 min-w-0 flex flex-col'}
+      >
         <main
           className="flex-1 box-border"
           style={{
@@ -297,6 +247,166 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
+/** A menu fold remembered on this device. */
+function useRemembered(key: string, initial: boolean): [boolean, (v: boolean) => void] {
+  const [v, setV] = useState(() => {
+    try {
+      const raw = localStorage.getItem(key);
+      return raw === null ? initial : raw === '1';
+    } catch {
+      return initial;
+    }
+  });
+  const set = (next: boolean) => {
+    setV(next);
+    try {
+      localStorage.setItem(key, next ? '1' : '0');
+    } catch {
+      // private mode: not remembered
+    }
+  };
+  return [v, set];
+}
+
+function useLogout() {
+  return useAction(() => post('/auth/logout'), {
+    onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
+  });
+}
+
+/** Folded sidebar (user request 31/10/2026); D-120: short enough to fit an iPad in landscape. */
+function Rail({
+  onSearch,
+  onCapture,
+  onUnfold,
+}: {
+  onSearch: () => void;
+  onCapture: () => void;
+  onUnfold: () => void;
+}) {
+  const location = useRouterState({ select: (s) => s.location });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!moreOpen) return;
+    const h = (e: PointerEvent) => {
+      if (!moreRef.current?.contains(e.target as Node)) setMoreOpen(false);
+    };
+    document.addEventListener('pointerdown', h);
+    return () => document.removeEventListener('pointerdown', h);
+  }, [moreOpen]);
+  useEffect(() => setMoreOpen(false), [location.pathname]);
+  const vue = vueOf(location.search);
+  const extra = NAV.flatMap((s) => s.items.filter((i) => i.more || i.sub));
+  const railLink = (i: NavItem) => {
+    const active = isActive(i, location.pathname, vue);
+    return (
+      <Link
+        key={i.label}
+        to={i.to}
+        search={i.search as never}
+        aria-label={i.label}
+        data-label={i.label}
+        className="icon-btn rail-item hover:no-underline"
+        style={active ? ACTIVE_STYLE : { color: 'var(--text-2)' }}
+      >
+        <NavIcon name={i.icon ?? i.to} />
+      </Link>
+    );
+  };
+  return (
+    <nav
+      aria-label="Navigation principale (réduite)"
+      className="nav-pane flex-none flex flex-col items-center gap-1 box-border"
+      style={{ width: 52, height: '100%', padding: '14px 6px 12px', zIndex: 30 }}
+    >
+      <Link to="/semaine" aria-label="Mémento" className="hover:no-underline mb-1">
+        <img src="/icon.svg" alt="" width={26} height={26} />
+      </Link>
+      <button
+        type="button"
+        className="icon-btn rail-item"
+        aria-label="Déplier le menu"
+        data-label="Déplier le menu"
+        onClick={onUnfold}
+      >
+        »
+      </button>
+      <button
+        type="button"
+        className="icon-btn rail-item"
+        aria-label="Rechercher"
+        data-label="Rechercher (⌘K)"
+        onClick={onSearch}
+      >
+        <NavIcon name="search" />
+      </button>
+      <button
+        type="button"
+        className="icon-btn rail-item capture-btn"
+        aria-label="Capturer dans l’Inbox"
+        data-label="Capturer dans l’Inbox"
+        onClick={onCapture}
+      >
+        <NavIcon name="capture" />
+      </button>
+      {NAV.map((s) => (
+        <div key={s.section} className="flex flex-col items-center gap-1 w-full">
+          <span aria-hidden style={{ height: 1, width: 24, background: 'var(--border)', margin: '3px 0' }} />
+          {s.items.filter((i) => !i.more && !i.sub).map(railLink)}
+        </div>
+      ))}
+      <div ref={moreRef} className="relative">
+        <button
+          type="button"
+          className="icon-btn rail-item"
+          aria-label="Autres pages"
+          aria-expanded={moreOpen}
+          data-label={moreOpen ? '' : 'Autres pages'}
+          onClick={() => setMoreOpen(!moreOpen)}
+          style={
+            extra.some((i) => isActive(i, location.pathname, vue)) ? ACTIVE_STYLE : { color: 'var(--text-2)' }
+          }
+        >
+          <NavIcon name="more" />
+        </button>
+        {moreOpen && (
+          <div
+            className="card absolute flex flex-col p-1"
+            style={{ left: 'calc(100% + 10px)', top: -4, minWidth: 170, zIndex: 60 }}
+          >
+            {extra.map((i) => (
+              <Link
+                key={i.label}
+                to={i.to}
+                search={i.search as never}
+                className="flex items-center gap-2 px-2 rounded-md text-[14px] hover:no-underline"
+                style={{
+                  minHeight: 34,
+                  ...(isActive(i, location.pathname, vue) ? ACTIVE_STYLE : { color: 'var(--text-2)' }),
+                }}
+              >
+                <NavIcon name={i.icon ?? i.to} />
+                {i.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-auto flex flex-col items-center gap-1">
+        <NotifyBell />
+        <SettingsLink active={location.pathname.startsWith('/configuration')} />
+      </div>
+    </nav>
+  );
+}
+
+/** D-120: the active page — a soft violet, the only colour of the menu with the capture button. */
+const ACTIVE_STYLE = {
+  background: 'var(--nav-active)',
+  color: 'var(--nav-active-text)',
+} as const;
+
 function Sidebar({
   onSearch,
   onCapture,
@@ -309,143 +419,159 @@ function Sidebar({
   const path = useRouterState({ select: (s) => s.location.pathname });
   const vue = useRouterState({ select: (s) => vueOf(s.location.search) });
   const me = useMe();
+  const touch = useIsTouch();
   // D-102 / D-105: the month projects under « Projets » fold from the chevron on its line (remembered).
-  const [projectsOpen, setProjectsOpenState] = useState(() => {
-    try {
-      return localStorage.getItem('memento.sidebar.projects') !== '0';
-    } catch {
-      return true;
-    }
-  });
-  const setProjectsOpen = (v: boolean) => {
-    setProjectsOpenState(v);
-    try {
-      localStorage.setItem('memento.sidebar.projects', v ? '1' : '0');
-    } catch {
-      // private mode: not remembered
-    }
+  const [projectsOpen, setProjectsOpen] = useRemembered('memento.sidebar.projects', true);
+  // D-120: the pages used less often wait under « Autres pages » (opened by itself when one of them is shown).
+  const [moreOpen, setMoreOpen] = useRemembered('memento.sidebar.more', false);
+  const moreActive = MORE.some((i) => isActive(i, path, vue));
+  const logout = useLogout();
+  const unreviewed = me.data?.unreviewed ?? 0;
+  const navLink = (i: NavItem, extra?: ReactNode) => {
+    const active = isActive(i, path, vue);
+    return (
+      <Link
+        to={i.to}
+        search={i.search as never}
+        className="flex-1 min-w-0 flex items-center gap-2.5 px-2 rounded-md hover:no-underline nav-link"
+        style={{
+          minHeight: i.sub ? 30 : 34,
+          fontSize: i.sub ? 13 : 14,
+          paddingLeft: i.sub ? 36 : undefined,
+          fontWeight: active ? 600 : 400,
+          ...(active ? ACTIVE_STYLE : { color: i.sub ? 'var(--text-muted)' : 'var(--text-2)' }),
+        }}
+      >
+        {!i.sub && (
+          <span className="grid place-items-center" style={{ opacity: active ? 1 : 0.75 }}>
+            <NavIcon name={i.icon ?? i.to} />
+          </span>
+        )}
+        <span className="flex-1 min-w-0 truncate">{i.label}</span>
+        {extra}
+      </Link>
+    );
   };
-  const logout = useAction(() => post('/auth/logout'), {
-    onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
-  });
+  const journalBadge =
+    unreviewed > 0 ? (
+      <span
+        className="mono text-[11px] rounded-full px-2"
+        style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
+      >
+        {unreviewed}
+      </span>
+    ) : null;
   return (
     <nav
       aria-label="Navigation principale"
-      className="flex-none flex flex-col gap-5 sticky top-0 h-screen overflow-y-auto box-border"
-      style={{
-        width: 232,
-        padding: '28px 14px 20px',
-        borderRight: '1px solid var(--border)',
-        background: 'var(--surface-2)',
-      }}
+      className="nav-pane flex-none flex flex-col box-border"
+      style={{ width: 232, height: '100%' }}
     >
-      <div className="flex items-center gap-2">
-        <Link to="/semaine" className="flex items-center gap-2 px-2 hover:no-underline flex-1">
-          <img src="/icon.svg" alt="" width={26} height={26} />
-          <span className="text-[19px] font-bold tracking-tight">Mémento</span>
-        </Link>
-        <button
-          type="button"
-          className="icon-btn"
-          aria-label="Réduire le menu"
-          title="Réduire le menu"
-          onClick={onFold}
-        >
-          «
-        </button>
-      </div>
-      <button
-        type="button"
-        className="btn btn-sm justify-between"
-        onClick={onSearch}
-        style={{ color: 'var(--text-faint)' }}
+      {/* D-120: only the pages scroll; the account line stays pinned at the bottom. */}
+      <div
+        className="flex-1 min-h-0 flex flex-col gap-4 overflow-y-auto"
+        style={{ padding: touch ? '14px 12px 12px' : '20px 12px 12px', overscrollBehavior: 'contain' }}
       >
-        <span>Rechercher</span>
-        <span className="mono text-[11px]">⌘K</span>
-      </button>
-      <button type="button" className="btn btn-sm justify-start gap-1.5" onClick={onCapture}>
-        <span aria-hidden>+</span> Capturer dans l’Inbox
-      </button>
-      {NAV.map((s) => (
-        <div key={s.section} className="flex flex-col gap-0.5">
-          <div
-            className="flex items-center gap-2 px-2 pb-1.5 text-[11px] font-bold uppercase"
-            style={{ letterSpacing: '0.1em', color: 'var(--text)' }}
+        <div className="flex items-center gap-2">
+          <Link to="/semaine" className="flex items-center gap-2 px-2 hover:no-underline flex-1">
+            <img src="/icon.svg" alt="" width={26} height={26} />
+            <span className="text-[19px] font-bold tracking-tight">Mémento</span>
+          </Link>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Réduire le menu"
+            title="Réduire le menu"
+            onClick={onFold}
           >
-            {s.section}
-            <span aria-hidden className="flex-1" style={{ height: 1, background: 'var(--border)' }} />
-          </div>
-          {s.items.map((i) => {
-            const active = isActive(i, path, vue);
-            return (
-              <Fragment key={i.label}>
-                <span className="flex items-center gap-0.5">
-                  <Link
-                    to={i.to}
-                    search={i.search as never}
-                    className="flex-1 min-w-0 flex items-center justify-between px-2 rounded-md text-[14px] hover:no-underline"
-                    style={{
-                      minHeight: 36,
-                      fontWeight: active ? 600 : 400,
-                      background: active ? 'var(--bin)' : undefined,
-                      color: active ? 'var(--text)' : 'var(--text-2)',
-                    }}
-                  >
-                    {i.label}
-                    {i.to === '/journal' && (me.data?.unreviewed ?? 0) > 0 && (
-                      <span
-                        className="mono text-[11px] rounded-full px-2"
-                        style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
-                      >
-                        {me.data!.unreviewed}
-                      </span>
-                    )}
-                  </Link>
-                  {i.to === '/projets' && (
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      style={{ width: 28, height: 28 }}
-                      aria-expanded={projectsOpen}
-                      aria-label={
-                        projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'
-                      }
-                      title={projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'}
-                      onClick={() => setProjectsOpen(!projectsOpen)}
-                    >
-                      <svg
-                        aria-hidden="true"
-                        width={12}
-                        height={12}
-                        viewBox="0 0 14 14"
-                        style={{
-                          transform: `rotate(${projectsOpen ? 90 : 0}deg)`,
-                          transition: 'transform 0.15s',
-                        }}
-                      >
-                        <path
-                          d="M5 3l4 4-4 4"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="1.8"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </button>
-                  )}
-                </span>
-                {i.to === '/projets' && projectsOpen && <SidebarProjects />}
-              </Fragment>
-            );
-          })}
+            «
+          </button>
         </div>
-      ))}
-      <div className="mt-auto flex flex-col gap-2.5 px-2">
-        <ThemeSwitch />
-        <div className="flex items-center gap-1 text-[13px]" style={{ color: 'var(--text-muted)' }}>
-          <span className="flex-1 min-w-0 truncate font-medium">{me.data?.login}</span>
+        {/* D-120: search and capture share one line; the capture is an icon with its label on hover. */}
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className={`btn btn-sm flex-1 ${touch ? 'justify-start' : 'justify-between'}`}
+            onClick={onSearch}
+            style={{ color: 'var(--text-faint)' }}
+          >
+            <span className="flex items-center gap-1.5">
+              <NavIcon name="search" /> Rechercher
+            </span>
+            {!touch && <span className="mono text-[11px]">⌘K</span>}
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm capture-btn"
+            style={{ width: 36, padding: 0 }}
+            aria-label="Capturer dans l’Inbox"
+            title="Capturer dans l’Inbox"
+            onClick={onCapture}
+          >
+            <NavIcon name="capture" />
+          </button>
+        </div>
+        {NAV.map((s) => (
+          <div key={s.section} className="flex flex-col gap-px">
+            <div className="nav-section px-2 pb-1">{s.section}</div>
+            {s.items
+              .filter((i) => !i.more)
+              .map((i) => (
+                <Fragment key={i.label}>
+                  <span className="flex items-center gap-0.5">
+                    {navLink(i, i.to === '/journal' ? journalBadge : undefined)}
+                    {i.to === '/projets' && (
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        style={{ width: 28, height: 28 }}
+                        aria-expanded={projectsOpen}
+                        aria-label={
+                          projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'
+                        }
+                        title={projectsOpen ? 'Masquer les projets du mois' : 'Afficher les projets du mois'}
+                        onClick={() => setProjectsOpen(!projectsOpen)}
+                      >
+                        <Chevron open={projectsOpen} />
+                      </button>
+                    )}
+                  </span>
+                  {i.to === '/projets' && projectsOpen && <SidebarProjects />}
+                </Fragment>
+              ))}
+          </div>
+        ))}
+        <div className="flex flex-col gap-px">
+          <button
+            type="button"
+            className="nav-section flex items-center gap-1.5 px-2 pb-1 border-0 bg-transparent cursor-pointer text-left"
+            aria-expanded={moreOpen || moreActive}
+            onClick={() => setMoreOpen(!(moreOpen || moreActive))}
+          >
+            Autres pages
+            <Chevron open={moreOpen || moreActive} />
+          </button>
+          {(moreOpen || moreActive) && MORE.map((i) => <Fragment key={i.label}>{navLink(i)}</Fragment>)}
+        </div>
+      </div>
+      {/* D-120: one line of icons (theme, notifications, settings), one line for the account. */}
+      <div
+        className="flex-none flex flex-col gap-2"
+        style={{ padding: '10px 13px 12px', borderTop: '1px solid var(--border)' }}
+      >
+        <div className="flex items-center gap-1">
+          <ThemeSwitch compact />
+          <span className="flex-1" />
           <NotifyBell />
           <SettingsLink active={path.startsWith('/configuration')} />
+        </div>
+        <div className="flex items-center gap-2 pl-1">
+          <span className="flex-1 min-w-0 flex flex-col">
+            <span className="truncate text-[13px] font-medium" style={{ color: 'var(--text-2)' }}>
+              {me.data?.login}
+            </span>
+            <AppVersion />
+          </span>
           <button
             type="button"
             aria-label="Se déconnecter"
@@ -456,9 +582,22 @@ function Sidebar({
             <LogoutIcon />
           </button>
         </div>
-        <AppVersion />
       </div>
     </nav>
+  );
+}
+
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      aria-hidden="true"
+      width={12}
+      height={12}
+      viewBox="0 0 14 14"
+      style={{ transform: `rotate(${open ? 90 : 0}deg)`, transition: 'transform 0.15s' }}
+    >
+      <path d="M5 3l4 4-4 4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
   );
 }
 
@@ -544,7 +683,7 @@ const THEMES = [
   { value: 'dark', label: 'Sombre', icon: <MoonIcon /> },
 ] as const;
 
-export function ThemeSwitch() {
+export function ThemeSwitch({ compact }: { compact?: boolean }) {
   const settings = useSettings();
   const setTheme = useSetTheme();
   const value = settings.data?.theme ?? 'auto';
@@ -564,9 +703,10 @@ export function ThemeSwitch() {
           aria-label={t.label}
           title={t.label}
           onClick={() => setTheme.mutate(t.value)}
-          className="flex-1 grid place-items-center border-0 rounded-md cursor-pointer"
+          className={`${compact ? '' : 'flex-1 '}grid place-items-center border-0 rounded-md cursor-pointer`}
           style={{
-            minHeight: 30,
+            minHeight: compact ? 28 : 30,
+            width: compact ? 30 : undefined,
             background: value === t.value ? 'var(--surface)' : 'transparent',
             color: value === t.value ? 'var(--text)' : 'var(--text-faint)',
             boxShadow: value === t.value ? '0 1px 2px rgba(0,0,0,0.08)' : undefined,
@@ -713,9 +853,7 @@ function PhoneMenu({
   const path = useRouterState({ select: (s) => s.location.pathname });
   const vue = useRouterState({ select: (s) => vueOf(s.location.search) });
   const me = useMe();
-  const logout = useAction(() => post('/auth/logout'), {
-    onSuccess: () => window.dispatchEvent(new Event('memento:unauthenticated')),
-  });
+  const logout = useLogout();
   return (
     <Panel open={open} onClose={onClose} title="Menu" side={false} width={420}>
       <button type="button" className="btn justify-start" onClick={onSearch}>
@@ -997,6 +1135,21 @@ const ICON_PATHS: Record<string, ReactNode> = {
     </>
   ),
   plus: <path d="M8 3v10M3 8h10" />,
+  // Inbox tray with a « + »: capture into the Inbox.
+  capture: (
+    <>
+      <path d="M1.8 9.5h3.4l1 1.8h3.6l1-1.8h3.4" />
+      <path d="M1.8 9.5V13a1 1 0 0 0 1 1h10.4a1 1 0 0 0 1-1V9.5L12.6 6" />
+      <path d="M3.4 6 1.8 9.5M8 1.8v5.4M5.3 4.5h5.4" />
+    </>
+  ),
+  more: (
+    <>
+      <circle cx="3.5" cy="8" r="0.6" fill="currentColor" />
+      <circle cx="8" cy="8" r="0.6" fill="currentColor" />
+      <circle cx="12.5" cy="8" r="0.6" fill="currentColor" />
+    </>
+  ),
   '/semaine': (
     <>
       <rect x="2" y="3" width="12" height="11" rx="1.5" />
