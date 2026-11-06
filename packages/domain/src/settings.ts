@@ -30,6 +30,7 @@ export const settingsSchema = z.object({
   'guards.window_weeks': z.number().int().min(1).max(26),
   'schedule.week_plan': z.object({ day: z.number().int().min(1).max(7), time: hhmm }),
   'schedule.reports': z.object({ time: hhmm }),
+  'schedule.week_report': z.object({ time: hhmm }),
   'report.rhythm_low_pct': z.number().int().min(0).max(200),
   'report.rhythm_high_pct': z.number().int().min(0).max(300),
   'templates.meta_objective': z.string().max(4000),
@@ -87,6 +88,7 @@ export const DEFAULT_SETTINGS: Settings = {
   'guards.window_weeks': 4, // CH-05
   'schedule.week_plan': { day: 1, time: '07:00' }, // WF-01
   'schedule.reports': { time: '07:00' },
+  'schedule.week_report': { time: '20:00' }, // D-116: Sunday evening
   'report.rhythm_low_pct': 80, // R-05
   'report.rhythm_high_pct': 110,
   'templates.meta_objective':

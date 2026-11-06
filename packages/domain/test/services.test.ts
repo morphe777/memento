@@ -25,6 +25,7 @@ import {
   duplicateObjective,
   duplicateProject,
   exportData,
+  findReport,
   generateReport,
   getAiKey,
   getCalendar,
@@ -807,6 +808,8 @@ describe('worker jobs (WF-01 to WF-03)', () => {
     ctx.setNow('2026-11-02T06:05:00.000Z'); // 07:05 Paris
     const r = runDueJobs(ctx);
     expect(r.week).toBe('done');
+    expect(r.week_report).toBe('skipped'); // frozen at 06:30 (catch-up of Sunday evening)
+    expect(early.week_report).toBe('done');
     expect(r.month).toBe('skipped');
     expect(runDueJobs(ctx).week).toBe('skipped');
     expect(getPlanningPage(ctx, '2026-W45').plan?.proposedAt).toBeTruthy();
@@ -1407,5 +1410,58 @@ describe('D-113 calendrier', () => {
     expect(at(done.id)).toEqual([['2026-11-02', 'done', false]]);
     expect(cal.planned.find((w) => w.isoWeek === '2026-W45')?.tasks.map((t) => t.taskId)).toEqual([free.id]);
     expect(errCode(() => getCalendar(ctx, '2026-01-01', '2026-12-31'))).toBe('INVALID_RANGE');
+  });
+});
+
+describe('D-116 week report on Sunday evening, planning a future week', () => {
+  it('freezes the week on Sunday evening, weekend included, and does not freeze it again on Monday', async () => {
+    const { runDueJobs } = await import('../src/services/jobs.ts');
+    const ctx = makeCtx('2026-11-08T18:00:00.000Z'); // Sunday W45, 19:00 Paris
+    expect(runDueJobs(ctx).week_report).toBeUndefined(); // not before 20:00
+    ctx.setNow('2026-11-08T19:05:00.000Z'); // 20:05
+    expect(runDueJobs(ctx).week_report).toBe('done');
+    expect(findReport(ctx, 'week', '2026-W45')).toBeTruthy();
+    ctx.setNow('2026-11-09T06:05:00.000Z'); // Monday 07:05: the plan, not the report again
+    const monday = runDueJobs(ctx);
+    expect(monday.week).toBe('done');
+    expect(monday.week_report).toBe('skipped');
+  });
+
+  it('a task planned in a week in between is counted as done: the next task comes up', () => {
+    const ctx = makeCtx('2026-11-04T09:00:00.000Z'); // Wednesday W45
+    const { tasks } = activeProject(ctx, 'Garage', 'Travaux', 3);
+    setWeekItems(ctx, '2026-W46', [{ taskId: tasks[0].id, kind: 'week' }]);
+    const titles = (w: string) =>
+      getPlanningPage(ctx, w)
+        .groups.flatMap((g) => g.cards)
+        .flatMap((c) => c.tasks.filter((t) => !t.locked).map((t) => t.title));
+    expect(titles('2026-W46')).toContain('Garage 1');
+    expect(titles('2026-W48')).not.toContain('Garage 1');
+    expect(titles('2026-W48')).toContain('Garage 2'); // after « Garage 1 », available anyway
+    // Chosen again in the planned week itself: it stays.
+    setWeekItems(ctx, '2026-W48', [{ taskId: tasks[0].id, kind: 'week' }]);
+    expect(titles('2026-W48')).toContain('Garage 1');
+  });
+
+  it('a recurring Inbox task due after the week is set apart, with its marker; no domain in the why', () => {
+    const ctx = makeCtx('2026-11-04T09:00:00.000Z'); // W45
+    createTask(ctx, { title: 'Box', durationMin: 30, dueDate: '2026-11-30', recurrenceRule: 'FREQ=MONTHLY' });
+    createTask(ctx, {
+      title: 'Sport',
+      durationMin: 30,
+      dueDate: '2026-11-06',
+      recurrenceRule: 'FREQ=WEEKLY',
+    });
+    createTask(ctx, { title: 'Lettre', durationMin: 15 });
+    const inbox = getPlanningPage(ctx, '2026-W45').groups.find((g) => g.key === 'inbox')!.cards[0];
+    expect(inbox.tasks.map((t) => [t.title, t.recurring])).toEqual([
+      ['Sport', true],
+      ['Lettre', false],
+    ]);
+    expect(inbox.laterRecurring.map((t) => t.title)).toEqual(['Box']);
+    const whys = getPlanningPage(ctx, '2026-W45')
+      .groups.flatMap((g) => g.cards)
+      .flatMap((c) => [...c.tasks, ...c.laterRecurring].map((t) => t.why));
+    expect(whys.join(' ')).not.toMatch(/priorité n°/);
   });
 });

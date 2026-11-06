@@ -79,6 +79,9 @@ function WeekPlanPage({ semaine, tabs }: { semaine?: string; tabs: React.ReactNo
 
 function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
   const settings = useSettings();
+  const me = useMe();
+  const [showLater, setShowLater] = useState(false);
+  const laterCount = page.groups.find((g) => g.key === 'inbox')?.cards[0]?.laterRecurring.length ?? 0;
   const navigate = useNavigate();
   const dl = useDomainLookup();
   const w = page.isoWeek;
@@ -123,6 +126,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
               <span className="min-w-0">
                 Planification · semaine {weekNumber(w)} · {page.label}
               </span>
+              {me.data && <WeekTag week={w} current={me.data.currentWeek} />}
               <button
                 type="button"
                 className="btn btn-sm btn-ghost px-1 flex-none"
@@ -170,7 +174,23 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         </div>
       </div>
       {page.groups.map((g) => (
-        <PlanGroup key={g.key} g={g}>
+        <PlanGroup
+          key={g.key}
+          g={g}
+          extra={
+            g.key === 'inbox' &&
+            laterCount > 0 && (
+              // D-116: the future occurrences of recurring tasks, on demand (Inbox only).
+              <label
+                className="flex items-center gap-1.5 text-[13px] cursor-pointer"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                <input type="checkbox" checked={showLater} onChange={(e) => setShowLater(e.target.checked)} />
+                Récurrentes à venir ({laterCount})
+              </label>
+            )
+          }
+        >
           {g.cards.length === 0 && (
             <div className="text-[14px] px-1" style={{ color: 'var(--text-faint)' }}>
               {g.key === 'inbox'
@@ -185,7 +205,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
               key={c.projectId ?? 'inbox'}
               card={c}
               color={dl.color(c.domainId)}
-              domainName={c.projectId ? dl.name(c.domainId) : ''}
+              showLater={showLater}
               onToggle={toggle}
               busy={setItems.isPending}
             />
@@ -256,7 +276,15 @@ function WeekTime({ page, onBudget }: { page: PlanningPage; onBudget: () => void
 }
 
 /** A box of the week (Inbox, Projets du mois, À considérer aussi) that folds from its title, like Mois. */
-function PlanGroup({ g, children }: { g: PlanningPage['groups'][number]; children: React.ReactNode }) {
+function PlanGroup({
+  g,
+  extra,
+  children,
+}: {
+  g: PlanningPage['groups'][number];
+  extra?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   const [open, toggle] = useFold(`memento.week.fold.${g.key}`);
   return (
     <section className="bin flex flex-col gap-3">
@@ -271,22 +299,54 @@ function PlanGroup({ g, children }: { g: PlanningPage['groups'][number]; childre
             · {g.hint}
           </span>
         )}
+        {extra}
       </div>
       {open && children}
     </section>
   );
 }
 
+/** D-116: discreet marker of the week being planned: current, next, or how far. */
+function WeekTag({ week, current }: { week: string; current: string }) {
+  let n = 0;
+  while (n < 60 && shiftIsoWeek(current, n) < week) n += 1;
+  while (n > -60 && shiftIsoWeek(current, n) > week) n -= 1;
+  const label =
+    n === 0
+      ? 'en cours'
+      : n === 1
+        ? 'prochaine'
+        : n > 1
+          ? `dans ${n} semaines`
+          : n === -1
+            ? 'dernière'
+            : `il y a ${-n} semaines`;
+  const tone =
+    n === 0
+      ? { color: 'var(--primary)', borderColor: 'var(--primary)' }
+      : n === 1
+        ? { color: 'var(--text-muted)', borderColor: 'var(--border)' }
+        : { color: 'var(--text-faint)', borderColor: 'transparent' };
+  return (
+    <span
+      className="flex-none text-[11px] font-medium"
+      style={{ ...tone, border: '1px solid', borderRadius: 999, padding: '0 7px', lineHeight: '18px' }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function ProjectCard({
   card,
   color,
-  domainName,
+  showLater = false,
   onToggle,
   busy,
 }: {
   card: PlanningPage['groups'][number]['cards'][number];
   color: string;
-  domainName: string;
+  showLater?: boolean;
   onToggle: (taskId: string, kind: 'week' | 'bonus') => void;
   busy: boolean;
 }) {
@@ -295,6 +355,13 @@ function ProjectCard({
   const nb = `${hidden} ${hidden > 1 ? 'autres tâches' : 'autre tâche'}`;
   const inbox = !card.projectId;
   const dueHidden = card.hiddenDueCount;
+  const later = showLater ? card.laterRecurring : [];
+  if (inbox && !card.tasks.length && !hidden && !later.length)
+    return (
+      <div className="text-[14px] px-1" style={{ color: 'var(--text-faint)' }}>
+        Rien pour cette semaine : seulement des récurrentes à venir.
+      </div>
+    );
   return (
     <div
       className="overflow-hidden"
@@ -315,11 +382,6 @@ function ProjectCard({
               Inbox
             </Link>
           )}
-          {domainName && (
-            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-              {domainName}
-            </span>
-          )}
           {card.objectiveId && (
             <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
               · Objectif :{' '}
@@ -338,6 +400,9 @@ function ProjectCard({
         </div>
       )}
       {card.tasks.map((t) => (
+        <PlanTaskRow key={t.taskId} t={t} onToggle={onToggle} busy={busy} />
+      ))}
+      {later.map((t) => (
         <PlanTaskRow key={t.taskId} t={t} onToggle={onToggle} busy={busy} />
       ))}
       {hidden > 0 && (
@@ -427,6 +492,17 @@ function PlanTaskRow({
             {t.title}
           </button>
           {t.isExperience && <ExperienceBadge />}
+          {t.recurring && (
+            <span
+              className="text-[12px]"
+              style={{ color: 'var(--text-faint)' }}
+              title="Tâche récurrente"
+              role="img"
+              aria-label="Tâche récurrente"
+            >
+              ↻
+            </span>
+          )}
         </div>
         <span
           className="text-[12px]"
@@ -531,7 +607,6 @@ function MorePanel({
           key={c.projectId}
           card={c}
           color={dl.color(c.domainId)}
-          domainName={dl.name(c.domainId)}
           onToggle={(taskId, kind) => {
             if (c.projectId && !picked.includes(c.projectId)) setPicked([...picked, c.projectId]);
             onToggle(taskId, kind);
