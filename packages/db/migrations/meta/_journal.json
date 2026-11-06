@@ -57,6 +57,13 @@
       "when": 1793450230708,
       "tag": "0007_cap_unplanned",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1793995824147,
+      "tag": "0008_notifications",
+      "breakpoints": true
     }
   ]
 }
