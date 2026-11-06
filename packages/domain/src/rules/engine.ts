@@ -12,7 +12,7 @@ import {
   weekSunday,
 } from '../time.ts';
 import { availableTaskIds } from './availability.ts';
-import { delayMin } from './delay.ts';
+import { delayMin, type PaceCalendar, weekToDoMin } from './delay.ts';
 import { budgetMinutes, budgetStatus } from './tasks.ts';
 
 /** CH-05 guard-rail domains (by name, see docs/DECISIONS.md D-15). */
@@ -94,6 +94,8 @@ export interface EngineInput {
   projects: EngineProject[];
   tasks: EngineTask[];
   taskDeps: { taskId: string; dependsOnTaskId: string }[];
+  /** D-118: time available per day for the delay; absent = every day weighs the same. */
+  paceCalendar?: PaceCalendar;
 }
 
 export type Selection = 'week' | 'bonus';
@@ -126,18 +128,35 @@ function projectMinutes(tasks: EngineTask[]) {
   };
 }
 
-/** R-06 delay (minutes, negative = late) for a month project, at a given date. */
-export function projectDelayMin(p: EngineProject, tasks: EngineTask[], today: string): number {
-  const { totalMin, doneMin } = projectMinutes(tasks);
-  return delayMin({
-    totalMin,
-    doneMin,
-    startDate: p.startDate,
-    dueDate: p.dueDate,
-    replannedAt: p.replannedAt,
-    replanDoneMin: p.replanDoneMin,
-    today,
-  });
+const delayInput = (p: EngineProject, tasks: EngineTask[], today: string, calendar?: PaceCalendar) => ({
+  ...projectMinutes(tasks),
+  startDate: p.startDate,
+  dueDate: p.dueDate,
+  monthFlag: p.monthFlag,
+  replannedAt: p.replannedAt,
+  replanDoneMin: p.replanDoneMin,
+  today,
+  calendar,
+});
+
+/** R-06 / D-118 delay (minutes, negative = late) for a month project, at a given date. */
+export function projectDelayMin(
+  p: EngineProject,
+  tasks: EngineTask[],
+  today: string,
+  calendar?: PaceCalendar,
+): number {
+  return delayMin(delayInput(p, tasks, today, calendar));
+}
+
+/** D-118: minutes left to do this week for the project to be on time on Sunday evening. */
+export function projectWeekToDoMin(
+  p: EngineProject,
+  tasks: EngineTask[],
+  today: string,
+  calendar?: PaceCalendar,
+): number {
+  return weekToDoMin(delayInput(p, tasks, today, calendar));
 }
 
 interface Prepared {
@@ -209,7 +228,7 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
   if (project && isMonthProject(P, project)) {
     const ptasks = P.tasksByProject.get(project.id) ?? [];
     const { totalMin } = projectMinutes(ptasks);
-    lateMin = Math.max(0, -projectDelayMin(project, ptasks, P.input.today));
+    lateMin = Math.max(0, -projectDelayMin(project, ptasks, P.input.today, P.input.paceCalendar));
     R = totalMin > 0 ? clamp01(lateMin / totalMin) : 0;
   }
   // C continuity: a task of the project done during the 2 previous weeks.
@@ -481,7 +500,7 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
         hiddenTasks: [],
         hiddenDueCount: 0,
         laterRecurring: [],
-        deltaMin: isMonthProject(P, p) ? projectDelayMin(p, ptasks, input.today) : null,
+        deltaMin: isMonthProject(P, p) ? projectDelayMin(p, ptasks, input.today, input.paceCalendar) : null,
       },
     };
   };

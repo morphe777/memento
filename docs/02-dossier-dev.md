@@ -189,7 +189,7 @@ Générés par le worker, stockés en `report.payload` (jsonb) et **jamais recal
 | R-04 | Focus | Heures faites hors expériences : objectifs actifs ≥ 50 % → Cap tenu ; Inbox ≥ 50 % → Semaine Inbox (neutre) ; hors objectif ≥ 50 % → Dispersé ; sinon Mixte | Palier en texte, jamais de % |
 | R-05 | Rythme | heures faites ÷ budget : < 80 % Sous-productif ; 80 à 110 % OK ; > 110 % Surproductif | Palier en texte |
 | R-07 | Évitement | Tâches avec postpone_count ≥ 3 | Nombre + titres |
-| R-06 | Avance / retard | Par projet du mois : heures prévues à date (prorata des jours écoulés) − heures faites | Barre centrée, ± heures |
+| R-06 | Avance / retard | Par projet du mois (D-118) : heures faites − heures attendues ; attendu = travail réparti sur la période (dates du projet, sinon son mois) au prorata du temps disponible (budget de chaque semaine ÷ 7, 0 en vacances), compté sur les semaines finies ; « encore X cette semaine » | Barre centrée, ± heures |
 | — | Heures par domaine | Durées des tâches faites par domaine, expériences incluses, ordre de priorité | Barres |
 
 Ordre d'affichage du rapport hebdo (maquette `rapport-hebdo.dc.html`) : en-tête + navigation (semaine précédente, Mois, Trimestre) → indicateur global → Mes réussites → tuiles (Tâches terminées, Expériences, Focus, Rythme, Évitement) → Avance / retard + Heures par domaine.

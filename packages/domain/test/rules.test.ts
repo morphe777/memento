@@ -26,6 +26,7 @@ import {
   relevance,
   resolveProjectDomains,
   rhythmOf,
+  weekToDoMin,
   wouldCreateCycle,
 } from '../src/rules/index.ts';
 import { defaultWeight, SEED_DOMAINS } from '../src/seed-data.ts';
@@ -289,22 +290,44 @@ describe('D-108 objective focus', () => {
   });
 });
 
-describe('R-06 / RB-16 delay', () => {
+describe('R-06 / RB-16 delay (D-118: time available, judged by the week)', () => {
+  // 1–30 Nov 2026: W44 (Sun 1st) … W49 (Mon 30). 600 min of work.
   const base = {
     totalMin: 600,
     doneMin: 0,
     startDate: '2026-11-01',
-    dueDate: '2026-11-10',
+    dueDate: '2026-11-30',
     replannedAt: null,
     replanDoneMin: null,
-    today: '2026-11-05',
+    today: '2026-11-12', // Thursday of W46
   };
-  it('prorata of elapsed days', () => {
-    expect(plannedToDateMin(base)).toBe(300);
-    expect(delayMin({ ...base, doneMin: 120 })).toBe(-180);
+  it('the weeks already ended, prorata of their days when no budget is known', () => {
+    // Ended: 1 → 8 Nov = 8 days of 30.
+    expect(plannedToDateMin(base)).toBe(160);
+    expect(delayMin({ ...base, doneMin: 100 })).toBe(-60);
+    // Monday or Saturday of the same week: same expectation (no false late on Tuesday).
+    expect(plannedToDateMin({ ...base, today: '2026-11-09' })).toBe(160);
+    expect(plannedToDateMin({ ...base, today: '2026-11-14' })).toBe(160);
+    // To do this week: up to Sunday 15 Nov = 15 days of 30.
+    expect(weekToDoMin({ ...base, doneMin: 100 })).toBe(200);
+  });
+  it('a heavy week weighs more, a holiday weighs nothing', () => {
+    const calendar = {
+      weekBudgets: { '2026-W45': 1200, '2026-W46': 300 },
+      defaultBudgetMin: 600,
+      vacations: [{ from: '2026-11-23', to: '2026-11-29' }],
+    };
+    // Per day: W44 (1 day) 600/7, W45 1200/7 ×7, W46 300/7 ×7, W47 600/7 ×7, W48 0, W49 (1 day) 600/7.
+    // Total = (600 + 8400 + 2100 + 4200 + 0 + 600) / 7 = 15900/7; ended (W44 + W45) = 9000/7.
+    expect(plannedToDateMin({ ...base, calendar })).toBe(Math.round((600 * 9000) / 15900));
+  });
+  it('a month project without dates runs over its month', () => {
+    const m = { ...base, startDate: null, dueDate: null, monthFlag: '2026-11' };
+    expect(plannedToDateMin(m)).toBe(160);
+    expect(plannedToDateMin({ ...m, monthFlag: null })).toBe(0);
   });
   it('replan brings the bar back to the centre', () => {
-    expect(delayMin({ ...base, doneMin: 120, replannedAt: '2026-11-05', replanDoneMin: 120 })).toBe(0);
+    expect(delayMin({ ...base, doneMin: 120, replannedAt: '2026-11-12', replanDoneMin: 120 })).toBe(0);
   });
   it('labels', () => {
     expect(delayLabel(-120)).toBe('−2 h');

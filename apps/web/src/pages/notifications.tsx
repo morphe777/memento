@@ -194,9 +194,7 @@ export function NotifyBell({ label = false, onClick }: { label?: boolean; onClic
       aria-label={unread ? `Notifications, ${unread} non lues` : 'Notifications'}
       title="Notifications"
       onClick={onClick}
-      className={
-        label ? 'btn gap-2 hover:no-underline' : 'icon-btn relative hover:no-underline'
-      }
+      className={label ? 'btn gap-2 hover:no-underline' : 'icon-btn relative hover:no-underline'}
       style={{ color: 'var(--text-2)', position: 'relative' }}
     >
       <svg
