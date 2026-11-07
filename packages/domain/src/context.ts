@@ -20,9 +20,13 @@ export const newId = (): string => randomUUID();
 export const ctxNow = (ctx: Pick<Ctx, 'now'>): Date => (ctx.now ? ctx.now() : new Date());
 export const ctxNowIso = (ctx: Pick<Ctx, 'now'>): string => (ctx.now ? ctx.now().toISOString() : nowIso());
 
-/** Runs fn in a single SQLite transaction (nested calls become savepoints). */
+/**
+ * Runs fn in a single SQLite transaction (nested calls become savepoints). H-04: IMMEDIATE takes the write lock
+ * at the start, so busy_timeout applies; a deferred transaction that reads then writes after another process
+ * committed fails at once (SQLITE_BUSY_SNAPSHOT).
+ */
 export function tx<T>(ctx: Ctx, fn: () => T): T {
-  return ctx.sqlite.transaction(fn)();
+  return ctx.sqlite.transaction(fn).immediate();
 }
 
 type Plain = Record<string, unknown>;
