@@ -1,5 +1,22 @@
 // Weekly report indicators (dossier de dev §7, Specs §5b). Pure functions over a data snapshot.
-import { fmtMin } from '../time.ts';
+import { fmtMin, monthStart, quarterStart, shiftMonth, shiftQuarter, weekSunday } from '../time.ts';
+
+export const isValidMonth = (m: string): boolean => /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
+
+/**
+ * H-05 (D-116): the Europe/Paris moment from which a period may be frozen, by hand as by the job: the time the
+ * job freezes it. A week on its Sunday at the week report time; a month or a quarter on the first day of the
+ * next one at the reports time.
+ */
+export function reportFreezableFrom(
+  kind: 'week' | 'month' | 'quarter',
+  periodKey: string,
+  times: { weekReport: string; reports: string },
+): { date: string; time: string } {
+  if (kind === 'week') return { date: weekSunday(periodKey), time: times.weekReport };
+  if (kind === 'month') return { date: monthStart(shiftMonth(periodKey, 1)), time: times.reports };
+  return { date: quarterStart(shiftQuarter(periodKey, 1)), time: times.reports };
+}
 
 export type Focus = 'Cap tenu' | 'Semaine Inbox' | 'Dispersé' | 'Mixte' | 'Rien de fait';
 export type Rhythm = 'Sous-productif' | 'OK' | 'Surproductif';

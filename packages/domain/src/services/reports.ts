@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lt, schema } from '@memento/db';
 // Frozen reports (WF-08, dossier de dev §7). The payload holds every displayed value; it is never recomputed.
-import { type Ctx, ctxNowIso, newId, tx } from '../context.ts';
+import { type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { type EngineProject, type EngineTask, projectDelayMin } from '../rules/engine.ts';
 import {
@@ -8,18 +8,23 @@ import {
   estimationOf,
   focusOf,
   globalIndicator,
+  isValidMonth,
   minutesByDomain,
+  reportFreezableFrom,
   rhythmOf,
 } from '../rules/reports.ts';
 import { INBOX_COLORS } from '../seed-data.ts';
 import { getSettings } from '../settings.ts';
 import {
   addDays,
+  frShort,
   frWeekRange,
   isValidIsoWeek,
+  isValidQuarter,
   monthEnd,
   monthOf,
   monthStart,
+  parisClock,
   quarterEnd,
   quarterStart,
   shiftMonth,
@@ -501,17 +506,30 @@ export function generateReport(ctx: Ctx, kind: Kind, periodKey: string) {
   return tx(ctx, () => {
     const found = existing(ctx, kind, periodKey);
     if (found) return { report: found, created: false };
-    let payload: Record<string, unknown>;
-    if (kind === 'week') {
-      if (!isValidIsoWeek(periodKey)) throw new DomainError('INVALID_PERIOD', 'Semaine invalide.');
-      payload = buildWeekPayload(ctx, periodKey);
-    } else if (kind === 'month') {
-      if (!/^\d{4}-\d{2}$/.test(periodKey)) throw new DomainError('INVALID_PERIOD', 'Mois invalide.');
-      payload = buildMonthPayload(ctx, periodKey);
-    } else {
-      if (!/^\d{4}-Q[1-4]$/.test(periodKey)) throw new DomainError('INVALID_PERIOD', 'Trimestre invalide.');
-      payload = buildQuarterPayload(ctx, periodKey);
-    }
+    const valid = kind === 'week' ? isValidIsoWeek : kind === 'month' ? isValidMonth : isValidQuarter;
+    if (!valid(periodKey))
+      throw new DomainError(
+        'INVALID_PERIOD',
+        kind === 'week' ? 'Semaine invalide.' : kind === 'month' ? 'Mois invalide.' : 'Trimestre invalide.',
+      );
+    // H-05: never before the job's own time, so a report is never frozen while its period still runs.
+    const s = getSettings(ctx);
+    const from = reportFreezableFrom(kind, periodKey, {
+      weekReport: s['schedule.week_report'].time,
+      reports: s['schedule.reports'].time,
+    });
+    const now = parisClock(ctxNow(ctx));
+    if (now.date < from.date || (now.date === from.date && now.time < from.time))
+      throw new DomainError(
+        'PERIOD_NOT_OVER',
+        `Période pas encore terminée : rapport figeable à partir du ${frShort(from.date)} à ${from.time}.`,
+      );
+    const payload =
+      kind === 'week'
+        ? buildWeekPayload(ctx, periodKey)
+        : kind === 'month'
+          ? buildMonthPayload(ctx, periodKey)
+          : buildQuarterPayload(ctx, periodKey);
     return { report: insertReport(ctx, kind, periodKey, payload), created: true };
   });
 }
