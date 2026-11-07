@@ -245,7 +245,9 @@ Outils nommés en anglais, description en français, chacun = un ou deux appels 
 | `list_changes` | Ce qui a changé (F-25) |
 | `add_resource` | Lien vers la doc (DM-70) |
 
-Pas d'outil de suppression définitive ni de réglages : réservés à l'interface.
+Suppression : outils `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective` (D-60, D-123),
+journalisés avec le contenu supprimé. Pas d'outil de réglages. Les routes ouvertes aux jetons sont fixées par une
+seule liste (`apps/api/src/access.ts`, H-03) ; les autres sont réservées à l'interface.
 
 ## 10. Arborescence des pages et fil d'Ariane
 

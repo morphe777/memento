@@ -10,20 +10,25 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'ut
 - Base : `http://<hôte>:4500/api/v1` (réseau local uniquement). MCP : `http://<hôte>:4502/mcp`, mêmes droits.
 - Authentification : `Authorization: Bearer mem_…` (jeton créé par l'utilisateur dans Configuration › Accès).
 - Tes actions sont signées `ai:<nom du jeton>` et apparaissent dans le **Journal** de l'utilisateur (`GET /changes`).
-- Jeton « lecture » : seulement des `GET` (sinon 403 `READ_ONLY_TOKEN`).
-- Interdit à tout jeton (403 `USER_ONLY`) : réglages, jetons, compte, export / import, purge des données,
-  « Proposer avec l'IA » (`/ai/*`).
+- Une seule liste fixe les routes ouvertes aux jetons ; toute autre route répond 403 `USER_ONLY` (réservée à
+  l'interface).
+- Jeton « lecture » : les lectures, plus `POST /plan/preview` et `POST /tasks/parse`, qui n'écrivent rien
+  (sinon 403 `READ_ONLY_TOKEN`).
+- Jeton « lecture-écriture » : création, modification, planification et suppression (journalisée avec son contenu).
+- Fermé à tout jeton : réglages (même en lecture), jetons, compte, export / import, purge des données,
+  « Proposer avec l'IA » (`/ai/*`), notifications (Telegram, push), écriture sur les domaines et les groupes,
+  génération d'un rapport (`POST /reports/generate`) et « Marquer comme revu » (`POST /changes/mark-reviewed`).
 
 ## 2. Conventions
 
 | Sujet | Format |
 | --- | --- |
-| Dates | `AAAA-MM-JJ`, heure de Paris |
+| Dates | `AAAA-MM-JJ`, heure de Paris, un jour qui existe (sinon 422 `INVALID_DATE`) |
 | Horodatages | ISO 8601 UTC (`doneAt`, `createdAt`…) |
 | Semaine | ISO `AAAA-Www` (lundi → dimanche), ex. `2026-W45` |
 | Mois | `AAAA-MM` · Trimestre : `AAAA-Qn`, ex. `2026-Q4` |
 | Durée d'une tâche | minutes : **5, 15, 30, 60 ou 120** (2 h max, RB-03) ; `null` = inconnue (idées) |
-| Récurrence | RRULE iCalendar, **Inbox seulement** : `FREQ=WEEKLY`, `FREQ=MONTHLY`, `FREQ=MONTHLY;INTERVAL=3`, `FREQ=YEARLY` |
+| Récurrence | RRULE iCalendar, **Inbox seulement** : `FREQ=WEEKLY`, `FREQ=MONTHLY`, `FREQ=MONTHLY;INTERVAL=3`, `FREQ=YEARLY`. Clés acceptées, une fois chacune : `FREQ` (DAILY, WEEKLY, MONTHLY, YEARLY), `INTERVAL` (1 à 999), `BYDAY`, `BYMONTH`, `BYMONTHDAY` |
 | Descriptions | **Markdown** (titres, listes, cases `- [ ]`, tableaux, liens). Pas de HTML |
 | Identifiants | UUID |
 
@@ -130,7 +135,8 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 ## 5. Recettes
 
 1. **Capturer une idée de projet** : `GET /domains` + `GET /groups` → `POST /projects { title, groupIds,
-   description }`. Le modèle de description de l'utilisateur s'applique si tu n'en donnes pas.
+   description }`. Écris une vraie description : sans elle, le projet reste sans description (aucun modèle n'est
+   copié, D-119).
 2. **Découper un projet** : `POST /tasks/batch { projectId, tasks: [{ title, durationMin }] }` (ordre = ordre
    d'exécution), puis `POST /projects/{id}/promote`. Vérifie `gaps` et complète (`PATCH /projects/{id}`
    `{ successCriterion }`).
@@ -180,6 +186,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `NOT_IN_OBJECTIVE` / `NOT_IN_PROJECT` / `REORDER_INCOMPLETE` | réordonnancement incohérent |
 | `GROUP_IN_USE` / `GROUP_NAME_TAKEN` | groupe encore utilisé / nom déjà pris |
 | `INVALID_WEEK` / `INVALID_MONTH` / `INVALID_QUARTER` / `INVALID_PERIOD` | clé de période invalide |
+| `PERIOD_NOT_OVER` | rapport demandé pour une période pas encore terminée |
+| `INVALID_DATE` | date impossible ou mal écrite (`AAAA-MM-JJ`) |
+| `USER_ONLY` (403) | route réservée à l'interface |
 
 ## 8. Outils MCP
 

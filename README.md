@@ -46,13 +46,25 @@ Guides : [`docs/api/guide.md`](docs/api/guide.md) (pour toi : brancher une IA ou
 2. API : `Authorization: Bearer mem_…`
 3. MCP : URL `http://<hôte>:4502/mcp`, même en-tête `Authorization: Bearer mem_…`. Chaque agent utilise **son** jeton, ce qui lui donne son nom dans le journal (`ai:<nom>`) et dans « À revoir ».
 
-Un jeton en lecture seule ne peut faire que des GET. Aucun jeton ne peut gérer les jetons ni les réglages : c'est réservé à l'interface.
+Ce qu'un jeton peut appeler est fixé par **une seule liste**, `apps/api/src/access.ts` (D-123) ; toute autre route est
+réservée à l'interface (403 `USER_ONLY`) :
+
+- jeton **lecture** : les lectures de la liste, plus deux POST qui n'écrivent rien (`/plan/preview`, `/tasks/parse`) ;
+- jeton **lecture-écriture** : toute la liste, suppressions comprises (D-60 ; le contenu supprimé est journalisé) ;
+- **jamais pour un jeton** : les réglages (même en lecture), les jetons, le compte, l'import, l'export, la purge,
+  la configuration et les assistants IA de l'interface, les notifications (Telegram, push), l'écriture sur les
+  domaines et les groupes, la génération d'un rapport et « Marquer comme revu ».
 
 ## Qualité
 
 ```bash
 pnpm check        # lint (Biome) + typage + tests (Vitest)
+pnpm test:dates   # la suite à d'autres dates (01/01/2027, 30/11/2026 23:30 UTC) et dans un ordre aléatoire
 ```
+
+La CI GitHub (`.github/workflows/ci.yml`) bloque sur un échec de lint, de typage, de test, de `pnpm audit` (niveau
+high) ou du scan de l'image (Trivy), et vérifie que l'image ne contient ni maquettes, ni dossier de conception, ni
+données.
 
 ## Déploiement Docker (production)
 
@@ -60,12 +72,22 @@ Une image `morphe777/memento` (Docker Hub), trois conteneurs : `memento` (API + 
 `memento-worker` (jobs planifiés) et `memento-mcp` (serveur MCP, port 4502). Données : bind du
 dossier `MEMENTO_DATA_DIR` de l'hôte (obligatoire) → `/data` (base `memento.db`).
 
-### 1. Construire et pousser l'image
+### 1. Publier une version
+
+1. Version dans le `package.json` racine et les sous-paquets, entrée dans `CHANGELOG.md`, commit.
+2. CI verte, puis tag : `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Image, depuis ce commit tagué et propre (le script refuse sinon) :
 
 ```bash
 ./install/build-and-push.sh            # build + login + push (version lue dans package.json, + latest)
 ./install/build-and-push.sh --no-push  # build local seulement
 ```
+
+4. Dans `install/docker-compose.yml` (et la stack Portainer), l'image porte la version : `morphe777/memento:X.Y.Z`,
+   jamais `latest`.
+
+**Retour arrière** : remettre la version précédente dans la stack. Les migrations ne se défont pas : restaurer
+aussi la sauvegarde prise juste avant la mise à jour (voir Sauvegarde).
 
 ### 2. Préparer le dossier de données
 
@@ -93,7 +115,7 @@ MEMENTO_DATA_DIR=/srv/memento docker compose -f install/docker-compose.yml up -d
 
 Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la même machine). Derrière NGINX Proxy
 Manager en HTTPS, passer `MEMENTO_COOKIE_SECURE: "true"`. Mise à jour : nouvelle image puis « Pull and redeploy »
-(les migrations s'appliquent au démarrage ; une copie de la base est conseillée avant).
+(les migrations s'appliquent au démarrage) : faire d'abord une sauvegarde avec `backup-cli.ts` (voir Sauvegarde).
 
 Contrôle des données, en lecture seule (aucune écriture, aucune migration) : il liste les dates impossibles et les règles
 de récurrence illisibles enregistrées avant la v1.0, à corriger à la main. Code de sortie 1 s'il en trouve.
@@ -139,15 +161,42 @@ Les deux passent par le réseau de la maison (VPN dehors).
 
 ## Sauvegarde
 
-La base est un seul fichier SQLite (`data/memento.db`, mode WAL). Pour une sauvegarde à chaud cohérente :
+La base est un seul fichier SQLite en mode WAL : `memento.db` plus `memento.db-wal` (les dernières écritures). Copier
+le fichier seul pendant que l'application tourne peut donner une copie incomplète. Les commandes ci-dessous font une
+copie à chaud cohérente (API de sauvegarde de SQLite, sans le CLI `sqlite3`), puis la vérifient (intégrité, nombre
+de domaines, objectifs, projets, tâches, rapports, migrations) ; elles n'écrasent jamais un fichier existant.
 
 ```bash
-sqlite3 data/memento.db ".backup 'sauvegarde-$(date +%F).db'"
+# En dev
+pnpm db:backup sauvegardes/$(date +%F).db
+pnpm db:verify sauvegardes/2026-11-07.db
+# En production (le fichier atterrit dans le dossier de données de l'hôte)
+docker exec memento node_modules/.bin/tsx packages/db/src/backup-cli.ts /data/sauvegardes/$(date +%F).db
+docker exec memento node_modules/.bin/tsx packages/db/src/verify-cli.ts /data/sauvegardes/2026-11-07.db
 ```
+
+La sauvegarde externe du dossier de données (bind) copie `memento.db` et `memento.db-wal` à des instants
+différents : elle n'est sûre que pour les fichiers de `sauvegardes/`. Planifier `backup-cli.ts` (cron de l'hôte,
+chaque nuit) avant la sauvegarde externe.
+
+### Restaurer
+
+1. Vérifier la sauvegarde choisie : `verify-cli.ts <fichier>` doit afficher `"ok":true`.
+2. Arrêter la stack (les trois conteneurs).
+3. Mettre de côté la base actuelle : `mv memento.db memento.db.avant-restauration`, de même pour `memento.db-wal`
+   et `memento.db-shm` s'ils existent.
+4. Copier la sauvegarde à la place : `cp sauvegardes/<date>.db memento.db` (propriétaire uid 1000).
+5. Démarrer la stack : les migrations éventuelles s'appliquent. `GET /api/v1/health` doit répondre `ok`.
+6. Contrôler : `verify-cli.ts /data/memento.db` (mêmes nombres qu'à l'étape 1, migrations à jour) et
+   `check-data.ts` (aucune donnée invalide).
+
+Exercice fait le 07/11/2026 sur une copie de la sauvegarde réelle prise avant la v0.18, restaurée puis démarrée
+en v1.0.0 : intégrité ok, migrations 6 → 9, mêmes nombres d'objets avant et après, aucune donnée invalide, puis sauvegarde
+à chaud vérifiée pendant que l'API tournait.
 
 ## Sécurité
 
 - Aucun secret dans le dépôt (`.env` et `data/` sont ignorés par git).
 - Mots de passe hachés en argon2id ; sessions et jetons stockés hachés (SHA-256) ; cookie `httpOnly`, `SameSite=Strict`, `Secure` derrière HTTPS (`MEMENTO_COOKIE_SECURE=true`).
-- Connexion limitée à 5 tentatives par minute.
+- Connexion limitée à 5 tentatives par minute et par adresse. L'en-tête `X-Forwarded-For` n'est cru que du proxy déclaré dans `MEMENTO_TRUST_PROXY` (IP ou CIDR) ; sans lui, toutes les connexions passées par le proxy partagent le même quota.
 - Pas d'exposition Internet : LAN ou VPN WireGuard uniquement.

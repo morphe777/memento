@@ -23,8 +23,10 @@ Configuration › Accès › nom (`claude`, `n8n`…) + portée :
 - **Lecture-écriture** : créer des idées, découper des projets, proposer un plan de semaine…
 
 Le secret `mem_…` n'est affiché **qu'une fois** (seule son empreinte est stockée). Un jeton par agent : chaque
-action est signée `ai:<nom>` dans le Journal. Révoquer coupe l'accès immédiatement. Aucun jeton ne peut toucher aux
-réglages, aux jetons, au compte, à l'export / import ni à « Vider les données ».
+action est signée `ai:<nom>` dans le Journal. Révoquer coupe l'accès immédiatement. Les routes ouvertes aux jetons
+sont fixées par une seule liste (`apps/api/src/access.ts`) ; aucun jeton ne peut lire ni modifier les réglages, ni
+toucher aux jetons, au compte, à l'export / import, à « Vider les données », aux notifications, aux domaines et
+groupes (en écriture), à la génération d'un rapport ni à « Marquer comme revu ».
 
 ## 2. Brancher une IA par MCP (recommandé)
 
