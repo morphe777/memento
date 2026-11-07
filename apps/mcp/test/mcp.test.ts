@@ -258,3 +258,20 @@ describe('C-03 a tool only reaches its own route', () => {
     }
   });
 });
+
+describe('C-05 the MCP refuses an invalid recurrence rule', () => {
+  it.each(['FREQ=DAILY;INTERVAL=abc', 'FREQ=NOPE', 'FREQ=WEEKLY;BYDAY=XX', 'FREQ=DAILY;INTERVAL=0'])(
+    'update_task %s: tool error INVALID_RECURRENCE, the API still answers',
+    async (rule) => {
+      const created = (
+        await rpc('tools/call', { name: 'add_inbox_task', arguments: { title: 'Arroser', durationMin: 5 } })
+      ).body;
+      const id = JSON.parse(created.result.content[0].text).id;
+      const res = (await rpc('tools/call', { name: 'update_task', arguments: { id, recurrenceRule: rule } }))
+        .body;
+      expect(res.result.isError).toBe(true);
+      expect(JSON.parse(res.result.content[0].text).code).toBe('INVALID_RECURRENCE');
+      expect((await api.inject({ url: '/api/v1/health' })).statusCode).toBe(200);
+    },
+  );
+});
