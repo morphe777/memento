@@ -5,7 +5,7 @@
 import { and, eq, gte, inArray, isNull, lt, lte, ne, or, schema, sql } from '@memento/db';
 import { type Ctx, ctxNow } from '../context.ts';
 import { DomainError } from '../errors.ts';
-import { nextOccurrence } from '../rules/recurrence.ts';
+import { isValidRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { addDays, daysBetween, isoWeekOf, parisDate, weekMonday, weekSunday } from '../time.ts';
 
 const { task, project, weekPlan, weekPlanItem } = schema;
@@ -99,7 +99,8 @@ export function getCalendar(ctx: Ctx, from: string, to: string) {
     const due = r.dueDate!;
     if (inRange(due)) entries.push({ ...base(r), date: due, kind: 'due', late: due < today });
     // RB-11: the next occurrences, created only when this one is done.
-    if (r.recurrenceRule) {
+    // C-05: an invalid stored rule shows the task, without occurrences, instead of breaking the page.
+    if (r.recurrenceRule && isValidRecurrenceRule(r.recurrenceRule)) {
       let d: string | null = due;
       for (let i = 0; i < MAX_OCCURRENCES && d && d <= to; i++) {
         d = nextOccurrence(r.recurrenceRule, d);
