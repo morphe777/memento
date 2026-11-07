@@ -1,6 +1,6 @@
 import type { AddressInfo } from 'node:net';
 import { openDb, runMigrations } from '@memento/db';
-import { seed } from '@memento/domain';
+import { parisDate, seed } from '@memento/domain';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../../api/src/app.ts';
 import { createToken, setUserPassword } from '../../api/src/auth.ts';
@@ -125,6 +125,14 @@ describe('MCP L6', () => {
   });
 
   it('a task created through MCP shows in "À revoir" as ai:claude, and marking it reviewed removes it', async () => {
+    // H-15: the database is shared by the file's tests; start from an empty « À revoir », whatever ran before.
+    const pending = (await api.inject({ url: '/api/v1/changes?actor=ai', headers: { cookie } })).json();
+    await api.inject({
+      method: 'POST',
+      url: '/api/v1/changes/mark-reviewed',
+      headers: { cookie },
+      payload: { ids: pending.map((c: { id: string }) => c.id) },
+    });
     const { body } = await rpc('tools/call', {
       name: 'add_inbox_task',
       arguments: { title: 'Rappeler le garage', durationMin: 30 },
@@ -161,7 +169,7 @@ describe('MCP L6', () => {
     const res = (
       await rpc('tools/call', {
         name: 'set_project_month',
-        arguments: { id, month: new Date().toISOString().slice(0, 7) },
+        arguments: { id, month: parisDate().slice(0, 7) }, // H-15: the app's month (Paris), not UTC's
       })
     ).body;
     expect(res.result.isError).toBe(true);

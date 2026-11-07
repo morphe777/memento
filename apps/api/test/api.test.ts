@@ -1,5 +1,5 @@
 import { openDb, runMigrations, schema } from '@memento/db';
-import { createObjective, createProject, listGroups, seed } from '@memento/domain';
+import { addDays, createObjective, createProject, listGroups, parisDate, seed } from '@memento/domain';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.ts';
 import { createToken, setUserPassword } from '../src/auth.ts';
@@ -424,7 +424,7 @@ describe('API L1 — business errors', () => {
       method: 'POST',
       url: `/api/v1/projects/${idea.id}/month`,
       headers: { cookie: s.cookie },
-      payload: { month: new Date().toISOString().slice(0, 7) },
+      payload: { month: parisDate().slice(0, 7) }, // H-15: the app's month (Paris), not UTC's
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('MONTH_PROJECT_INCOMPLETE');
@@ -461,7 +461,8 @@ describe('API Vue Plan (CA-12, CA-13)', () => {
   async function fixture() {
     const s = await setup();
     const ctx = { db: s.db, sqlite: s.sqlite, actor: 'me' as const };
-    const o = createObjective(ctx, { title: 'Obj', deadline: '2026-12-20' });
+    // H-15: a deadline ahead of today, whatever the day the suite runs.
+    const o = createObjective(ctx, { title: 'Obj', deadline: addDays(parisDate(), 50) });
     const groupIds = [listGroups(ctx)[0].id];
     const a = createProject(ctx, { title: 'A', groupIds, objectiveId: o.id, dependsOn: [] });
     const b = createProject(ctx, { title: 'B', groupIds, objectiveId: o.id, dependsOn: [] });

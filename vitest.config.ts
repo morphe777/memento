@@ -5,5 +5,6 @@ export default defineConfig({
     include: ['packages/*/test/**/*.test.ts', 'apps/*/test/**/*.test.ts'],
     environment: 'node',
     env: { TZ: 'Europe/Paris' },
+    setupFiles: ['./vitest.setup.ts'],
   },
 });
