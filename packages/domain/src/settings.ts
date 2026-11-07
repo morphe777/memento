@@ -4,9 +4,10 @@ import { z } from 'zod';
 import { DEFAULT_AI_PROMPTS } from './ai/prompts.ts';
 import { audit, type Ctx, tx } from './context.ts';
 import { DomainError } from './errors.ts';
+import { isoDate } from './schemas.ts';
 
 const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/);
-const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: 'Date invalide (AAAA-MM-JJ).' });
+const ymd = isoDate; // C-06: a real day, also when the holidays come through PATCH /settings
 /** D-78: a holiday period, both days included. */
 export const vacationSchema = z
   .object({ from: ymd, to: ymd })

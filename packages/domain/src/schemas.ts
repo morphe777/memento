@@ -1,14 +1,21 @@
 // Shared Zod input schemas: single source of truth for API validation, OpenAPI, web forms and MCP tools.
 import { z } from 'zod';
 
-const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date au format AAAA-MM-JJ');
+import { isValidDate } from './time.ts';
+
+/** C-06: the message of every date error (the API answers it with 422 INVALID_DATE). */
+export const DATE_MESSAGE = 'Date invalide (AAAA-MM-JJ, jour existant).';
+/** C-06: a real calendar day, YYYY-MM-DD (the format alone let 2026-10-45 through). */
+export const isoDate = z.string().refine(isValidDate, DATE_MESSAGE);
+const date = isoDate;
 const color = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const title = z.string().trim().min(1, 'Titre obligatoire').max(200);
 const text = z.string().max(20_000);
 export const uuid = z.string().uuid();
 
 export const idParam = z.object({ id: uuid });
-export const isoWeekParam = z.object({ isoWeek: z.string().regex(/^\d{4}-W\d{2}$/) });
+export const isoWeek = z.string().regex(/^\d{4}-W\d{2}$/, 'Semaine ISO (ex. 2026-W45)');
+export const isoWeekParam = z.object({ isoWeek });
 
 export const domainCreate = z.object({
   name: title,
@@ -220,6 +227,8 @@ export const weekPatchBody = z.object({
   budgetReason: z.string().max(2000).nullable().optional(),
 });
 
+/** A report period: 2026-W45, 2026-11 or 2026-Q4. */
+export const reportPeriodKey = z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/);
 export const reportListQuery = z.object({
   kind: z.enum(['week', 'month', 'quarter']).optional(),
   from: z.string().optional(),
@@ -227,7 +236,7 @@ export const reportListQuery = z.object({
 });
 export const reportGenerateBody = z.object({
   kind: z.enum(['week', 'month', 'quarter']),
-  periodKey: z.string().regex(/^\d{4}-(W\d{2}|\d{2}|Q[1-4])$/),
+  periodKey: reportPeriodKey,
 });
 
 export const capQuery = z.object({ month: monthKey.optional() });
