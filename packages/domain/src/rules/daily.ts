@@ -1,7 +1,7 @@
 // D-76: urgency tag of « Ma semaine ». D-77 / D-78: the evening report (« Bilan du jour »): a sentence summing up
 // the main achievements, the week KPIs, then the done tasks; encouragement and leads when nothing was done; the
 // weekend (D-116: Saturday, encouragement only). Pure functions: the service gathers the data.
-import { addDays, fmtMin, frDay, frShort } from '../time.ts';
+import { addDays, fmtMin, frDay, frShort, parisInstant } from '../time.ts';
 
 export type Urgency = 'late' | 'today' | 'soon' | null;
 
@@ -52,6 +52,7 @@ export interface RecapFacts {
   dayLabel: string; // e.g. « mercredi 28 octobre »
   /** D-116: `weekend` on Saturday (and Sunday asked by hand, then Saturday + Sunday). */
   mode: 'day' | 'weekend';
+  /** D-121: what the report covers, Paris wall clock (YYYY-MM-DDTHH:MM), start included, end excluded. */
   period: { from: string; to: string };
   nothingDone: boolean;
   done: { tasks: RecapTask[]; doneTasks: number; doneMin: number; completedProjects: string[] };
@@ -100,6 +101,16 @@ const capitalize = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
 
 function joinFr(parts: string[]): string {
   return parts.length < 2 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} et ${parts.at(-1)}`;
+}
+
+/**
+ * D-121: a report covers the time between two reports, not a calendar day: from the sending time of the day
+ * before (included) to the sending time of `day` (excluded), so that a task done after a report is in the next
+ * one, and in one only. On a clock change the window lasts 23 or 25 h: consecutive ones still touch.
+ * `days` = 2 for a Sunday asked by hand (D-116: Saturday + Sunday).
+ */
+export function recapWindow(day: string, time: string, days = 1): { start: Date; end: Date } {
+  return { start: parisInstant(addDays(day, -days), time), end: parisInstant(day, time) };
 }
 
 /** D-78: is this day inside a holiday period (both ends included)? */
@@ -207,7 +218,7 @@ export function composeDailyRecap(f: RecapFacts, lowPct = 80): Recap {
         : focus.length
           ? ''
           : ' Rien d’urgent en vue : avance à ton rythme.';
-    summary = `Pas de tâche cochée aujourd'hui, ça arrive : la semaine se joue sur plusieurs jours.${already}${rest}`;
+    summary = `Pas de tâche cochée ces dernières 24 h, ça arrive : la semaine se joue sur plusieurs jours.${already}${rest}`;
   }
   return { date: f.date, mode: f.mode, nothingDone: f.nothingDone, title, summary, kpis, done, focus };
 }
@@ -226,7 +237,7 @@ export function recapToTelegramHtml(r: Recap): string {
   if (r.done.length)
     lines.push(
       '',
-      `<b>${weekend ? 'Fait ce week-end' : 'Fait aujourd’hui'}</b>`,
+      `<b>${weekend ? 'Fait ce week-end' : 'Fait ces dernières 24 h'}</b>`,
       ...r.done.map((d) => `✓ ${escapeHtml(d)}`),
     );
   if (r.focus.length)

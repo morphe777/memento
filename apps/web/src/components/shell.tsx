@@ -615,13 +615,19 @@ function SidebarProjects() {
   });
   const now = useQuery(query(month));
   const later = useQuery(query(next));
+  // D-121: most important domain first (the API sorts by title, kept inside a domain).
+  const rank = new Map(dl.domains.map((d, i) => [d.id, i]));
+  const byDomain = (rows: Project[]) =>
+    [...rows].sort(
+      (a, b) => (rank.get(a.domainIds[0]) ?? rank.size) - (rank.get(b.domainIds[0]) ?? rank.size),
+    );
   const list = (title: string, rows: Project[] | undefined) =>
     rows && rows.length > 0 ? (
       <>
         <span className="px-2 pt-1 text-[11px]" style={{ color: 'var(--text-ghost)' }}>
           {title}
         </span>
-        {rows.map((p) => (
+        {byDomain(rows).map((p) => (
           <Link
             key={p.id}
             to="/projets/$id"

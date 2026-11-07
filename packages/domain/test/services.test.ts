@@ -654,6 +654,23 @@ describe('D-44 Inbox', () => {
     expect(inbox.later.map((t) => t.title)).toEqual(['Impôts']);
     expect(inbox.doneThisMonth).toEqual([]);
   });
+
+  it('D-121 open tasks by domain priority, no domain last, the manual order inside a domain', () => {
+    const ctx = makeCtx();
+    const [first, second] = listDomains(ctx);
+    createTask(ctx, { title: 'Sans domaine', durationMin: 30 });
+    createTask(ctx, { title: 'Second A', durationMin: 30, domainId: second.id });
+    createTask(ctx, { title: 'Premier A', durationMin: 30, domainId: first.id });
+    createTask(ctx, { title: 'Second B', durationMin: 30, domainId: second.id });
+    createTask(ctx, { title: 'Premier B', durationMin: 30, domainId: first.id });
+    expect(listInbox(ctx).open.map((t) => t.title)).toEqual([
+      'Premier A',
+      'Premier B',
+      'Second A',
+      'Second B',
+      'Sans domaine',
+    ]);
+  });
 });
 
 describe('D-43 Planifier le mois', () => {

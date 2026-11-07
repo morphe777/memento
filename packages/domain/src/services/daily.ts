@@ -4,6 +4,7 @@
 // D-78: no day streak but a week streak and the 4-week volume; encouragement and leads when nothing was done;
 // D-116: Saturday only when something was done (encouragement), nothing on Sunday (the week report comes then)
 // nor during holidays (jobs.ts).
+// D-121: a report covers the 24 h between two reports (from the sending time of the day before), not the calendar day.
 import { and, eq, gte, inArray, schema } from '@memento/db';
 import { z } from 'zod';
 import { parseJsonObject } from '../ai/propose.ts';
@@ -18,6 +19,7 @@ import {
   type RecapFacts,
   type RecapTask,
   recapToTelegramHtml,
+  recapWindow,
   reportNoticeHtml,
   sanitizeTelegramHtml,
   stripTelegramHtml,
@@ -34,6 +36,7 @@ import {
   isoWeekOf,
   isValidDate,
   monthOf,
+  parisClock,
   parisDate,
   shiftWeek,
   weekMonday,
@@ -49,7 +52,16 @@ const doneDate = (iso: string | null) => (iso ? parisDate(new Date(iso)) : null)
 const workMin = (t: { isExperience: boolean; actualMin: number | null; durationMin: number | null }) =>
   t.isExperience ? 0 : (t.actualMin ?? t.durationMin ?? 0);
 
-/** The facts of a day (today by default): what the report shows and what the AI receives. */
+const wallClock = (at: Date) => {
+  const c = parisClock(at);
+  return `${c.date}T${c.time}`;
+};
+
+/**
+ * The facts of a report: what it shows and what the AI receives. With a date (the evening job, a past day): the
+ * window ending at that day's sending time (D-121). Without (asked by hand, preview, « Envoyer maintenant »): the
+ * last 24 h up to now, otherwise what was just done would be missing once the evening report has gone.
+ */
 export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   const day = date ?? parisDate(ctxNow(ctx));
   if (!isValidDate(day)) throw new DomainError('VALIDATION', 'Date invalide (AAAA-MM-JJ).');
@@ -57,7 +69,16 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
   const settings = getSettings(ctx);
   // D-116: Saturday and Sunday are the weekend (on Sunday, asked by hand, it covers both days).
   const mode = isoDay(day) >= 6 ? ('weekend' as const) : ('day' as const);
-  const from = isoDay(day) === 7 ? addDays(day, -1) : day;
+  const days = isoDay(day) === 7 ? 2 : 1;
+  const time = settings['notify.daily_recap'].time;
+  const now = ctxNow(ctx);
+  const { start, end } = date
+    ? recapWindow(day, time, days)
+    : { start: new Date(now.getTime() - days * 86_400_000), end: new Date(now.getTime() + 1) }; // up to now included
+  const inWindow = (iso: string | null, a: Date, b: Date) => {
+    const at = iso ? Date.parse(iso) : Number.NaN;
+    return at >= a.getTime() && at < b.getTime();
+  };
   // Done tasks of the last year: the period, the last 7 days and the weekly volumes of the week streak.
   const since = new Date(Date.parse(`${addDays(day, -7 * STREAK_WEEKS)}T00:00:00Z`)).toISOString();
   const recent = ctx.db
@@ -71,10 +92,11 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
     const d = doneDate(t.doneAt) as string;
     byDay.set(d, [...(byDay.get(d) ?? []), t]);
   }
-  const done = recent.filter((t) => (doneDate(t.doneAt) as string) >= from);
+  const done = recent.filter((t) => inWindow(t.doneAt, start, end));
   const last7Days = Array.from({ length: 7 }, (_, i) => {
     const d = addDays(day, i - 7);
-    const ts = byDay.get(d) ?? [];
+    const w = recapWindow(d, time);
+    const ts = recent.filter((t) => inWindow(t.doneAt, w.start, w.end));
     return { date: d, doneTasks: ts.length, doneMin: ts.reduce((a, t) => a + workMin(t), 0) };
   });
 
@@ -137,10 +159,7 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
     });
   const allProjects = ctx.db.select().from(s.project).all();
   const completedProjects = allProjects
-    .filter((p) => {
-      const d = p.status === 'done' ? doneDate(p.completedAt) : null;
-      return !!d && d >= from && d <= day;
-    })
+    .filter((p) => p.status === 'done' && inWindow(p.completedAt, start, end))
     .map((p) => p.title);
   const nothingDone = done.length === 0 && completedProjects.length === 0;
 
@@ -151,7 +170,7 @@ export function getDailyFacts(ctx: Ctx, date?: string): RecapFacts {
     date: day,
     dayLabel: `${frDay(day)} ${d === 1 ? '1er' : d} ${frMonth(day)}`,
     mode,
-    period: { from, to: day },
+    period: { from: wallClock(start), to: wallClock(end) },
     nothingDone,
     done: {
       tasks,
@@ -249,7 +268,7 @@ export async function writeDailyReportWithAi(ctx: Ctx, facts: RecapFacts, llm: L
   const s = getSettings(ctx);
   const { text } = await llm({
     system: `${s['ai.prompt.daily']}\n\nRéponds uniquement par un objet JSON {"message": string} : message = le texte complet du message Telegram (HTML Telegram : <b>, <i>, <u>, <s>, <code>, <blockquote> ; retours à la ligne par \\n, pas de <br> ni de <p>).`,
-    user: `Écris le rapport du soir.\n\nDonnées Mémento (JSON, durées en minutes ; les tâches sont planifiées à la semaine, pas au jour ; aucune donnée de forme / énergie n'existe) :\n${JSON.stringify(
+    user: `Écris le rapport du soir.\n\nDonnées Mémento (JSON, durées en minutes ; les tâches sont planifiées à la semaine, pas au jour ; done couvre period, les 24 h entre deux bilans, à cheval sur deux jours : ne dis pas « aujourd'hui » pour ces tâches ; aucune donnée de forme / énergie n'existe) :\n${JSON.stringify(
       { ...facts, userContext: s['ai.instructions'].trim() || null },
     )}`,
     schema: z.toJSONSchema(AI_OUTPUT) as Record<string, unknown>,
