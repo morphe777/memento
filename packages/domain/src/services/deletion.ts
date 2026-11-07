@@ -44,12 +44,22 @@ export function deleteTask(ctx: Ctx, id: string) {
 export function deleteProject(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getProjectRow(ctx, id);
-    const taskIds = ctx.db
-      .select({ id: task.id })
+    // C-04: the journal keeps the content of each deleted task (D-35: the deletion stays definitive).
+    const deletedTasks = ctx.db
+      .select({
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        status: task.status,
+        durationMin: task.durationMin,
+        dueDate: task.dueDate,
+        isExperience: task.isExperience,
+        doneAt: task.doneAt,
+      })
       .from(task)
       .where(eq(task.projectId, id))
-      .all()
-      .map((t) => t.id);
+      .all();
+    const taskIds = deletedTasks.map((t) => t.id);
     removeTaskRows(ctx, taskIds);
     ctx.db.delete(projectGroup).where(eq(projectGroup.projectId, id)).run();
     ctx.db
@@ -59,7 +69,7 @@ export function deleteProject(ctx: Ctx, id: string) {
     ctx.db.delete(resourceLink).where(eq(resourceLink.ownerId, id)).run();
     ctx.db.delete(project).where(eq(project.id, id)).run();
     refreshObjectiveProgress(ctx, before.objectiveId);
-    audit(ctx, 'project', id, 'delete', { ...before, deletedTaskCount: taskIds.length }, null);
+    audit(ctx, 'project', id, 'delete', { ...before, deletedTaskCount: taskIds.length, deletedTasks }, null);
     return { ok: true as const };
   });
 }

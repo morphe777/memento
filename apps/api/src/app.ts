@@ -77,9 +77,11 @@ export async function buildApp(opts: AppOptions) {
   const READ_POSTS = new Set(['/api/v1/plan/preview', '/api/v1/tasks/parse']);
   // /auth/me answers 200 { authenticated: false } instead of 401 (no console noise before login).
   const SOFT = new Set(['/api/v1/auth/me']);
+  // C-02: decided on the route the router matched (decoded URL), never on the raw URL. No route = not an API
+  // handler: the not-found handler answers.
   app.addHook('onRequest', async (req, reply) => {
-    const path = req.url.split('?')[0];
-    if (!path.startsWith('/api/') || PUBLIC.has(path)) return;
+    const path = req.routeOptions.url;
+    if (!path?.startsWith('/api/') || PUBLIC.has(path)) return;
     const bearer = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
     req.principal = bearer
       ? A.tokenPrincipal(db, bearer)
@@ -100,6 +102,9 @@ export async function buildApp(opts: AppOptions) {
       return reply.code(422).send({ code: err.code, message: err.message, details: err.details });
     if (err instanceof D.NotFoundError)
       return reply.code(404).send({ code: 'NOT_FOUND', message: `${err.entity} introuvable` });
+    // C-06: an impossible or malformed date has its own code, whatever the field.
+    if (hasZodFastifySchemaValidationErrors(err) && err.validation.some((v) => v.message === D.DATE_MESSAGE))
+      return reply.code(422).send({ code: 'INVALID_DATE', message: D.DATE_MESSAGE, details: err.validation });
     if (hasZodFastifySchemaValidationErrors(err)) {
       return reply
         .code(400)
@@ -739,7 +744,7 @@ export async function buildApp(opts: AppOptions) {
       // D-77: the evening report: the plain version and the facts it is made from (the AI one is built on sending).
       r.get(
         '/daily-recap',
-        { schema: { ...tag('Rapports'), querystring: z.object({ date: z.string().optional() }) } },
+        { schema: { ...tag('Rapports'), querystring: z.object({ date: D.isoDate.optional() }) } },
         async (req) => D.getDailyRecap(ctx(req), req.query.date),
       );
       // D-78: holidays, also open to the AI token (« je suis en vacances du… au… »).
@@ -749,7 +754,7 @@ export async function buildApp(opts: AppOptions) {
       );
       r.delete(
         '/vacations/:from',
-        { schema: { ...tag('Réglages'), params: z.object({ from: z.string() }) } },
+        { schema: { ...tag('Réglages'), params: z.object({ from: D.isoDate }) } },
         async (req) => D.removeVacation(ctx(req), req.params.from),
       );
       r.get('/notify/status', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
@@ -792,7 +797,7 @@ export async function buildApp(opts: AppOptions) {
       r.post(
         '/notify/daily-recap/preview',
         {
-          schema: { ...tag('Réglages'), body: z.object({ date: z.string().optional() }).default({}) },
+          schema: { ...tag('Réglages'), body: z.object({ date: D.isoDate.optional() }).default({}) },
           preHandler: userOnly,
         },
         async (req) =>
@@ -801,7 +806,7 @@ export async function buildApp(opts: AppOptions) {
       r.post(
         '/notify/daily-recap/send',
         {
-          schema: { ...tag('Réglages'), body: z.object({ date: z.string().optional() }).default({}) },
+          schema: { ...tag('Réglages'), body: z.object({ date: D.isoDate.optional() }).default({}) },
           preHandler: userOnly,
         },
         async (req) => {
@@ -871,7 +876,8 @@ export async function buildApp(opts: AppOptions) {
       });
       r.post(
         '/changes/mark-reviewed',
-        { schema: { ...tag('À revoir'), body: D.markReviewedBody } },
+        // C-04: the human review (F-25) is the user's: a token cannot clear what an AI did.
+        { schema: { ...tag('À revoir'), body: D.markReviewedBody }, preHandler: userOnly },
         async (req) => ({
           updated: D.markReviewed(ctx(req), req.body),
         }),
