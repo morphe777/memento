@@ -1,0 +1,50 @@
+# H-17: automatic gate on every push and pull request. Publishing the image stays manual
+# (install/build-and-push.sh, from a commit tagged vX.Y.Z).
+name: CI
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4 # version from package.json « packageManager »
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Lint, types, tests
+        run: pnpm check
+      - name: Tests on other days and in random order (H-15)
+        run: pnpm test:dates
+      - name: Dependencies without high advisory
+        run: pnpm audit --audit-level high
+
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image (not pushed)
+        run: docker build --build-arg VERSION=ci -t memento:ci .
+      - name: No personal or design files in the image
+        run: |
+          docker run --rm --entrypoint sh memento:ci -c '
+            test -f docs/api/guide-ia.md &&
+            ! test -e maquettes && ! test -e memento-vue-plan && ! test -e data && ! test -e .git &&
+            test "$(ls docs)" = "api" && test "$(ls docs/api)" = "guide-ia.md"'
+      - name: Image scan (fixable high and critical vulnerabilities block)
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.1
+          image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress memento:ci

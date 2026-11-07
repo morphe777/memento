@@ -6,3 +6,6 @@ allowBuilds:
   esbuild: true
   "@biomejs/biome": true
   "@node-rs/argon2": true
+overrides:
+  # H-17: high advisory GHSA-27r3-jxmh-p828 (via @modelcontextprotocol/sdk > express); 2.4.0 is in express 5 range.
+  body-parser: 2.4.0

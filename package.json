@@ -1,6 +1,7 @@
 {
   "name": "memento",
-  "version": "0.30.0",
+  "version": "1.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@12.15.0",
@@ -15,6 +16,8 @@
     "mcp": "pnpm --filter @memento/mcp start",
     "db:generate": "pnpm --filter @memento/db generate",
     "db:migrate": "pnpm --filter @memento/db migrate",
+    "db:backup": "pnpm --filter @memento/db backup",
+    "db:verify": "pnpm --filter @memento/db verify",
     "db:seed": "pnpm --filter @memento/domain seed",
     "db:demo": "pnpm --filter @memento/domain demo",
     "db:check": "pnpm --filter @memento/domain check-data",
@@ -24,6 +27,7 @@
     "format": "biome format --write .",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "test:dates": "MEMENTO_TEST_NOW=2027-01-01T00:00:00Z vitest run --sequence.shuffle && MEMENTO_TEST_NOW=2026-11-30T23:30:00Z vitest run --sequence.shuffle",
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:demo-map": "pnpm --filter @memento/domain demo-map"
   },

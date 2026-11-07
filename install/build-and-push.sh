@@ -1,5 +1,6 @@
 #!/bin/bash
 # Build the Mémento image and push it to Docker Hub (morphe777/memento), tagged with the version and latest.
+# H-17: only from a clean commit tagged vVERSION (CI green), so every image matches one tagged commit.
 set -e
 
 DOCKER_USERNAME="morphe777"
@@ -19,6 +20,15 @@ if ! docker info &> /dev/null; then
 fi
 
 cd "$(dirname "$0")/.."
+
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+    echo "❌ Modifications non commitées : commiter d'abord"
+    exit 1
+fi
+if [ "$(git describe --exact-match --tags HEAD 2>/dev/null)" != "v$VERSION" ]; then
+    echo "❌ Le commit courant n'a pas le tag v$VERSION (git tag v$VERSION, après une CI verte)"
+    exit 1
+fi
 
 echo "🔨 Build de l'image..."
 docker build \
