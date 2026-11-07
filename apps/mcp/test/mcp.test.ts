@@ -205,3 +205,48 @@ describe('MCP L6', () => {
     expect(JSON.parse(res.result.content[0].text).code).toBe('READ_ONLY_TOKEN');
   });
 });
+
+describe('C-03 a tool only reaches its own route', () => {
+  const addTask = async (title: string) =>
+    JSON.parse(
+      (await rpc('tools/call', { name: 'add_inbox_task', arguments: { title, durationMin: 30 } })).body.result
+        .content[0].text,
+    ).id as string;
+  const exists = async (id: string) =>
+    (await api.inject({ url: `/api/v1/tasks/${id}`, headers: { cookie } })).statusCode === 200;
+
+  it.each([
+    (id: string) => `../tasks/${id}`,
+    (id: string) => `..%2Ftasks%2F${id}`,
+    (id: string) => `%2e%2e/tasks/${id}`,
+    () => '..',
+    () => '',
+  ])('remove_vacation with a path in « from » is refused and the task stays', async (from) => {
+    const id = await addTask('Ne pas supprimer');
+    const res = (await rpc('tools/call', { name: 'remove_vacation', arguments: { from: from(id) } })).body;
+    expect(res.result?.isError ?? !!res.error).toBe(true);
+    expect(await exists(id)).toBe(true);
+  });
+
+  it('path parameters are encoded segments: `..` and empty values are refused', async () => {
+    const { p } = await import('../src/index.ts');
+    expect(p`/vacations/${'2026-11-10'}`).toBe('/vacations/2026-11-10');
+    expect(p`/reports/by-period/${'week'}/${'a/b?c'}`).toBe('/reports/by-period/week/a%2Fb%3Fc');
+    expect(() => p`/vacations/${'..'}`).toThrow();
+    expect(() => p`/vacations/${'.'}`).toThrow();
+    expect(() => p`/reports/by-period/${undefined}/${'2026-W45'}`).toThrow();
+  });
+
+  it('week, date and period parameters follow the domain schemas', async () => {
+    for (const [name, args] of [
+      ['get_week_plan', { isoWeek: '../tasks' }],
+      ['propose_week_plan', { isoWeek: '2026-45' }],
+      ['get_report', { kind: 'week', periodKey: '../../tasks' }],
+      ['get_daily_recap', { date: '2026-13-45' }],
+      ['add_vacation', { from: '2026-10-45', to: '2026-10-46' }],
+    ] as const) {
+      const res = (await rpc('tools/call', { name, arguments: args })).body;
+      expect([name, res.result?.isError ?? !!res.error]).toEqual([name, true]);
+    }
+  });
+});

@@ -58,10 +58,30 @@ const fail = (e: unknown) => ({
 
 const currentWeek = async (call: Call) =>
   ((await call('GET', '/auth/me')) as { currentWeek: string }).currentWeek;
+/** A query string, already encoded: `p` leaves it as it is. */
+class Query {
+  constructor(readonly text: string) {}
+}
 const qs = (o: Record<string, unknown>) => {
-  const p = Object.entries(o).filter(([, v]) => v !== undefined && v !== '');
-  return p.length ? `?${p.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')}` : '';
+  const q = Object.entries(o).filter(([, v]) => v !== undefined && v !== '');
+  return new Query(
+    q.length ? `?${q.map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`).join('&')}` : '',
+  );
 };
+/**
+ * C-03: builds an API path. Every interpolated value is one encoded segment; an empty, `.` or `..` value is
+ * refused, so a tool can only reach its own route (the arguments are also checked by the domain schemas).
+ */
+export function p(parts: TemplateStringsArray, ...values: unknown[]): string {
+  return parts.reduce((out, part, i) => {
+    if (i === 0) return part;
+    const v = values[i - 1];
+    if (v instanceof Query) return out + v.text + part;
+    const seg = v === undefined || v === null ? '' : String(v);
+    if (seg === '' || seg === '.' || seg === '..') throw new Error(`Paramètre invalide : « ${seg} ».`);
+    return out + encodeURIComponent(seg) + part;
+  }, '');
+}
 
 export function buildServer(call: Call) {
   const server = new McpServer(
@@ -90,7 +110,7 @@ export function buildServer(call: Call) {
     'search',
     'Recherche globale (objectifs, projets, idées, tâches, Inbox), classée par pertinence.',
     { q: z.string() },
-    (a) => call('GET', `/search${qs({ q: a.q })}`),
+    (a) => call('GET', p`/search${qs({ q: a.q })}`),
   );
 
   tool(
@@ -102,9 +122,9 @@ export function buildServer(call: Call) {
       const [domains, objectives, monthProjects, execution, plan] = await Promise.all([
         call('GET', '/domains'),
         call('GET', '/objectives?status=active'),
-        call('GET', `/projects${qs({ status: 'active', month: new Date().toISOString().slice(0, 7) })}`),
-        call('GET', `/weeks/${week}/execution`),
-        call('GET', `/week-plans/${week}`),
+        call('GET', p`/projects${qs({ status: 'active', month: new Date().toISOString().slice(0, 7) })}`),
+        call('GET', p`/weeks/${week}/execution`),
+        call('GET', p`/week-plans/${week}`),
       ]);
       const ex = execution as { budget: unknown; doneMin: number; experiences: unknown; remaining: number };
       return {
@@ -127,15 +147,15 @@ export function buildServer(call: Call) {
     'list_objectives',
     'Liste les objectifs (filtres statut, trimestre ex. 2026-Q4).',
     { status: z.string().optional(), quarter: z.string().optional() },
-    (a) => call('GET', `/objectives${qs(a)}`),
+    (a) => call('GET', p`/objectives${qs(a)}`),
   );
   tool(
     'get_objective',
     "Détail d'un objectif avec son chemin : projets ordonnés et leurs prérequis (dependsOn ; waitingOn = prérequis non terminés, informatif).",
     { id: S.uuid },
     async (a) => ({
-      ...((await call('GET', `/objectives/${a.id}`)) as object),
-      path: await call('GET', `/objectives/${a.id}/path`),
+      ...((await call('GET', p`/objectives/${a.id}`)) as object),
+      path: await call('GET', p`/objectives/${a.id}/path`),
     }),
   );
   tool(
@@ -148,22 +168,22 @@ export function buildServer(call: Call) {
     'update_objective',
     'Modifie un objectif.',
     { id: S.uuid, ...S.objectivePatch.shape },
-    ({ id, ...rest }) => call('PATCH', `/objectives/${id}`, rest),
+    ({ id, ...rest }) => call('PATCH', p`/objectives/${id}`, rest),
   );
 
   tool(
     'list_projects',
     'Liste les projets (statuts séparés par des virgules : idea,active,paused,done,abandoned ; groupe ; domaine ; mois AAAA-MM).',
     S.projectListQuery.shape,
-    (a) => call('GET', `/projects${qs(a)}`),
+    (a) => call('GET', p`/projects${qs(a)}`),
   );
   tool(
     'get_project',
     'Détail d’un projet avec ses tâches dans l’ordre (verrous inclus : dans un projet séquentiel une tâche attend la précédente), ses prérequis (dependsOn, waitingOn, blocked : informatifs, ils ne bloquent jamais le projet) et ses ressources.',
     { id: S.uuid },
     async (a) => ({
-      ...((await call('GET', `/projects/${a.id}`)) as object),
-      tasks: await call('GET', `/tasks?projectId=${a.id}`),
+      ...((await call('GET', p`/projects/${a.id}`)) as object),
+      tasks: await call('GET', p`/tasks${qs({ projectId: a.id })}`),
     }),
   );
   tool(
@@ -188,11 +208,11 @@ export function buildServer(call: Call) {
         )
         .min(1),
     },
-    async ({ tasks, ...p }) => {
-      const project = (await call('POST', '/projects', p)) as { id: string };
+    async ({ tasks, ...body }) => {
+      const project = (await call('POST', '/projects', body)) as { id: string };
       await call('POST', '/tasks/batch', { projectId: project.id, tasks });
       try {
-        return await call('POST', `/projects/${project.id}/promote`);
+        return await call('POST', p`/projects/${project.id}/promote`);
       } catch (e) {
         return { project, promoted: false, error: e instanceof ApiFailure ? e.data : String(e) };
       }
@@ -202,25 +222,25 @@ export function buildServer(call: Call) {
     'update_project',
     'Modifie un projet ou une idée (titre, critère, dates, objectif, projet libre isFree, statut : ready / paused / abandoned / idea). Pour le projet du mois, utiliser set_project_month.',
     { id: S.uuid, ...S.projectPatch.shape },
-    ({ id, ...rest }) => call('PATCH', `/projects/${id}`, rest),
+    ({ id, ...rest }) => call('PATCH', p`/projects/${id}`, rest),
   );
   tool(
     'duplicate_project',
     'Duplique un projet (D-109) : mêmes groupes, objectif, critère, description, tâches toutes à faire ; ni mois, ni dates, ni récurrence. Titre par défaut « … (copie) ». Une idée reste une idée, sinon la copie est « prête ».',
     { id: S.uuid, title: S.projectDuplicateBody.shape.title },
-    ({ id, ...rest }) => call('POST', `/projects/${id}/duplicate`, rest),
+    ({ id, ...rest }) => call('POST', p`/projects/${id}/duplicate`, rest),
   );
   tool(
     'duplicate_objective',
     'Duplique un objectif (D-109) : mêmes champs, mesure remise à 0, même trimestre ; avec ses projets (hors abandonnés) et l’ordre de leur chemin, sauf withProjects: false.',
     { id: S.uuid, ...S.objectiveDuplicateBody.shape },
-    ({ id, ...rest }) => call('POST', `/objectives/${id}/duplicate`, rest),
+    ({ id, ...rest }) => call('POST', p`/objectives/${id}/duplicate`, rest),
   );
   tool(
     'promote_idea',
     'Promeut une idée en projet « prêt » (backlog). Jamais bloquant : les manques RB-02 sont renvoyés dans gaps.',
     { id: S.uuid },
-    (a) => call('POST', `/projects/${a.id}/promote`),
+    (a) => call('POST', p`/projects/${a.id}/promote`),
   );
   tool(
     'get_guide',
@@ -244,19 +264,19 @@ export function buildServer(call: Call) {
     'set_objective_quarter',
     'Place un objectif dans un trimestre (AAAA-Qn) : planification du trimestre. Sa deadline est ramenée dans le trimestre si besoin.',
     { id: S.uuid, quarter: S.quarterKey },
-    (a) => call('POST', `/objectives/${a.id}/quarter`, { quarter: a.quarter }),
+    (a) => call('POST', p`/objectives/${a.id}/quarter`, { quarter: a.quarter }),
   );
   tool(
     'set_project_month',
     'Choisit un projet prêt comme projet du mois (month = AAAA-MM ; mois courant = actif) ou le retire (month = null). Exige RB-02 complet.',
     { id: S.uuid, month: S.monthKey.nullable() },
-    (a) => call('POST', `/projects/${a.id}/month`, { month: a.month }),
+    (a) => call('POST', p`/projects/${a.id}/month`, { month: a.month }),
   );
   tool(
     'complete_project',
     'Termine un projet : critère de succès atteint ? (oui/non).',
     { id: S.uuid, success: z.boolean() },
-    (a) => call('POST', `/projects/${a.id}/complete`, { success: a.success }),
+    (a) => call('POST', p`/projects/${a.id}/complete`, { success: a.success }),
   );
 
   tool(
@@ -266,7 +286,7 @@ export function buildServer(call: Call) {
     () => call('GET', '/meta-objectives'),
   );
   tool('get_meta_objective', "Détail d'un méta-objectif avec ses objectifs.", { id: S.uuid }, (a) =>
-    call('GET', `/meta-objectives/${a.id}`),
+    call('GET', p`/meta-objectives/${a.id}`),
   );
   tool(
     'create_meta_objective',
@@ -278,32 +298,32 @@ export function buildServer(call: Call) {
     'update_meta_objective',
     'Modifie un méta-objectif (titre, description, horizon, statut, outcomeTitle, primaryDomainId).',
     { id: S.uuid, ...S.metaObjectivePatch.shape },
-    ({ id, ...rest }) => call('PATCH', `/meta-objectives/${id}`, rest),
+    ({ id, ...rest }) => call('PATCH', p`/meta-objectives/${id}`, rest),
   );
   tool(
     'set_objective_meta',
     'Rattache un objectif à un méta-objectif (metaObjectiveId = null : aucun).',
     { id: S.uuid, metaObjectiveId: S.uuid.nullable() },
-    (a) => call('PATCH', `/objectives/${a.id}`, { metaObjectiveId: a.metaObjectiveId }),
+    (a) => call('PATCH', p`/objectives/${a.id}`, { metaObjectiveId: a.metaObjectiveId }),
   );
 
   tool(
     'set_project_dependencies',
     "Remplace les prérequis d'un projet (dependsOn = ids des projets à terminer avant). Les prérequis ne bloquent jamais le mois ni la semaine ; refus DEPENDENCY_CYCLE / DEPENDENCY_SELF / DEPENDENCY_NOT_FOUND.",
     { id: S.uuid, ...S.projectDependenciesBody.shape },
-    (a) => call('PUT', `/projects/${a.id}/dependencies`, { dependsOn: a.dependsOn }),
+    (a) => call('PUT', p`/projects/${a.id}/dependencies`, { dependsOn: a.dependsOn }),
   );
   tool(
     'add_project_dependency',
     'Ajoute un prérequis à un projet (dependsOnId = projet à terminer avant).',
     { id: S.uuid, dependsOnId: S.uuid },
-    (a) => call('POST', `/projects/${a.id}/dependencies`, { dependsOnId: a.dependsOnId }),
+    (a) => call('POST', p`/projects/${a.id}/dependencies`, { dependsOnId: a.dependsOnId }),
   );
   tool(
     'remove_project_dependency',
     "Retire un prérequis d'un projet.",
     { id: S.uuid, dependsOnId: S.uuid },
-    (a) => call('DELETE', `/projects/${a.id}/dependencies/${a.dependsOnId}`),
+    (a) => call('DELETE', p`/projects/${a.id}/dependencies/${a.dependsOnId}`),
   );
 
   const planOps = z
@@ -346,7 +366,7 @@ export function buildServer(call: Call) {
     (a) =>
       call(
         'GET',
-        `/plan-graph${qs({ ...a, includeReserve: a.includeReserve === undefined ? undefined : String(a.includeReserve) })}`,
+        p`/plan-graph${qs({ ...a, includeReserve: a.includeReserve === undefined ? undefined : String(a.includeReserve) })}`,
       ),
   );
   tool(
@@ -376,13 +396,13 @@ export function buildServer(call: Call) {
     (a) => call('POST', '/tasks/batch', a),
   );
   tool('update_task', 'Modifie une tâche.', { id: S.uuid, ...S.taskPatch.shape }, ({ id, ...rest }) =>
-    call('PATCH', `/tasks/${id}`, rest),
+    call('PATCH', p`/tasks/${id}`, rest),
   );
   tool(
     'complete_task',
     'Coche une tâche (une tâche Inbox récurrente crée sa prochaine occurrence). actualMin : temps réellement passé en minutes, si différent de l’estimation. Une tâche qui n’était prévue ni cette semaine ni la précédente est tracée « hors planification » (D-99).',
     { id: S.uuid, actualMin: z.number().int().min(1).max(6000).optional() },
-    (a) => call('POST', `/tasks/${a.id}/complete`, a.actualMin ? { actualMin: a.actualMin } : undefined),
+    (a) => call('POST', p`/tasks/${a.id}/complete`, a.actualMin ? { actualMin: a.actualMin } : undefined),
   );
   tool(
     'reorder_tasks',
@@ -400,7 +420,7 @@ export function buildServer(call: Call) {
     'get_calendar',
     'Calendrier des tâches (D-113) de from à to (AAAA-MM-JJ, 121 jours max) : entries = tâches à faire à leur deadline (late si dépassée), faites au jour où elles l’ont été, prochaines occurrences des récurrentes (kind occurrence) ; planned = tâches prévues dans le plan d’une semaine sans jour dans cette semaine.',
     S.calendarQuery.shape,
-    (a) => call('GET', `/calendar?from=${a.from}&to=${a.to}`),
+    (a) => call('GET', p`/calendar${qs({ from: a.from, to: a.to })}`),
   );
   tool(
     'parse_task',
@@ -412,7 +432,7 @@ export function buildServer(call: Call) {
     'get_cap',
     'Cap (D-100) : objectifs du trimestre par méta-objectif et projets du mois, chacun avec son pourquoi en quelques mots (motive, mot-clé entre **…**). month = AAAA-MM, défaut = mois en cours. Le pourquoi se modifie par update_meta_objective / update_objective / update_project (champ motive).',
     { month: S.monthKey.optional() },
-    (a) => call('GET', `/cap${a.month ? `?month=${a.month}` : ''}`),
+    (a) => call('GET', p`/cap${qs({ month: a.month })}`),
   );
   tool(
     'add_inbox_task',
@@ -420,7 +440,7 @@ export function buildServer(call: Call) {
     {
       title: z.string(),
       durationMin: S.duration.optional(),
-      dueDate: z.string().optional(),
+      dueDate: S.isoDate.optional(),
       domainId: S.uuid.optional(),
     },
     (a) => call('POST', '/tasks', { ...a, projectId: null }),
@@ -429,27 +449,27 @@ export function buildServer(call: Call) {
   tool(
     'get_week_plan',
     'Page « Planifier la semaine » : bacs, tâches visibles, pourquoi, budget, alertes. Semaine ISO (ex. 2026-W45), défaut = semaine en cours.',
-    { isoWeek: z.string().optional() },
-    async (a) => call('GET', `/week-plans/${a.isoWeek ?? (await currentWeek(call))}`),
+    { isoWeek: S.isoWeek.optional() },
+    async (a) => call('GET', p`/week-plans/${a.isoWeek ?? (await currentWeek(call))}`),
   );
   tool(
     'propose_week_plan',
     'Relance le moteur de proposition pour une semaine.',
-    { isoWeek: z.string() },
-    (a) => call('POST', `/week-plans/${a.isoWeek}/propose`),
+    { isoWeek: S.isoWeek },
+    (a) => call('POST', p`/week-plans/${a.isoWeek}/propose`),
   );
   tool(
     'set_week_plan_items',
     'Remplace la sélection de la semaine (kind = week ou bonus).',
-    { isoWeek: z.string(), ...S.weekItemsBody.shape },
-    ({ isoWeek, items }) => call('PUT', `/week-plans/${isoWeek}/items`, { items }),
+    { isoWeek: S.isoWeek, ...S.weekItemsBody.shape },
+    ({ isoWeek, items }) => call('PUT', p`/week-plans/${isoWeek}/items`, { items }),
   );
 
   tool(
     'list_reports',
     'Liste les rapports figés (kind = week, month, quarter).',
     S.reportListQuery.shape,
-    (a) => call('GET', `/reports${qs(a)}`),
+    (a) => call('GET', p`/reports${qs(a)}`),
   );
   tool(
     'get_report',
@@ -457,16 +477,16 @@ export function buildServer(call: Call) {
     {
       id: S.uuid.optional(),
       kind: z.enum(['week', 'month', 'quarter']).optional(),
-      periodKey: z.string().optional(),
+      periodKey: S.reportPeriodKey.optional(),
     },
     (a) =>
-      a.id ? call('GET', `/reports/${a.id}`) : call('GET', `/reports/by-period/${a.kind}/${a.periodKey}`),
+      a.id ? call('GET', p`/reports/${a.id}`) : call('GET', p`/reports/by-period/${a.kind}/${a.periodKey}`),
   );
   tool(
     'get_daily_recap',
     'Bilan du jour (D-77, D-78) : faits des 24 dernières heures (D-121 ; le dimanche : 48 h ; ou date = AAAA-MM-JJ : les 24 h jusqu’à l’heure d’envoi de ce jour), 7 derniers jours, semaines d’affilée et volume des 4 semaines, semaine, pistes si rien n’est fait, et le rapport simple.',
-    { date: z.string().optional() },
-    (a) => call('GET', `/daily-recap${qs(a)}`),
+    { date: S.isoDate.optional() },
+    (a) => call('GET', p`/daily-recap${qs(a)}`),
   );
   tool(
     'list_vacations',
@@ -477,20 +497,20 @@ export function buildServer(call: Call) {
   tool(
     'add_vacation',
     'Déclare des vacances du from au to (AAAA-MM-JJ, inclus) : aucun bilan du soir, la série de semaines ne casse pas.',
-    { from: z.string(), to: z.string() },
+    { from: S.isoDate, to: S.isoDate },
     (a) => call('POST', '/vacations', a),
   );
   tool(
     'remove_vacation',
     'Supprime la période de vacances qui commence le from (AAAA-MM-JJ).',
-    { from: z.string() },
-    (a) => call('DELETE', `/vacations/${a.from}`),
+    { from: S.isoDate },
+    (a) => call('DELETE', p`/vacations/${a.from}`),
   );
   tool(
     'list_changes',
     'Ce qui a changé (F-25) : since = 24h | 7d | ISO, actor = all | me | ai.',
     S.changesQuery.shape,
-    (a) => call('GET', `/changes${qs(a)}`),
+    (a) => call('GET', p`/changes${qs(a)}`),
   );
   tool(
     'add_resource',
@@ -503,22 +523,22 @@ export function buildServer(call: Call) {
   const DELETE_WARNING =
     "Suppression DÉFINITIVE (journalisée). Uniquement si l'utilisateur l'a demandé explicitement ; sinon préfère abandonner / annuler.";
   tool('delete_task', `Supprime une tâche. ${DELETE_WARNING}`, { id: S.uuid }, (a) =>
-    call('DELETE', `/tasks/${a.id}`),
+    call('DELETE', p`/tasks/${a.id}`),
   );
   tool('delete_project', `Supprime un projet avec ses tâches. ${DELETE_WARNING}`, { id: S.uuid }, (a) =>
-    call('DELETE', `/projects/${a.id}`),
+    call('DELETE', p`/projects/${a.id}`),
   );
   tool(
     'delete_objective',
     `Supprime un objectif ; ses projets restent, hors objectif. ${DELETE_WARNING}`,
     { id: S.uuid },
-    (a) => call('DELETE', `/objectives/${a.id}`),
+    (a) => call('DELETE', p`/objectives/${a.id}`),
   );
   tool(
     'delete_meta_objective',
     `Supprime un méta-objectif ; ses objectifs restent, sans méta-objectif. ${DELETE_WARNING}`,
     { id: S.uuid },
-    (a) => call('DELETE', `/meta-objectives/${a.id}`),
+    (a) => call('DELETE', p`/meta-objectives/${a.id}`),
   );
   return server;
 }
