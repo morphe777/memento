@@ -1,8 +1,12 @@
 // RB-06 (DM-51, D-101): order = implicit prerequisite in sequential projects. A « libre » task starts a new
 // chain: it waits for nothing, and the non-free tasks under it follow it (they wait for the previous task, up to
 // that free task), not the tasks above it. A task is available when the previous task of its chain is done or
-// chosen in the current plan, and all its explicit prerequisites (RB-07) are done or chosen.
+// chosen in the current plan, and all its explicit prerequisites (RB-07) are done or chosen, wherever they are
+// (H-09: a prerequisite in another project counts by its real status).
 // Parallel projects: all tasks available.
+
+/** D-42: the projects whose tasks can be planned (engine, manual choice, carry-over RB-10 / H-08). */
+export const isPlannableProject = (status: string): boolean => status === 'active' || status === 'ready';
 
 export interface AvailTask {
   id: string;
@@ -15,7 +19,8 @@ export function availableTaskIds(
   tasks: AvailTask[],
   mode: 'sequential' | 'parallel',
   chosen: ReadonlySet<string> = new Set(),
-  deps: { taskId: string; dependsOnTaskId: string }[] = [],
+  // H-09: a prerequisite outside these tasks (another project, the Inbox) is judged on its own status.
+  deps: { taskId: string; dependsOnTaskId: string; dependsOnStatus?: AvailTask['status'] }[] = [],
   doneElsewhere: ReadonlySet<string> = new Set(),
 ): Set<string> {
   const ordered = [...tasks].sort((a, b) => a.position - b.position);
@@ -24,7 +29,10 @@ export function availableTaskIds(
   const depsOk = (id: string) =>
     deps
       .filter((d) => d.taskId === id)
-      .every((d) => satisfied(d.dependsOnTaskId) || status.get(d.dependsOnTaskId) === 'cancelled');
+      .every((d) => {
+        const s = status.get(d.dependsOnTaskId) ?? d.dependsOnStatus;
+        return s === 'done' || s === 'cancelled' || satisfied(d.dependsOnTaskId);
+      });
   const out = new Set<string>();
   let chainOpen = true;
   for (const t of ordered) {

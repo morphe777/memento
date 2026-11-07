@@ -2,7 +2,7 @@ import { and, asc, eq, gte, inArray, isNull, lt, or, schema } from '@memento/db'
 // Week planning (§6, V-16) and execution (V-18). RB-06, RB-09, RB-10, RB-14.
 import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
-import { availableTaskIds, blockedProjectIds } from '../rules/availability.ts';
+import { availableTaskIds, blockedProjectIds, isPlannableProject } from '../rules/availability.ts';
 import { deadlineUrgency } from '../rules/daily.ts';
 import type { PaceCalendar } from '../rules/delay.ts';
 import {
@@ -31,21 +31,12 @@ import {
   weekMonday,
   weekSunday,
 } from '../time.ts';
+import { taskDependencies } from './dependencies.ts';
 import { serializeProjects } from './projects.ts';
 import { getOrCreatePlan, getPlanRow } from './unplanned.ts';
 
-const {
-  weekPlan,
-  weekPlanItem,
-  task,
-  project,
-  projectGroup,
-  group,
-  domain,
-  objective,
-  taskDependency,
-  projectDependency,
-} = schema;
+const { weekPlan, weekPlanItem, task, project, projectGroup, group, domain, objective, projectDependency } =
+  schema;
 
 export function assertWeek(isoWeek: string) {
   if (!isValidIsoWeek(isoWeek)) throw new DomainError('INVALID_WEEK', `Semaine invalide : ${isoWeek}`);
@@ -137,7 +128,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
   const blocked = blockedProjectIds(allProjects, deps);
   const titleOf = new Map(allProjects.map((p) => [p.id, p.title]));
   const statusOf = new Map(allProjects.map((p) => [p.id, p.status]));
-  const active = allProjects.filter((p) => p.status === 'active' || p.status === 'ready'); // D-42
+  const active = allProjects.filter((p) => isPlannableProject(p.status)); // D-42
   const serialized = serializeProjects(ctx, active);
   const objectives = ctx.db.select().from(objective).all();
   const projects: EngineProject[] = serialized.map((p) => {
@@ -203,7 +194,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     domains: domains.map((d) => ({ id: d.id, name: d.name, priorityRank: d.priorityRank, weight: d.weight })),
     projects,
     tasks,
-    taskDeps: ctx.db.select().from(taskDependency).all(),
+    taskDeps: taskDependencies(ctx),
     paceCalendar: paceCalendar(ctx),
   };
 }
@@ -249,7 +240,7 @@ export function closeWeek(ctx: Ctx, isoWeek: string) {
     const plan = getPlanRow(ctx, isoWeek);
     if (!plan || plan.closedAt) return { carried: 0 };
     const items = planItems(ctx, plan.id).filter((i) => i.kind === 'week');
-    const todo = items.length
+    const planned = items.length
       ? ctx.db
           .select()
           .from(task)
@@ -264,6 +255,16 @@ export function closeWeek(ctx: Ctx, isoWeek: string) {
           )
           .all()
       : [];
+    // H-08 (RB-10): only what can still be planned, a task of the Inbox or of a plannable project (D-42); a task
+    // of a project finished, abandoned or paused during the week is left where it is, not counted as postponed.
+    const statusOf = new Map(
+      ctx.db
+        .select({ id: project.id, status: project.status })
+        .from(project)
+        .all()
+        .map((p) => [p.id, p.status]),
+    );
+    const todo = planned.filter((t) => !t.projectId || isPlannableProject(statusOf.get(t.projectId) ?? ''));
     const next = todo.length ? getOrCreatePlan(ctx, shiftWeek(isoWeek, 1)) : null;
     for (const t of todo) {
       ctx.db
@@ -322,8 +323,29 @@ export function proposeWeek(ctx: Ctx, isoWeek: string) {
     const plan = getOrCreatePlan(ctx, isoWeek);
     // D-52: no more validation step, so a (formerly) validated week can be recomputed too.
     const items = planItems(ctx, plan.id);
-    // Engine suggestions are replaced; my choices, AI choices and carried-over tasks are kept.
-    const keep = items.filter((i) => i.source !== 'engine' || (i.why ?? '').startsWith('Reportée'));
+    // Engine suggestions are replaced; my choices, AI choices, carried-over tasks and (H-10) the lines already done
+    // are kept, as setWeekItems does: « Fait » never goes down.
+    const doneIds = new Set(
+      items.length
+        ? ctx.db
+            .select({ id: task.id })
+            .from(task)
+            .where(
+              and(
+                inArray(
+                  task.id,
+                  items.map((i) => i.taskId),
+                ),
+                eq(task.status, 'done'),
+              ),
+            )
+            .all()
+            .map((t) => t.id)
+        : [],
+    );
+    const keep = items.filter(
+      (i) => i.source !== 'engine' || (i.why ?? '').startsWith('Reportée') || doneIds.has(i.taskId),
+    );
     ctx.db
       .delete(weekPlanItem)
       .where(and(eq(weekPlanItem.weekPlanId, plan.id), eq(weekPlanItem.source, 'engine')))
@@ -412,13 +434,13 @@ export function setWeekItems(
     if (rows.length !== ids.length)
       throw new DomainError('TASK_NOT_FOUND', 'Tâche inconnue dans la sélection.');
     const chosen = new Set(ids);
-    const deps = ctx.db.select().from(taskDependency).all();
+    const deps = taskDependencies(ctx);
     const ahead = plannedAhead(ctx, isoWeek); // D-116: planned in a week in between = done by then
     for (const t of rows.filter((r) => !beforeIds.has(r.id))) {
       if (t.status !== 'todo') throw new DomainError('TASK_NOT_TODO', `« ${t.title} » n'est plus à faire.`);
       if (!t.projectId) continue;
       const p = ctx.db.select().from(project).where(eq(project.id, t.projectId)).get()!;
-      if (p.status !== 'active' && p.status !== 'ready')
+      if (!isPlannableProject(p.status))
         throw new DomainError('PROJECT_NOT_ACTIVE', `« ${p.title} » n'est ni prêt ni projet du mois.`);
       const siblings = ctx.db.select().from(task).where(eq(task.projectId, p.id)).all();
       if (!availableTaskIds(siblings, p.sequenceMode, chosen, deps, ahead).has(t.id)) {

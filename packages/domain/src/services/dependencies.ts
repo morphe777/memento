@@ -6,7 +6,19 @@ import { DomainError } from '../errors.ts';
 import { assertNoCycle } from '../rules/graph.ts';
 import { type DepEdge, isLinearChain, topoOrder } from '../rules/plan.ts';
 
-const { project, projectDependency, setting } = schema;
+const { project, projectDependency, setting, task, taskDependency } = schema;
+
+/** RB-07, H-09: every task prerequisite with the prerequisite's own status (it may sit in another project). */
+export const taskDependencies = (ctx: Ctx) =>
+  ctx.db
+    .select({
+      taskId: taskDependency.taskId,
+      dependsOnTaskId: taskDependency.dependsOnTaskId,
+      dependsOnStatus: task.status,
+    })
+    .from(taskDependency)
+    .innerJoin(task, eq(task.id, taskDependency.dependsOnTaskId))
+    .all();
 
 export const allDependencies = (ctx: Ctx): DepEdge[] => ctx.db.select().from(projectDependency).all();
 

@@ -9,6 +9,7 @@ import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
 import { addDays, currentWeek, parisDate } from '../time.ts';
+import { taskDependencies } from './dependencies.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 import { listDomains } from './referential.ts';
 import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
@@ -88,7 +89,7 @@ export function listTasks(ctx: Ctx, f: { projectId?: string | 'inbox'; status?: 
     )
     .orderBy(asc(task.position), asc(task.createdAt))
     .all();
-  const deps = ctx.db.select().from(taskDependency).all();
+  const deps = taskDependencies(ctx);
   const chosen = currentChosen(ctx);
   const projectIds = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
   const projects = projectIds.length

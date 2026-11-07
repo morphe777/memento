@@ -93,7 +93,7 @@ export interface EngineInput {
   domains: EngineDomain[];
   projects: EngineProject[];
   tasks: EngineTask[];
-  taskDeps: { taskId: string; dependsOnTaskId: string }[];
+  taskDeps: { taskId: string; dependsOnTaskId: string; dependsOnStatus?: 'todo' | 'done' | 'cancelled' }[];
   /** D-118: time available per day for the delay; absent = every day weighs the same. */
   paceCalendar?: PaceCalendar;
 }
