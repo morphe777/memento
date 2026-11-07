@@ -1,6 +1,7 @@
 {
   "name": "@memento/db",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": {
@@ -8,7 +9,9 @@
   },
   "scripts": {
     "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate-cli.ts"
+    "migrate": "tsx src/migrate-cli.ts",
+    "backup": "tsx src/backup-cli.ts",
+    "verify": "tsx src/verify-cli.ts"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",
