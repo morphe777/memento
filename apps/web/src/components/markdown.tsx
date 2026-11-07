@@ -1,4 +1,6 @@
 // Descriptions are Markdown (GFM: lists, tables, task lists, links). Raw HTML is not rendered (react-markdown default).
+// H-02: an image is shown as a link, never loaded: a description (written by the AI too) cannot make the browser
+// call another server. The CSP (img-src 'self' data:) blocks it as well.
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
@@ -22,6 +24,16 @@ export function Markdown({ text, plain = false }: { text: string; plain?: boolea
             ) : (
               <a {...props} target="_blank" rel="noreferrer noopener" />
             ),
+          img: ({ src, alt }) => {
+            const label = `Image${alt ? ` : ${alt}` : ''}`;
+            return plain || typeof src !== 'string' ? (
+              <span>{label}</span>
+            ) : (
+              <a href={src} target="_blank" rel="noreferrer noopener">
+                {label}
+              </a>
+            );
+          },
         }}
       >
         {text}

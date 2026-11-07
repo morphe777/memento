@@ -37,6 +37,7 @@ const app = await buildApp({
   cookieSecure: process.env.MEMENTO_COOKIE_SECURE === 'true',
   logger: true,
   backupDir: dirname(resolveDbFile()),
+  trustProxy: process.env.MEMENTO_TRUST_PROXY,
 });
 const port = Number(process.env.MEMENTO_API_PORT ?? 4500);
 const host = process.env.MEMENTO_HOST ?? '127.0.0.1';

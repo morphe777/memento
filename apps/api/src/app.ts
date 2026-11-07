@@ -9,7 +9,7 @@ import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import type { Db, SqliteDatabase } from '@memento/db';
 import * as D from '@memento/domain';
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import {
   hasZodFastifySchemaValidationErrors,
   jsonSchemaTransform,
@@ -18,9 +18,26 @@ import {
   type ZodTypeProvider,
 } from 'fastify-type-provider-zod';
 import { z } from 'zod';
+import { TOKEN_ROUTES, tokenAccess } from './access.ts';
 import * as A from './auth.ts';
 
 const GUIDE_FILE = resolve(import.meta.dirname, '../../../docs/api/guide-ia.md');
+
+/** H-02. Inline styles stay allowed (React `style` and the libraries), scripts never. */
+export const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "worker-src 'self'",
+  "manifest-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 export interface AppOptions {
   db: Db;
@@ -33,9 +50,17 @@ export interface AppOptions {
   backupDir?: string;
   /** Replaces the configured AI provider (tests). */
   llm?: D.Llm;
+  /**
+   * H-01: addresses (IP or CIDR, comma separated) of the reverse proxy whose X-Forwarded-For is believed
+   * (MEMENTO_TRUST_PROXY). None by default: the client address is the TCP peer, a header cannot change it.
+   */
+  trustProxy?: string;
 }
 
 declare module 'fastify' {
+  interface FastifyInstance {
+    apiRoutes: string[];
+  }
   interface FastifyRequest {
     principal: A.Principal | null;
   }
@@ -44,8 +69,15 @@ declare module 'fastify' {
 export async function buildApp(opts: AppOptions) {
   const app = Fastify({
     logger: opts.logger ? { redact: ['req.headers.authorization', 'req.headers.cookie'] } : false,
-    trustProxy: true,
+    trustProxy: opts.trustProxy?.trim() || false,
   });
+  // H-03, H-14: every API route, for the token list check below and the access matrix test.
+  const apiRoutes: string[] = [];
+  app.addHook('onRoute', (r) => {
+    if (!r.url.startsWith('/api/')) return;
+    for (const m of [r.method].flat()) if (m !== 'HEAD') apiRoutes.push(`${m} ${r.url}`);
+  });
+  app.decorate('apiRoutes', apiRoutes);
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   await app.register(fastifyCookie);
@@ -70,11 +102,14 @@ export async function buildApp(opts: AppOptions) {
     reply.header('X-Content-Type-Options', 'nosniff');
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Referrer-Policy', 'same-origin');
+    // H-02: only this server's scripts, images and connections (no remote image in a description).
+    reply.header('Content-Security-Policy', CSP);
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+    if (opts.cookieSecure) reply.header('Strict-Transport-Security', 'max-age=31536000');
   });
 
   // Authentication for every /api/v1 route except login, health and the OpenAPI document.
   const PUBLIC = new Set(['/api/v1/auth/login', '/api/v1/health', '/api/v1/openapi.json']);
-  const READ_POSTS = new Set(['/api/v1/plan/preview', '/api/v1/tasks/parse']);
   // /auth/me answers 200 { authenticated: false } instead of 401 (no console noise before login).
   const SOFT = new Set(['/api/v1/auth/me']);
   // C-02: decided on the route the router matched (decoded URL), never on the raw URL. No route = not an API
@@ -89,10 +124,20 @@ export async function buildApp(opts: AppOptions) {
     if (!req.principal && SOFT.has(path)) return;
     if (!req.principal)
       return reply.code(401).send({ code: 'UNAUTHENTICATED', message: 'Connexion requise.' });
-    // A read token may simulate a plan draft or read a task text: these POSTs write nothing (03 §Jetons).
-    if (!req.principal.canWrite && req.method !== 'GET' && !READ_POSTS.has(path)) {
+    if (req.principal.kind !== 'token') return;
+    // H-03: a token reaches only the routes of the list (access.ts), a read token only their `read` ones.
+    const access = tokenAccess(req.method, path);
+    if (!access)
+      return reply
+        .code(403)
+        .send({ code: 'USER_ONLY', message: 'Réservé à l’interface (utilisateur connecté).' });
+    if (access === 'write' && !req.principal.canWrite)
       return reply.code(403).send({ code: 'READ_ONLY_TOKEN', message: 'Jeton en lecture seule.' });
-    }
+  });
+  // H-03: the list names real routes only (a renamed route would otherwise silently close or stay open).
+  app.addHook('onReady', async () => {
+    const missing = Object.keys(TOKEN_ROUTES).filter((k) => !apiRoutes.includes(k));
+    if (missing.length) throw new Error(`TOKEN_ROUTES: unknown routes ${missing.join(', ')}`);
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -124,12 +169,6 @@ export async function buildApp(opts: AppOptions) {
   });
 
   const ctx = (req: FastifyRequest): D.Ctx => ({ db, sqlite, actor: req.principal!.actor, now: opts.now });
-  const userOnly = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (req.principal?.kind !== 'user')
-      return reply
-        .code(403)
-        .send({ code: 'USER_ONLY', message: 'Réservé à l’interface (utilisateur connecté).' });
-  };
   const today = () => D.parisDate(opts.now ? opts.now() : new Date());
 
   await app.register(
@@ -195,7 +234,6 @@ export async function buildApp(opts: AppOptions) {
         '/auth/account',
         {
           schema: { ...tag('Auth'), body: z.object({ login: z.string().min(1).max(100) }) },
-          preHandler: userOnly,
         },
         async (req) => {
           const c = ctx(req);
@@ -214,7 +252,6 @@ export async function buildApp(opts: AppOptions) {
             ...tag('Auth'),
             body: z.object({ current: z.string().min(1).max(500), next: z.string().min(1).max(500) }),
           },
-          preHandler: userOnly,
           config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
         },
         async (req) => {
@@ -233,18 +270,15 @@ export async function buildApp(opts: AppOptions) {
 
       // ---------- Settings & tokens (interface only, not for AI: dossier §9) ----------
       r.get('/settings', { schema: tag('Réglages') }, async (req) => D.getSettings(ctx(req)));
-      r.patch(
-        '/settings',
-        { schema: { ...tag('Réglages'), body: D.settingsPatchSchema }, preHandler: userOnly },
-        async (req) => D.patchSettings(ctx(req), req.body),
+      r.patch('/settings', { schema: { ...tag('Réglages'), body: D.settingsPatchSchema } }, async (req) =>
+        D.patchSettings(ctx(req), req.body),
       );
-      r.get('/tokens', { schema: tag('Accès'), preHandler: userOnly }, async () => A.listTokens(db));
+      r.get('/tokens', { schema: tag('Accès') }, async () => A.listTokens(db));
       // D-50: restore an export (replaces all business data). A SQLite backup is taken first.
       r.post(
         '/import',
         {
           schema: { ...tag('Réglages'), body: z.record(z.string(), z.unknown()) },
-          preHandler: userOnly,
           bodyLimit: 100 * 1024 * 1024,
         },
         async (req) => {
@@ -261,95 +295,69 @@ export async function buildApp(opts: AppOptions) {
       );
       // D-58: « Proposer avec l'IA ». Interface only (it spends the user's AI credits); the proposal is
       // returned, never applied: the user applies it through the usual planning endpoints.
-      r.get('/ai/status', { schema: tag('IA'), preHandler: userOnly }, async (req) => {
+      r.get('/ai/status', { schema: tag('IA') }, async (req) => {
         const s = D.getSettings(ctx(req));
         return D.aiStatus(s, process.env, D.getAiKey(ctx(req), s['ai.provider']));
       });
       // D-66: the API key is typed in Configuration › IA; it is written here and never read back.
-      r.put('/ai/key', { schema: { ...tag('IA'), body: D.aiKeyBody }, preHandler: userOnly }, async (req) =>
+      r.put('/ai/key', { schema: { ...tag('IA'), body: D.aiKeyBody } }, async (req) =>
         D.setAiKey(ctx(req), req.body.provider, req.body.key),
       );
       // D-66: connection test + model list, with the form's values (not yet saved).
-      r.post(
-        '/ai/check',
-        { schema: { ...tag('IA'), body: D.aiCheckBody }, preHandler: userOnly },
-        async (req) => D.checkAi(req.body, process.env, D.getAiKey(ctx(req), req.body.provider)),
+      r.post('/ai/check', { schema: { ...tag('IA'), body: D.aiCheckBody } }, async (req) =>
+        D.checkAi(req.body, process.env, D.getAiKey(ctx(req), req.body.provider)),
       );
-      r.post(
-        '/ai/propose',
-        { schema: { ...tag('IA'), body: D.aiProposeBody }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          const s = D.getSettings(c);
-          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
-          return D.proposeWithAi(c, req.body.scope, req.body.period, llm);
-        },
-      );
+      r.post('/ai/propose', { schema: { ...tag('IA'), body: D.aiProposeBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.proposeWithAi(c, req.body.scope, req.body.period, llm);
+      });
       // D-70: « Découper avec l'IA »: proposed tasks of a project (nothing created; POST /tasks/batch adds them).
-      r.post(
-        '/ai/breakdown',
-        { schema: { ...tag('IA'), body: D.aiBreakdownBody }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          const s = D.getSettings(c);
-          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
-          return D.breakdownWithAi(c, req.body, llm);
-        },
-      );
+      r.post('/ai/breakdown', { schema: { ...tag('IA'), body: D.aiBreakdownBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.breakdownWithAi(c, req.body, llm);
+      });
       // D-75: « Proposer un chemin avec l'IA »: proposed projects of an objective (nothing created).
-      r.post(
-        '/ai/path',
-        { schema: { ...tag('IA'), body: D.aiPathBody }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          const s = D.getSettings(c);
-          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
-          return D.pathWithAi(c, req.body, llm);
-        },
-      );
+      r.post('/ai/path', { schema: { ...tag('IA'), body: D.aiPathBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.pathWithAi(c, req.body, llm);
+      });
       // D-97: « Compléter avec l'IA » in the edit panels: alternative titles and field proposals (nothing saved).
-      r.post(
-        '/ai/fill',
-        { schema: { ...tag('IA'), body: D.aiFillBody }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          const s = D.getSettings(c);
-          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
-          return D.fillWithAi(c, req.body, llm);
-        },
-      );
+      r.post('/ai/fill', { schema: { ...tag('IA'), body: D.aiFillBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.fillWithAi(c, req.body, llm);
+      });
       // D-68: « Rédiger avec l'IA »: a description proposal, returned to the editor (nothing saved).
-      r.post(
-        '/ai/describe',
-        { schema: { ...tag('IA'), body: D.aiDescribeBody }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          const s = D.getSettings(c);
-          const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
-          return D.describeWithAi(c, req.body, llm);
-        },
-      );
+      r.post('/ai/describe', { schema: { ...tag('IA'), body: D.aiDescribeBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.describeWithAi(c, req.body, llm);
+      });
       // D-57: wipe objectives, projects and tasks (configuration kept). A SQLite backup is taken first.
-      r.post(
-        '/purge',
-        { schema: { ...tag('Réglages'), body: D.purgeBody }, preHandler: userOnly },
-        async (req) => {
-          let backup: string | null = null;
-          if (opts.backupDir) {
-            backup = join(
-              opts.backupDir,
-              `backup-avant-purge-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
-            );
-            await sqlite.backup(backup);
-          }
-          return {
-            ...D.purgeData(ctx(req), { history: req.body.history }),
-            backup: backup ? basename(backup) : null,
-          };
-        },
-      );
+      r.post('/purge', { schema: { ...tag('Réglages'), body: D.purgeBody } }, async (req) => {
+        let backup: string | null = null;
+        if (opts.backupDir) {
+          backup = join(
+            opts.backupDir,
+            `backup-avant-purge-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
+          );
+          await sqlite.backup(backup);
+        }
+        return {
+          ...D.purgeData(ctx(req), { history: req.body.history }),
+          backup: backup ? basename(backup) : null,
+        };
+      });
       // D-45: full JSON export (backup), interface only, without any secret.
-      r.get('/export', { schema: tag('Réglages'), preHandler: userOnly }, async (req, reply) => {
+      r.get('/export', { schema: tag('Réglages') }, async (req, reply) => {
         const data = D.exportData(ctx(req));
         reply.header(
           'content-disposition',
@@ -364,7 +372,6 @@ export async function buildApp(opts: AppOptions) {
             ...tag('Accès'),
             body: z.object({ name: z.string(), scopes: z.enum(['read', 'read_write']) }),
           },
-          preHandler: userOnly,
         },
         async (req) => {
           const c = ctx(req);
@@ -375,25 +382,19 @@ export async function buildApp(opts: AppOptions) {
           });
         },
       );
-      r.delete(
-        '/tokens/:id',
-        { schema: { ...tag('Accès'), params: D.idParam }, preHandler: userOnly },
-        async (req) => {
-          const c = ctx(req);
-          D.tx(c, () => {
-            A.revokeToken(db, req.params.id);
-            D.audit(c, 'api_token', req.params.id, 'revoke', null, { revoked: true });
-          });
-          return { ok: true };
-        },
-      );
+      r.delete('/tokens/:id', { schema: { ...tag('Accès'), params: D.idParam } }, async (req) => {
+        const c = ctx(req);
+        D.tx(c, () => {
+          A.revokeToken(db, req.params.id);
+          D.audit(c, 'api_token', req.params.id, 'revoke', null, { revoked: true });
+        });
+        return { ok: true };
+      });
 
       // ---------- Domains ----------
       r.get('/domains', { schema: tag('Domaines') }, async (req) => D.listDomains(ctx(req)));
-      r.post(
-        '/domains',
-        { schema: { ...tag('Domaines'), body: D.domainCreate }, preHandler: userOnly },
-        async (req) => D.createDomain(ctx(req), req.body),
+      r.post('/domains', { schema: { ...tag('Domaines'), body: D.domainCreate } }, async (req) =>
+        D.createDomain(ctx(req), req.body),
       );
       r.patch(
         '/domains/:id',
@@ -757,36 +758,32 @@ export async function buildApp(opts: AppOptions) {
         { schema: { ...tag('Réglages'), params: z.object({ from: D.isoDate }) } },
         async (req) => D.removeVacation(ctx(req), req.params.from),
       );
-      r.get('/notify/status', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+      r.get('/notify/status', { schema: tag('Réglages') }, async (req) =>
         D.notifyStatus(ctx(req), process.env),
       );
       // The bot token is written here and never read back (like the AI keys, D-66).
       r.put(
         '/notify/telegram-token',
-        { schema: { ...tag('Réglages'), body: D.telegramTokenBody }, preHandler: userOnly },
+        { schema: { ...tag('Réglages'), body: D.telegramTokenBody } },
         async (req) => D.setTelegramToken(ctx(req), req.body.token),
       );
-      r.post('/notify/telegram-detect', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+      r.post('/notify/telegram-detect', { schema: tag('Réglages') }, async (req) =>
         D.detectTelegramChat(ctx(req), process.env),
       );
       // Web Push (user request 01/11/2026): this device subscribes from Configuration › Notifications.
-      r.get('/notify/push/key', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
-        D.pushPublicKey(ctx(req)),
-      );
-      r.get('/notify/push/devices', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
-        D.listPushDevices(ctx(req)),
-      );
+      r.get('/notify/push/key', { schema: tag('Réglages') }, async (req) => D.pushPublicKey(ctx(req)));
+      r.get('/notify/push/devices', { schema: tag('Réglages') }, async (req) => D.listPushDevices(ctx(req)));
       r.post(
         '/notify/push/subscribe',
-        { schema: { ...tag('Réglages'), body: D.pushSubscriptionBody }, preHandler: userOnly },
+        { schema: { ...tag('Réglages'), body: D.pushSubscriptionBody } },
         async (req) => D.addPushSubscription(ctx(req), req.body),
       );
       r.post(
         '/notify/push/unsubscribe',
-        { schema: { ...tag('Réglages'), body: D.pushUnsubscribeBody }, preHandler: userOnly },
+        { schema: { ...tag('Réglages'), body: D.pushUnsubscribeBody } },
         async (req) => D.removePushSubscription(ctx(req), req.body.endpoint),
       );
-      r.post('/notify/push/test', { schema: tag('Réglages'), preHandler: userOnly }, async (req) =>
+      r.post('/notify/push/test', { schema: tag('Réglages') }, async (req) =>
         D.sendPush(ctx(req), {
           title: 'Mémento',
           body: 'Les notifications arrivent bien sur cet appareil.',
@@ -798,7 +795,6 @@ export async function buildApp(opts: AppOptions) {
         '/notify/daily-recap/preview',
         {
           schema: { ...tag('Réglages'), body: z.object({ date: D.isoDate.optional() }).default({}) },
-          preHandler: userOnly,
         },
         async (req) =>
           D.buildDailyMessage(ctx(req), { env: process.env, llm: opts.llm, date: req.body.date }),
@@ -807,7 +803,6 @@ export async function buildApp(opts: AppOptions) {
         '/notify/daily-recap/send',
         {
           schema: { ...tag('Réglages'), body: z.object({ date: D.isoDate.optional() }).default({}) },
-          preHandler: userOnly,
         },
         async (req) => {
           const out = await D.sendDailyRecap(ctx(req), {
@@ -877,7 +872,7 @@ export async function buildApp(opts: AppOptions) {
       r.post(
         '/changes/mark-reviewed',
         // C-04: the human review (F-25) is the user's: a token cannot clear what an AI did.
-        { schema: { ...tag('À revoir'), body: D.markReviewedBody }, preHandler: userOnly },
+        { schema: { ...tag('À revoir'), body: D.markReviewedBody } },
         async (req) => ({
           updated: D.markReviewed(ctx(req), req.body),
         }),

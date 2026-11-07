@@ -323,3 +323,64 @@ describe('H-04 a write waits for a short lock instead of failing', () => {
     sqlite.close();
   });
 });
+
+describe('H-01 the login rate limit ignores X-Forwarded-For unless the proxy is declared', () => {
+  const attempts = async (app: Awaited<ReturnType<typeof buildApp>>, remoteAddress: string) => {
+    const codes: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      const r = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/login',
+        remoteAddress,
+        headers: { 'x-forwarded-for': `203.0.113.${i}` },
+        payload: { login: 'owner', password: 'wrong' },
+      });
+      codes.push(r.statusCode);
+    }
+    return codes;
+  };
+
+  it('30 attempts with a rotating X-Forwarded-For are limited (429)', async () => {
+    const { app } = await setup();
+    const codes = await attempts(app, '198.51.100.7');
+    expect(codes.filter((c) => c === 401)).toHaveLength(5);
+    expect(codes.filter((c) => c === 429)).toHaveLength(25);
+  });
+
+  it('behind a declared proxy, each client has its own quota, a forged header from elsewhere does not', async () => {
+    const { db, sqlite } = openDb(':memory:');
+    runMigrations(db);
+    seed({ db, sqlite, actor: 'me' });
+    const app = await buildApp({
+      db,
+      sqlite,
+      cookieSecure: false,
+      webDist: '/nonexistent',
+      trustProxy: '10.0.0.0/8',
+    });
+    expect((await attempts(app, '10.0.0.2')).filter((c) => c === 429)).toHaveLength(0); // 30 distinct clients
+    expect((await attempts(app, '198.51.100.7')).filter((c) => c === 429)).toHaveLength(25);
+  });
+});
+
+describe('H-02 security headers', () => {
+  it('every answer carries the CSP, the front included; HSTS only behind HTTPS', async () => {
+    const dist = mkdtempSync(join(tmpdir(), 'memento-web-'));
+    writeFileSync(join(dist, 'index.html'), '<!doctype html><title>x</title>');
+    const { app } = await setup(dist);
+    for (const url of ['/', '/api/v1/health', '/projets/x']) {
+      const r = await app.inject({ method: 'GET', url });
+      expect(r.headers['content-security-policy']).toContain("img-src 'self' data:");
+      expect(r.headers['content-security-policy']).toContain("script-src 'self';");
+      expect(r.headers['permissions-policy']).toContain('camera=()');
+      expect(r.headers['strict-transport-security']).toBeUndefined();
+    }
+    const { db, sqlite } = openDb(':memory:');
+    runMigrations(db);
+    const secure = await buildApp({ db, sqlite, cookieSecure: true, webDist: dist });
+    expect(
+      (await secure.inject({ method: 'GET', url: '/api/v1/health' })).headers['strict-transport-security'],
+    ).toBe('max-age=31536000');
+    rmSync(dist, { recursive: true });
+  });
+});
