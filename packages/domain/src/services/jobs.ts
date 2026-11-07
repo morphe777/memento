@@ -1,8 +1,9 @@
 // Scheduled jobs (WF-01 to WF-03, G-04): Sunday evening weekly report, Monday plan, monthly and quarterly reports.
-// Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time.
+// Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time,
+// and retries a failed job at the next tick (C-07).
 import { and, eq, schema } from '@memento/db';
-import { type Ctx, ctxNow, newId } from '../context.ts';
-import { isOnVacation } from '../rules/daily.ts';
+import { type Ctx, ctxNow, newId, tx } from '../context.ts';
+import { escapeHtml, isOnVacation } from '../rules/daily.ts';
 import { getSettings } from '../settings.ts';
 import {
   isoDay,
@@ -16,35 +17,59 @@ import {
   shiftWeek,
 } from '../time.ts';
 import { getDailyFacts, notifyReportReady, notifyStatus, sendDailyRecap } from './daily.ts';
+import { recordNotification } from './notifications.ts';
 import { closeWeek, proposeWeek } from './planning.ts';
 import { rollMonth } from './projects.ts';
 import type { PushSender } from './push.ts';
 import { closeRecurringObjectives } from './recurrence.ts';
 import { generateReport } from './reports.ts';
 
+const JOB_LABELS: Record<string, string> = {
+  month: 'Rapport du mois et bascule des projets du mois',
+  week_report: 'Rapport de la semaine',
+  week: 'Clôture de la semaine et proposition du plan',
+  quarter: 'Rapport du trimestre et objectifs récurrents',
+};
+
+/**
+ * C-07: a job counts as done only once it succeeded. It runs in one transaction (all or nothing, its job_run row
+ * included); a failure is recorded, retried at every tick until it succeeds, and announced once per job and
+ * period (the first failure).
+ */
 function once(ctx: Ctx, job: string, periodKey: string, fn: () => void): 'done' | 'skipped' | 'failed' {
   const { jobRun } = schema;
-  if (
+  const row = () =>
     ctx.db
       .select()
       .from(jobRun)
       .where(and(eq(jobRun.job, job), eq(jobRun.periodKey, periodKey)))
-      .get()
-  )
-    return 'skipped';
-  let ok = true;
-  let error: string | null = null;
+      .get();
+  const save = (ok: boolean, error: string | null) => {
+    const ranAt = ctxNow(ctx).toISOString();
+    const existing = row();
+    if (existing) ctx.db.update(jobRun).set({ ranAt, ok, error }).where(eq(jobRun.id, existing.id)).run();
+    else ctx.db.insert(jobRun).values({ id: newId(), job, periodKey, ranAt, ok, error }).run();
+    return existing;
+  };
+  if (row()?.ok) return 'skipped';
   try {
-    fn();
+    tx(ctx, () => {
+      fn();
+      save(true, null);
+    });
+    return 'done';
   } catch (e) {
-    ok = false;
-    error = (e as Error).message;
+    const error = (e as Error).message;
+    tx(ctx, () => {
+      if (save(false, error)) return; // already announced at the first failure
+      recordNotification(ctx, {
+        kind: 'job',
+        title: `Échec : ${JOB_LABELS[job] ?? job} (${periodKey})`,
+        html: `<b>${escapeHtml(JOB_LABELS[job] ?? job)}</b> (${escapeHtml(periodKey)}) a échoué ; nouvel essai à chaque minute.\n\n<i>${escapeHtml(error)}</i>`,
+      });
+    });
+    return 'failed';
   }
-  ctx.db
-    .insert(jobRun)
-    .values({ id: newId(), job, periodKey, ranAt: ctxNow(ctx).toISOString(), ok, error })
-    .run();
-  return ok ? 'done' : 'failed';
 }
 
 /** Runs every job that is due at `now` (Europe/Paris) and not yet run for its period. */
@@ -80,11 +105,7 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
   if (isoDay(date) > plan.day || (isoDay(date) === plan.day && time >= plan.time)) {
     out.week = once(ctx, 'week', week, () => {
       closeWeek(ctx, shiftWeek(week, -1)); // RB-10
-      try {
-        proposeWeek(ctx, week); // §6
-      } catch {
-        // already validated by hand: nothing to propose
-      }
+      proposeWeek(ctx, week); // §6 (C-07: never fails on a validated week since D-52, so a failure is real)
     });
   }
   const quarter = quarterOf(date);

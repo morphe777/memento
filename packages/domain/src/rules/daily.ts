@@ -223,7 +223,7 @@ export function composeDailyRecap(f: RecapFacts, lowPct = 80): Recap {
   return { date: f.date, mode: f.mode, nothingDone: f.nothingDone, title, summary, kpis, done, focus };
 }
 
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Telegram message (HTML parse mode) of the plain report. */
 export function recapToTelegramHtml(r: Recap): string {

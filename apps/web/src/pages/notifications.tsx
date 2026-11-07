@@ -9,7 +9,7 @@ import { useAction } from '../lib/hooks.ts';
 
 export interface NotificationRow {
   id: string;
-  kind: 'daily' | 'report';
+  kind: 'daily' | 'report' | 'job';
   title: string;
   html: string;
   url: string | null;

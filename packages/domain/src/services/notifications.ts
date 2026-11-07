@@ -11,7 +11,7 @@ const KEEP_DAYS = 90;
 /** Records a notice before it is sent; returns its id (the push opens /notifications/{id}). */
 export function recordNotification(
   ctx: Ctx,
-  n: { kind: 'daily' | 'report'; title: string; html: string; url?: string | null },
+  n: { kind: 'daily' | 'report' | 'job'; title: string; html: string; url?: string | null },
 ): string {
   const id = newId();
   ctx.db

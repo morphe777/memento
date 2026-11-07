@@ -304,7 +304,7 @@ export const notification = sqliteTable(
   'notification',
   {
     id: text('id').primaryKey(),
-    kind: text('kind', { enum: ['daily', 'report'] }).notNull(),
+    kind: text('kind', { enum: ['daily', 'report', 'job'] }).notNull(),
     title: text('title').notNull(),
     html: text('html').notNull(), // Telegram HTML subset, as sent
     url: text('url'), // what it is about (a report), if anything
