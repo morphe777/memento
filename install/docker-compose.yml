@@ -1,13 +1,14 @@
 # Mémento — stack de production (Portainer ou docker compose).
 # Une seule image, trois conteneurs : API + interface web, worker (jobs planifiés), serveur MCP (IA).
-# Données : bind vers /srv/memento (base SQLite memento.db, sauvegardes avant import).
+# Données : bind vers le dossier MEMENTO_DATA_DIR de l'hôte (base SQLite memento.db, sauvegardes avant import).
+# MEMENTO_DATA_DIR est obligatoire : le déploiement échoue s'il manque, plutôt que de démarrer sur un dossier vide.
 # Réseau local / VPN uniquement : ne pas exposer sur Internet.
 
 x-memento: &memento
   image: morphe777/memento:latest
   restart: unless-stopped
   volumes:
-    - /srv/memento:/data
+    - ${MEMENTO_DATA_DIR:?Renseigner MEMENTO_DATA_DIR (dossier de donnees sur l'hote)}:/data
   environment: &env
     TZ: Europe/Paris
     MEMENTO_DB_FILE: /data/memento.db

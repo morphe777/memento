@@ -10,12 +10,12 @@ async function setup() {
   const { db, sqlite } = openDb(':memory:');
   runMigrations(db);
   seed({ db, sqlite, actor: 'me' });
-  await setUserPassword(db, 'mehdi', PASSWORD);
+  await setUserPassword(db, 'owner', PASSWORD);
   const app = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent' });
   const res = await app.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
-    payload: { login: 'mehdi', password: PASSWORD },
+    payload: { login: 'owner', password: PASSWORD },
   });
   const cookie = `memento_session=${res.cookies.find((c) => c.name === 'memento_session')!.value}`;
   return { app, db, sqlite, cookie };
@@ -31,7 +31,7 @@ describe('API L0 — auth', () => {
     const res = await s.app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { login: 'mehdi', password: PASSWORD },
+      payload: { login: 'owner', password: PASSWORD },
     });
     expect(res.statusCode).toBe(200);
     const c = res.cookies.find((x) => x.name === 'memento_session')!;
@@ -49,7 +49,7 @@ describe('API L0 — auth', () => {
       const r = await s.app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
-        payload: { login: 'mehdi', password: 'wrong' },
+        payload: { login: 'owner', password: 'wrong' },
       });
       codes.push(r.statusCode);
     }
@@ -85,7 +85,7 @@ describe('API — own account (Configuration › Compte)', () => {
     const other = await s.app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { login: 'mehdi', password: PASSWORD },
+      payload: { login: 'owner', password: PASSWORD },
     });
     const otherCookie = `memento_session=${other.cookies.find((c) => c.name === 'memento_session')!.value}`;
     const h = { cookie: s.cookie };
@@ -233,7 +233,7 @@ describe('API — Compléter avec l’IA (D-97)', () => {
     const { db, sqlite } = openDb(':memory:');
     runMigrations(db);
     seed({ db, sqlite, actor: 'me' });
-    await setUserPassword(db, 'mehdi', PASSWORD);
+    await setUserPassword(db, 'owner', PASSWORD);
     let asked = '';
     const llm = async (r: { user: string }) => {
       asked = r.user;
@@ -246,7 +246,7 @@ describe('API — Compléter avec l’IA (D-97)', () => {
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { login: 'mehdi', password: PASSWORD },
+      payload: { login: 'owner', password: PASSWORD },
     });
     const h = { cookie: `memento_session=${login.cookies.find((c) => c.name === 'memento_session')!.value}` };
     const r = await app.inject({
@@ -298,13 +298,13 @@ describe('API — Proposer avec l’IA (D-58)', () => {
     const { db, sqlite } = openDb(':memory:');
     runMigrations(db);
     seed({ db, sqlite, actor: 'me' });
-    await setUserPassword(db, 'mehdi', PASSWORD);
+    await setUserPassword(db, 'owner', PASSWORD);
     const llm = async () => ({ text: '{"summary":"Rien à changer.","objectives":[]}', model: 'fake' });
     const app = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent', llm });
     const login = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { login: 'mehdi', password: PASSWORD },
+      payload: { login: 'owner', password: PASSWORD },
     });
     const h = { cookie: `memento_session=${login.cookies.find((c) => c.name === 'memento_session')!.value}` };
     const st = (await app.inject({ url: '/api/v1/ai/status', headers: h })).json();

@@ -1,0 +1,245 @@
+{
+  "_source": "Jeu de données fictif pour les tests de la Vue Plan. heuresRestantesMin = totalMin - doneMin.",
+  "domaine": {
+    "id": "505858e4-d6be-58cd-a001-de9cda0aae31",
+    "name": "Carrière",
+    "colorLight": "#2F6FDB",
+    "colorDark": "#6A9BF2",
+    "priorityRank": 3
+  },
+  "metaObjectif": {
+    "id": "d470cbde-18b7-57d6-8269-a7648e41641f",
+    "title": null,
+    "_note": "titre absent : cas du méta-objectif sans titre (API-01)",
+    "outcomeTitlePropose": "Vivre de la photographie"
+  },
+  "objectifs": [
+    {
+      "id": "63bbd27f-16bc-518f-be98-74c249622ca2",
+      "title": "Fondation du portfolio",
+      "outcomeTitlePropose": "Un portfolio clair et visible",
+      "quarter": "2026-Q4",
+      "deadline": "2026-12-31",
+      "smartIndicator": "Site, galerie et tarifs",
+      "smartTarget": "3",
+      "criticality": 2
+    },
+    {
+      "id": "12f520e9-19a5-541c-be14-ad1786b587da",
+      "title": "2 Expositions & tarifs",
+      "outcomeTitlePropose": "Le montrer par 2 expositions",
+      "quarter": "2027-Q1",
+      "deadline": "2027-03-31",
+      "smartIndicator": "",
+      "smartTarget": "",
+      "criticality": 2
+    }
+  ],
+  "projetsDansObjectifs": [
+    {
+      "id": "771cc320-a1f0-52c6-b6de-e6a68d4e8fdb",
+      "title": "Plan, Galerie & Tarifs",
+      "objectiveId": "63bbd27f-16bc-518f-be98-74c249622ca2",
+      "positionInObjective": 2,
+      "isFree": false,
+      "status": "active",
+      "monthFlag": "2026-10",
+      "groups": ["IA"],
+      "tasks": "4/4 faites",
+      "heuresRestantesMin": 0,
+      "gaps": [],
+      "blocked": false,
+      "dependsOn": []
+    },
+    {
+      "id": "2f650ddf-e3fe-5408-9ef8-64fda5c1eb10",
+      "title": "Formation Lightroom",
+      "objectiveId": "63bbd27f-16bc-518f-be98-74c249622ca2",
+      "positionInObjective": 3,
+      "isFree": true,
+      "status": "ready",
+      "monthFlag": "2026-11",
+      "groups": ["IA"],
+      "tasks": "0/9",
+      "heuresRestantesMin": 510,
+      "gaps": [],
+      "blocked": false,
+      "dependsOn": []
+    },
+    {
+      "id": "7f2b52a1-05bc-5ad6-8927-238c908bc9eb",
+      "title": "Refonte du site",
+      "objectiveId": "63bbd27f-16bc-518f-be98-74c249622ca2",
+      "positionInObjective": 4,
+      "isFree": false,
+      "status": "idea",
+      "monthFlag": null,
+      "groups": ["IA"],
+      "tasks": "0/4",
+      "heuresRestantesMin": 240,
+      "gaps": ["SUCCESS_CRITERION_MISSING"],
+      "blocked": true,
+      "dependsOn": []
+    },
+    {
+      "id": "58f40992-f41e-5358-bd5a-6475bef7ede4",
+      "title": "Tarifs de novembre",
+      "objectiveId": "63bbd27f-16bc-518f-be98-74c249622ca2",
+      "positionInObjective": 6,
+      "isFree": false,
+      "status": "ready",
+      "monthFlag": null,
+      "groups": ["Emploi"],
+      "tasks": "0/3",
+      "heuresRestantesMin": 180,
+      "gaps": [],
+      "blocked": true,
+      "dependsOn": []
+    },
+    {
+      "id": "0f66d839-e574-5159-885d-cd3cf6607834",
+      "title": "Première expo",
+      "objectiveId": "12f520e9-19a5-541c-be14-ad1786b587da",
+      "positionInObjective": 1,
+      "isFree": false,
+      "status": "idea",
+      "monthFlag": null,
+      "groups": ["IA"],
+      "tasks": "aucune",
+      "heuresRestantesMin": 0,
+      "gaps": ["SUCCESS_CRITERION_MISSING", "TASK_MISSING"],
+      "blocked": false,
+      "dependsOn": []
+    }
+  ],
+  "migrationAttendue_DM109": [
+    {
+      "projet": "Refonte du site",
+      "dependsOn": ["Plan, Galerie & Tarifs"]
+    },
+    {
+      "projet": "Tarifs de novembre",
+      "dependsOn": ["Refonte du site"]
+    },
+    {
+      "projet": "Formation Lightroom",
+      "dependsOn": [],
+      "_note": "libre"
+    },
+    {
+      "projet": "Première expo",
+      "dependsOn": [],
+      "_note": "seul dans son objectif"
+    }
+  ],
+  "reserveProjets": [
+    {
+      "id": "b2a53053-7765-50fd-8f18-5068b0b7f2fe",
+      "title": "Refonte du site et de la galerie",
+      "status": "idea",
+      "groups": ["IA", "Emploi"],
+      "heuresRestantesMin": 300,
+      "_note": "doublon possible avec Refonte du site"
+    },
+    {
+      "id": "b5c3bc29-0f9d-5b69-9280-ccd983f55c37",
+      "title": "Catalogue des tirages",
+      "status": "idea",
+      "groups": ["IA", "Expérimentations"],
+      "heuresRestantesMin": 330
+    },
+    {
+      "id": "ec0b8db5-cc2e-5641-a40c-a228bf7c7da3",
+      "title": "Évolution du catalogue",
+      "status": "idea",
+      "groups": ["Expérimentations"],
+      "heuresRestantesMin": 300
+    },
+    {
+      "id": "0bc79138-c638-5c2a-aa80-f1cb83ad9abe",
+      "title": "Projet Archivage",
+      "status": "idea",
+      "groups": ["Expérimentations"],
+      "heuresRestantesMin": 180
+    },
+    {
+      "id": "164ce04f-9964-513a-96b2-830c61038e38",
+      "title": "Mise à jour du matériel",
+      "status": "ready",
+      "groups": ["Expérimentations", "Sécurité numérique"],
+      "heuresRestantesMin": 240
+    },
+    {
+      "id": "1933ce29-e171-53c3-847f-2198c1001c63",
+      "title": "Atelier retouche",
+      "status": "idea",
+      "groups": ["Expérimentations"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "53daa27f-2df3-58e9-ac5d-eecc59542b33",
+      "title": "Relier les outils de retouche",
+      "status": "idea",
+      "groups": ["IA", "Expérimentations"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "1a9bdbe6-c3aa-5150-97df-1e93dca9a916",
+      "title": "Carnet d'idées",
+      "status": "idea",
+      "groups": ["Expérimentations"],
+      "heuresRestantesMin": 0
+    },
+    {
+      "id": "57b32a72-a931-5548-816b-5e5e630a3fd7",
+      "title": "Page de contact",
+      "status": "idea",
+      "groups": ["Expérimentations"],
+      "heuresRestantesMin": 0
+    }
+  ],
+  "reserveConnexes": [
+    {
+      "id": "aee4d5ac-0b52-5ab8-89b7-cc344b421819",
+      "title": "Carnet de recettes",
+      "primaryDomain": "Santé",
+      "objectiveTitle": "Repas équilibrés",
+      "groups": ["Suivi", "IA", "Repas"],
+      "heuresRestantesMin": 300
+    },
+    {
+      "id": "650728f5-d3eb-593c-989c-1f1c52daadac",
+      "title": "Sorties en famille du mois",
+      "primaryDomain": "Famille",
+      "objectiveTitle": null,
+      "groups": ["Sorties", "IA", "Expérimentations"],
+      "heuresRestantesMin": 360
+    }
+  ],
+  "reserveObjectifs": [
+    {
+      "id": "17e66e4f-335f-5885-9e9d-2fa214b1e50a",
+      "title": "Organiser les semaines de prise de vue",
+      "metaObjectiveId": null,
+      "quarter": "2027-Q4"
+    },
+    {
+      "id": "a81029a6-0f66-5fab-9ae1-f5d486ab81ee",
+      "title": "Sécuriser les comptes et les sauvegardes",
+      "metaObjectiveId": null,
+      "quarter": "2026-Q4"
+    },
+    {
+      "id": "c564a5d6-5f9d-5d67-a369-d26d49bb628a",
+      "title": "Vendre des tirages",
+      "metaObjectiveId": "485eda0a-881e-5d9f-ac80-b5692006ddf6",
+      "quarter": "2026-Q4",
+      "_note": "dans un autre méta-objectif"
+    }
+  ],
+  "contexteSemaine_2026W44": {
+    "budgetMin": 600,
+    "plannedMin": 750,
+    "alertes": ["BUDGET_OVER", "NO_EXPERIENCE"]
+  }
+}

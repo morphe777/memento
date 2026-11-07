@@ -8,7 +8,8 @@ Outil personnel, mono-utilisateur, auto-hébergé (homelab). Il organise ma vie 
 
 1. `docs/02-dossier-dev.md` — **le document de travail** : architecture, stack, modèle de données, règles métier (RB-xx), moteur, rapports, API, MCP, pages, design system, plan par lots.
 2. `docs/01-specs-fonctionnelles.md` — le pourquoi et le détail fonctionnel (IDs VIS, G, DM, CH, WF, R, V, F, NF). La section **9.0 « Décisions prises »** prime sur tout le reste.
-3. `maquettes/README.md` puis les 4 fichiers `.dc.html` — référence visuelle et comportementale des écrans clés.
+3. `maquettes/README.md` puis les 4 fichiers `.dc.html` — référence visuelle et comportementale des écrans clés, figée à la v0.1.
+4. `memento-vue-plan/` — dossier de conception de la Vue Plan (identifiants V-20 à V-31, DM-100 à DM-114, CH-20 à CH-23, API-xx, CA-xx), figé au 31/10/2026 : les changements ultérieurs sont dans `docs/DECISIONS.md`.
 
 Priorité en cas de conflit : décisions datées (Specs §9.0) > dossier de dev > maquettes > reste des Specs.
 

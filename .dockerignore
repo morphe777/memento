@@ -4,8 +4,13 @@ data
 .env
 .env.*
 .git
+.githooks
 .claude
 coverage
 **/*.tsbuildinfo
 *.db
 *.db-*
+maquettes
+memento-vue-plan
+docs
+!docs/api/guide-ia.md

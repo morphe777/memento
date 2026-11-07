@@ -3,9 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb, runMigrations } from '@memento/db';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_AI_PROMPTS, PREVIOUS_AI_PROMPTS } from '../src/ai/prompts.ts';
+import { DEFAULT_AI_PROMPTS } from '../src/ai/prompts.ts';
 import type { Ctx } from '../src/context.ts';
 import { getAiKey, getSettings, patchSettings, seed, setAiKey } from '../src/index.ts';
+
+/** An earlier default text of the week prompt (D-72). */
+const OLD_WEEK_PROMPT = `Propose la sélection de la semaine : la liste COMPLÈTE des tâches à faire (kind "week") et quelques bonus (kind "bonus", si le budget est atteint).
+- Les tâches "mandatory" (deadline dans la semaine) doivent être retenues.
+- Une tâche "locked" (attend une tâche précédente) ne peut pas être retenue, sauf si la tâche qui la bloque est elle-même retenue et la précède dans le même projet.
+- Le total des tâches "week" doit tenir dans budgetMin (en minutes) ; les bonus sont hors budget.
+- Privilégie les projets du mois, la continuité (avancer un projet plutôt que tout disperser), les deadlines, et une ou deux expériences si la cible n'est pas atteinte.`;
 
 /** Starts like a container does: open the file, run the migrations, run the seed. */
 function boot(file: string): Ctx {
@@ -51,7 +58,7 @@ describe('settings survive a restart (container recreated on the same /data)', (
     const file = join(dir, 'memento.db');
     try {
       const a = boot(file);
-      patchSettings(a, { 'ai.prompt.week': PREVIOUS_AI_PROMPTS.week![0], 'ai.prompt.system': 'Mon prompt.' });
+      patchSettings(a, { 'ai.prompt.week': OLD_WEEK_PROMPT, 'ai.prompt.system': 'Mon prompt.' });
       a.sqlite.close();
       const b = boot(file);
       expect(getSettings(b)['ai.prompt.week']).toBe(DEFAULT_AI_PROMPTS.week);

@@ -187,7 +187,10 @@ describe('L1 référentiel', () => {
   it('RB-01 + D-04: an idea needs a title and a group, nothing else', () => {
     const ctx = makeCtx();
     const { group } = lookups(ctx);
-    const idea = createProject(ctx, { title: 'Monter une étagère', groupIds: [group('Expérimentations').id] });
+    const idea = createProject(ctx, {
+      title: 'Monter une étagère',
+      groupIds: [group('Expérimentations').id],
+    });
     expect(idea.status).toBe('idea');
     expect(idea.domainIds).toHaveLength(1);
   });

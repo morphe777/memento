@@ -96,13 +96,10 @@ interface CareerJson {
   }[];
 }
 const career: CareerJson = JSON.parse(
-  readFileSync(
-    new URL('./fixtures/plan-sample.json', import.meta.url),
-    'utf8',
-  ),
+  readFileSync(new URL('./fixtures/plan-sample.json', import.meta.url), 'utf8'),
 );
 
-/** Builds the Carrière case; the projects carry no dependency, as in the real data (DM-109 not yet run). */
+/** Builds the Carrière case; the projects carry no dependency, before the migration (DM-109). */
 function buildCareer(ctx: TestCtx) {
   const meta = createMetaObjective(ctx, {
     title: 'Activité photo',
@@ -123,7 +120,7 @@ function buildCareer(ctx: TestCtx) {
   const projects = new Map<string, string>();
   for (const p of career.projetsDansObjectifs) {
     const created = mk(ctx, p.title, { objectiveId: objectives.get(p.objectiveId), isFree: p.isFree });
-    // positions have holes in the real data; the status is set directly
+    // positions have holes, as DM-100 allows; the status is set directly
     ctx.db
       .update(schema.project)
       .set({ positionInObjective: p.positionInObjective, isFree: p.isFree, status: p.status as 'idea' })

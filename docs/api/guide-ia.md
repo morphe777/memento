@@ -1,15 +1,15 @@
 # Mémento — guide de l'API pour une IA
 
-Tu pilotes Mémento, l'outil personnel de Mehdi pour ses objectifs, projets et sa charge mentale. Ce guide dit **ce
+Tu pilotes Mémento, l'outil personnel de l'utilisateur pour ses objectifs, projets et sa charge mentale. Ce guide dit **ce
 que tu peux faire, dans quel ordre, et quelles règles l'API impose**. Le contrat technique exact (schémas JSON) est
 dans `GET /api/v1/openapi.json`. Toute la logique métier est dans l'API : si une règle n'est pas respectée, l'API
-refuse avec un code lisible. Ne contourne jamais une règle, explique-la à Mehdi.
+refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'utilisateur.
 
 ## 1. Accès
 
 - Base : `http://<hôte>:4500/api/v1` (réseau local uniquement). MCP : `http://<hôte>:4502/mcp`, mêmes droits.
-- Authentification : `Authorization: Bearer mem_…` (jeton créé par Mehdi dans Configuration › Accès).
-- Tes actions sont signées `ai:<nom du jeton>` et apparaissent dans le **Journal** de Mehdi (`GET /changes`).
+- Authentification : `Authorization: Bearer mem_…` (jeton créé par l'utilisateur dans Configuration › Accès).
+- Tes actions sont signées `ai:<nom du jeton>` et apparaissent dans le **Journal** de l'utilisateur (`GET /changes`).
 - Jeton « lecture » : seulement des `GET` (sinon 403 `READ_ONLY_TOKEN`).
 - Interdit à tout jeton (403 `USER_ONLY`) : réglages, jetons, compte, export / import, purge des données,
   « Proposer avec l'IA » (`/ai/*`).
@@ -91,7 +91,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 
 - **Semaine** : `GET /week-plans/{semaine}` renvoie la page prête à afficher : bacs Inbox / Projets du mois / À
   considérer aussi, budget, alertes, « pourquoi » de chaque tâche. Le moteur est déterministe.
-  - `POST /week-plans/{semaine}/propose` : proposition du moteur (les choix de Mehdi sont conservés).
+  - `POST /week-plans/{semaine}/propose` : proposition du moteur (les choix de l'utilisateur sont conservés).
   - `PUT /week-plans/{semaine}/items` `{ items: [{ taskId, kind: "week"|"bonus" }] }` : la sélection complète.
     Refus : `TASK_LOCKED` (attend la précédente), `PROJECT_NOT_ACTIVE` (projet ni prêt ni du mois), `TASK_NOT_TODO`.
   - Le dépassement de budget n'est **jamais bloquant** : il est signalé (alerte `BUDGET_OVER`).
@@ -130,25 +130,25 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 ## 5. Recettes
 
 1. **Capturer une idée de projet** : `GET /domains` + `GET /groups` → `POST /projects { title, groupIds,
-   description }`. Le modèle de description de Mehdi s'applique si tu n'en donnes pas.
+   description }`. Le modèle de description de l'utilisateur s'applique si tu n'en donnes pas.
 2. **Découper un projet** : `POST /tasks/batch { projectId, tasks: [{ title, durationMin }] }` (ordre = ordre
    d'exécution), puis `POST /projects/{id}/promote`. Vérifie `gaps` et complète (`PATCH /projects/{id}`
    `{ successCriterion }`).
 3. **Préparer le lundi** : `GET /week-plans/{semaine}` → explique les alertes → propose une sélection par
-   `PUT …/items`. Mehdi garde la main : il peut tout modifier.
+   `PUT …/items`. L'utilisateur garde la main : il peut tout modifier.
 4. **Revue du mois** : `GET /month-plans/{mois}` → signale surcharge, objectifs non couverts, projets reconduits
    → propose des projets du mois (complets uniquement).
 5. **Contexte d'une semaine** : `GET /reports/by-period/week/{semaine}` (rapport figé : fait, focus, rythme,
    `budgetAdjustment.reason`, réussites, évitements). Utile pour corréler avec d'autres données.
-6. **Rendre compte de tes actions** : tout ce que tu fais est dans `GET /changes?actor=ai`. Mehdi le revoit.
+6. **Rendre compte de tes actions** : tout ce que tu fais est dans `GET /changes?actor=ai`. L'utilisateur le revoit.
 
 7. **Construire un plan** : `GET /plan-graph` (garde `version`) → monte la liste d'ops → `POST /plan/preview` : lis
-   `alerts` et `capacity` → ajuste → `POST /plan/apply { ops, baseVersion }`. Résume à Mehdi ce que tu as changé.
+   `alerts` et `capacity` → ajuste → `POST /plan/apply { ops, baseVersion }`. Résume à l'utilisateur ce que tu as changé.
 
 ## 6. Ce que tu ne fais pas
 
 - Suppression (`DELETE /tasks|projects|objectives|meta-objectives/{id}`, outils MCP `delete_*`) : définitive,
-  **seulement si Mehdi le demande explicitement**. Sinon préfère `abandoned` pour un projet, `cancelled` pour une
+  **seulement si l'utilisateur le demande explicitement**. Sinon préfère `abandoned` pour un projet, `cancelled` pour une
   tâche.
 - Pas de tâche de plus de 2 h : découpe.
 - Ne déplace pas des objectifs entre trimestres ni ne choisis les projets du mois sans le dire.

@@ -1,0 +1,34 @@
+#!/bin/bash
+# C-01: refuses a push whose commits contain a personal string.
+# The list lives in data/private/personal-strings.txt, one string per line. It is never in Git.
+# Activate once per clone: git config core.hooksPath .githooks
+set -u
+root=$(git rev-parse --show-toplevel)
+list="$root/data/private/personal-strings.txt"
+if [ ! -s "$list" ]; then
+  echo "pre-push: liste absente ou vide ($list), push refuse." >&2
+  exit 1
+fi
+zero=0000000000000000000000000000000000000000
+status=0
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+  [ "$local_sha" = "$zero" ] && continue # branch deletion
+  # Everything no remote-tracking branch has, so a rewritten history is scanned in full.
+  commits=$(git rev-list "$local_sha" --not --remotes 2>/dev/null)
+  if [ "$remote_sha" != "$zero" ] && git cat-file -e "$remote_sha" 2>/dev/null; then
+    commits=$(git rev-list "$local_sha" --not "$remote_sha" --remotes 2>/dev/null)
+  fi
+  [ -z "$commits" ] && continue
+  for c in $commits; do
+    # Message, author, committer, then the lines this commit adds.
+    hits=$( { git log -1 --format='%an%n%ae%n%cn%n%ce%n%B' "$c"
+              git show --format= --text --no-ext-diff --first-parent "$c" | grep -a '^+' ; } \
+            | grep -a -i -c -F -f "$list")
+    if [ "${hits:-0}" -gt 0 ]; then
+      echo "pre-push: commit ${c:0:10} : $hits ligne(s) avec une chaine personnelle (valeur non affichee)." >&2
+      status=1
+    fi
+  done
+done
+[ $status -ne 0 ] && echo "pre-push: push refuse. Controle : grep -iFf data/private/personal-strings.txt" >&2
+exit $status

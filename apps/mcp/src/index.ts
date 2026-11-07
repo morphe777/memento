@@ -68,7 +68,7 @@ export function buildServer(call: Call) {
     { name: 'memento', version: APP_VERSION },
     {
       instructions:
-        "Mémento : objectifs, projets et tâches de Mehdi. Avant d'agir, lis le guide (outil get_guide) puis la vue d'ensemble (get_context). Toutes les règles sont appliquées par l'API ; un refus renvoie un code et un message en français à transmettre tel quel.",
+        "Mémento : objectifs, projets et tâches de l'utilisateur. Avant d'agir, lis le guide (outil get_guide) puis la vue d'ensemble (get_context). Toutes les règles sont appliquées par l'API ; un refus renvoie un code et un message en français à transmettre tel quel.",
     },
   );
   type Args<T extends z.ZodRawShape> = z.infer<z.ZodObject<T>>;
@@ -499,9 +499,9 @@ export function buildServer(call: Call) {
     (a) => call('POST', '/resources', a),
   );
 
-  // Hard deletion (D-35, D-60): definitive and journaled. Only on Mehdi's explicit request.
+  // Hard deletion (D-35, D-60): definitive and journaled. Only on the user's explicit request.
   const DELETE_WARNING =
-    "Suppression DÉFINITIVE (journalisée). Uniquement si Mehdi l'a demandé explicitement ; sinon préfère abandonner / annuler.";
+    "Suppression DÉFINITIVE (journalisée). Uniquement si l'utilisateur l'a demandé explicitement ; sinon préfère abandonner / annuler.";
   tool('delete_task', `Supprime une tâche. ${DELETE_WARNING}`, { id: S.uuid }, (a) =>
     call('DELETE', `/tasks/${a.id}`),
   );

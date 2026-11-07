@@ -140,7 +140,7 @@ Le bazar des versions précédentes vient d'un seul axe utilisé pour deux usage
 - **DM-40** Un espace pour les tâches hors projet (déposer un colis, déclaration d'impôts…). Évite de multiplier les mini-projets et de tuer visuellement l'interface.
 
 * **DM-41** Tâche Inbox **récurrente** (annuelle, mensuelle) avec deadline : déclaration d'impôts en mai, etc. Le moteur la place en tête (étape 2) ; si le budget explose, alerte et tant pis pour le reste.
-* **DM-42** Revoir une stratégie (ex. allocation d’épargne) = un **projet**, pas une récurrence.
+* **DM-42** Revoir une stratégie (ex. allocation d'épargne) = un **projet**, pas une récurrence.
 
 ### 3.6 Relations
 
@@ -493,7 +493,7 @@ Chaque vue respecte G-01/G-02 (lisible en Z, un regard suffit) et G-08 (couleur 
 
 | ID | Question |
 | --- | --- |
-| Q-31 | Gestion courante (suivi de l’épargne, rééquilibrage, déclarations) : tâches récurrentes dans l'Inbox ? Lié à Q-18 |
+| Q-31 | Gestion courante (suivi de l'épargne, rééquilibrage, déclarations) : tâches récurrentes dans l'Inbox ? Lié à Q-18 |
 
 **Décisions (6)**
 

@@ -57,8 +57,8 @@ pnpm check        # lint (Biome) + typage + tests (Vitest)
 ## Déploiement Docker (production)
 
 Une image `morphe777/memento` (Docker Hub), trois conteneurs : `memento` (API + interface, port 4500),
-`memento-worker` (jobs planifiés) et `memento-mcp` (serveur MCP, port 4502). Données : bind
-`/srv/memento` → `/data` (base `memento.db`).
+`memento-worker` (jobs planifiés) et `memento-mcp` (serveur MCP, port 4502). Données : bind du
+dossier `MEMENTO_DATA_DIR` de l'hôte (obligatoire) → `/data` (base `memento.db`).
 
 ### 1. Construire et pousser l'image
 
@@ -79,15 +79,16 @@ cp data/memento.db* /srv/memento/
 Sans base existante, le conteneur la crée au premier démarrage (migrations + 8 domaines). Créer alors le compte :
 
 ```bash
-docker exec -it memento node_modules/.bin/tsx apps/api/src/cli/set-password.ts mehdi
+docker exec -it memento node_modules/.bin/tsx apps/api/src/cli/set-password.ts <identifiant>
 ```
 
 ### 3. Lancer la stack
 
-Portainer : nouvelle stack avec le contenu de `install/docker-compose.yml`. Ou en ligne de commande :
+Portainer : nouvelle stack avec le contenu de `install/docker-compose.yml` et la variable `MEMENTO_DATA_DIR`. Ou en ligne de
+commande :
 
 ```bash
-docker compose -f install/docker-compose.yml up -d
+MEMENTO_DATA_DIR=/srv/memento docker compose -f install/docker-compose.yml up -d
 ```
 
 Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la même machine). Derrière NGINX Proxy

@@ -30,7 +30,7 @@ const dayWeight = (d: string, cal?: PaceCalendar): number => {
 };
 
 /**
- * R-06 rewritten by D-118 (Mehdi 06/11/2026). The work of the project is spread over its period (start → due,
+ * R-06 rewritten by D-118 (06/11/2026). The work of the project is spread over its period (start → due,
  * else its month) in proportion to the time available each day (week budget ÷ 7, 0 on holiday), and judged by
  * the week: what is expected is what falls in the weeks already ended. `expectedMin` = expected now,
  * `endOfWeekMin` = expected at the end of the current week. After a replan (RB-16) the baseline is (replannedAt,

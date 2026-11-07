@@ -29,14 +29,14 @@ beforeAll(async () => {
   runMigrations(db);
   testDb = db;
   seed({ db, sqlite, actor: 'me' });
-  await setUserPassword(db, 'mehdi', 'correct horse battery');
+  await setUserPassword(db, 'owner', 'correct horse battery');
   token = createToken(db, 'claude', 'read_write').token;
   api = await buildApp({ db, sqlite, cookieSecure: false, webDist: '/nonexistent' });
   await api.listen({ port: 0, host: '127.0.0.1' });
   const login = await api.inject({
     method: 'POST',
     url: '/api/v1/auth/login',
-    payload: { login: 'mehdi', password: 'correct horse battery' },
+    payload: { login: 'owner', password: 'correct horse battery' },
   });
   cookie = `memento_session=${login.cookies[0].value}`;
   process.env.MEMENTO_API_URL = `http://127.0.0.1:${(api.server.address() as AddressInfo).port}/api/v1`;
@@ -151,7 +151,10 @@ describe('MCP L6', () => {
   it('business errors come back as tool errors with the readable code', async () => {
     const groups = (await api.inject({ url: '/api/v1/groups', headers: { cookie } })).json();
     const idea = (
-      await rpc('tools/call', { name: 'create_idea', arguments: { title: 'Peinture', groupIds: [groups[0].id] } })
+      await rpc('tools/call', {
+        name: 'create_idea',
+        arguments: { title: 'Peinture', groupIds: [groups[0].id] },
+      })
     ).body;
     const id = JSON.parse(idea.result.content[0].text).id;
     await rpc('tools/call', { name: 'promote_idea', arguments: { id } });

@@ -1,5 +1,6 @@
+import { createHash } from 'node:crypto';
 import { eq, schema } from '@memento/db';
-import { DEFAULT_AI_PROMPTS, PREVIOUS_AI_PROMPTS } from './ai/prompts.ts';
+import { DEFAULT_AI_PROMPTS, PREVIOUS_AI_PROMPT_HASHES } from './ai/prompts.ts';
 // Idempotent seed: 8 domains in priority order, default groups, default settings (L0).
 // D-64: domains and groups are a starter set written on a fresh database only; afterwards they are the
 // user's configuration (renamed, reordered, deleted) and the seed never reads or touches them again.
@@ -41,11 +42,14 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
       ctx.db.insert(schema.setting).values({ key, value }).onConflictDoNothing().run();
     }
-    // D-72: a prompt never edited (still an earlier default text) follows the new default.
-    for (const [name, olds] of Object.entries(PREVIOUS_AI_PROMPTS)) {
+    // D-72, D-122: a prompt never edited (an earlier default text, known by its hash) follows the new default.
+    for (const [name, olds] of Object.entries(PREVIOUS_AI_PROMPT_HASHES)) {
       const key = `ai.prompt.${name}`;
       const row = ctx.db.select().from(schema.setting).where(eq(schema.setting.key, key)).get();
-      if (typeof row?.value === 'string' && olds.includes(row.value))
+      if (
+        typeof row?.value === 'string' &&
+        olds.includes(createHash('sha256').update(row.value).digest('hex'))
+      )
         ctx.db
           .update(schema.setting)
           .set({ value: DEFAULT_AI_PROMPTS[name as keyof typeof DEFAULT_AI_PROMPTS] })

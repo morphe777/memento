@@ -1,5 +1,7 @@
 # Maquettes validées (v1)
 
+> Référence figée à la v0.1 : l'application a évolué depuis (voir `docs/DECISIONS.md`). Les titres sont fictifs.
+
 4 écrans validés le 23/10/2026. Ce sont des **références visuelles et comportementales**, pas du code à réutiliser.
 
 | Fichier | Écran | Points à respecter |

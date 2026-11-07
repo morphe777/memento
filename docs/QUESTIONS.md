@@ -1,5 +1,7 @@
 # Questions ouvertes pour Mehdi
 
+> Archive figée au 27/10/2026 : plusieurs points sont réglés depuis. Les décisions à jour sont dans `DECISIONS.md`.
+
 Ce que tu dois trancher ensuite, par ordre d'importance. Les choix provisoires sont dans `DECISIONS.md` (colonne « À valider » = oui).
 
 ## À trancher avant la mise en service (L7)
