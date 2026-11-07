@@ -8,6 +8,7 @@ import {
   type RecapFacts,
   type RecapTask,
   recapToTelegramHtml,
+  recapWindow,
   reportNoticeHtml,
   sanitizeTelegramHtml,
   stripTelegramHtml,
@@ -148,7 +149,7 @@ describe('D-77 « Bilan du jour »', () => {
     ]);
     const html = recapToTelegramHtml({ ...r, done: ['a < b'] });
     expect(html).toContain('🗓 Semaines d’affilée : <b>3</b> (≥ 80 %)');
-    expect(html).toContain('<b>Fait aujourd’hui</b>');
+    expect(html).toContain('<b>Fait ces dernières 24 h</b>');
     expect(html).not.toContain('Série');
     expect(html).toContain('a &lt; b');
     expect(html).not.toMatch(/Salut|Bravo/);
@@ -173,7 +174,7 @@ describe('D-77 « Bilan du jour »', () => {
     const r = composeDailyRecap(f);
     expect(r.title).toBe('🌱 Mercredi 28 octobre');
     expect(r.summary).toBe(
-      "Pas de tâche cochée aujourd'hui, ça arrive : la semaine se joue sur plusieurs jours. Déjà 2 tâches faites cette semaine.",
+      'Pas de tâche cochée ces dernières 24 h, ça arrive : la semaine se joue sur plusieurs jours. Déjà 2 tâches faites cette semaine.',
     );
     expect(r.kpis).toEqual([]);
     expect(r.focus).toEqual(['Devis · Cuisine (échéance vendredi)', 'Lire']);
@@ -311,6 +312,50 @@ describe('D-77 « Bilan du jour »', () => {
     }
   });
 
+  it('D-121 window: from the sending time of the day before, 23 or 25 h on a clock change', () => {
+    const iso = (w: { start: Date; end: Date }) => [w.start.toISOString(), w.end.toISOString()];
+    expect(iso(recapWindow('2026-11-05', '20:00'))).toEqual([
+      '2026-11-04T19:00:00.000Z',
+      '2026-11-05T19:00:00.000Z',
+    ]);
+    expect(iso(recapWindow('2026-10-25', '20:00'))).toEqual([
+      '2026-10-24T18:00:00.000Z', // CEST
+      '2026-10-25T19:00:00.000Z', // CET: 25 h
+    ]);
+    expect(iso(recapWindow('2026-03-29', '20:00'))).toEqual([
+      '2026-03-28T19:00:00.000Z', // CET
+      '2026-03-29T18:00:00.000Z', // CEST: 23 h
+    ]);
+  });
+
+  it('D-121 a task done after the report is in the next one, and only there, even after midnight', () => {
+    const ctx = makeCtx('2026-11-04T18:00:00.000Z'); // Wednesday 19:00
+    patchSettings(ctx, { 'notify.daily_recap': { enabled: true, time: '20:00', ai: false } });
+    const done = (title: string, at: string) => {
+      ctx.setNow(at);
+      completeTask(ctx, createTask(ctx, { projectId: null, title, durationMin: 30 }).id);
+    };
+    done('Avant le bilan', '2026-11-04T18:00:00.000Z'); // Wednesday 19:00
+    done('Après le bilan', '2026-11-04T20:00:00.000Z'); // Wednesday 21:00
+    done('Dans la nuit', '2026-11-04T23:30:00.000Z'); // Thursday 00:30
+    done('Jeudi matin', '2026-11-05T09:00:00.000Z'); // Thursday 10:00
+    done('Après le bilan de jeudi', '2026-11-05T19:30:00.000Z'); // Thursday 20:30
+    ctx.setNow('2026-11-05T21:00:00.000Z');
+    const titles = (date: string) => getDailyRecap(ctx, date).done.map((t) => t.split(' (')[0]);
+    expect(titles('2026-11-04')).toEqual(['Avant le bilan']);
+    const thursday = getDailyRecap(ctx, '2026-11-05');
+    expect(titles('2026-11-05')).toEqual(['Après le bilan', 'Dans la nuit', 'Jeudi matin']);
+    expect(thursday.facts.period).toEqual({ from: '2026-11-04T20:00', to: '2026-11-05T20:00' });
+    expect(thursday.facts.last7Days.at(-1)).toEqual({ date: '2026-11-04', doneTasks: 1, doneMin: 30 });
+    expect(recapToTelegramHtml(thursday)).toContain('<b>Fait ces dernières 24 h</b>');
+    // By hand, without a date: the last 24 h up to now, what was just done included.
+    expect(getDailyRecap(ctx).done.map((t) => t.split(' (')[0])).toEqual([
+      'Dans la nuit',
+      'Jeudi matin',
+      'Après le bilan de jeudi',
+    ]);
+  });
+
   it('D-116 Saturday only when something was done, nothing on Sunday nor during holidays, leads from the week plan', async () => {
     const ctx = makeCtx('2026-10-26T08:00:00.000Z'); // Monday W44
     const { group } = lookups(ctx);
@@ -340,7 +385,7 @@ describe('D-77 « Bilan du jour »', () => {
     completeTask(ctx, a.id);
     const saturday = getDailyRecap(ctx);
     expect(saturday.facts.mode).toBe('weekend');
-    expect(saturday.facts.period).toEqual({ from: '2026-10-31', to: '2026-10-31' });
+    expect(saturday.facts.period).toEqual({ from: '2026-10-30T11:00', to: '2026-10-31T11:00' });
     expect(saturday.done).toEqual(['Mesurer · Cuisine (1 h)']);
     expect(saturday.title).toBe('🌿 Samedi 31 octobre');
 

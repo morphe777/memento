@@ -1229,7 +1229,7 @@ function NotifyConfig({
           </InfoTip>
         </label>
         <div className="flex flex-wrap gap-4 items-end" style={{ paddingLeft: 24 }}>
-          <Field label="Heure d'envoi" hint="Heure de Paris">
+          <Field label="Heure d'envoi" hint="Heure de Paris. Le bilan couvre les 24 h depuis le précédent.">
             <input type="time" value={r.time} onChange={(e) => setR({ time: e.target.value })} />
           </Field>
           <label className="flex items-center gap-2 text-[14px]" style={{ minHeight: 44 }}>

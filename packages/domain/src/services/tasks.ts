@@ -10,6 +10,7 @@ import type { TaskCreate, TaskPatch } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
 import { addDays, currentWeek, parisDate } from '../time.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
+import { listDomains } from './referential.ts';
 import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
 
 const { task, taskDependency, project, weekPlan, weekPlanItem, domain } = schema;
@@ -308,11 +309,16 @@ export function removeTaskDependency(ctx: Ctx, id: string, dependsOnId: string) 
 /**
  * Inbox page (D-44): open tasks; recurring tasks whose deadline is more than N days away (« Plus tard »,
  * N = inbox.recurring_horizon_days); tasks done this month only.
+ * « Plus tard » stays sorted by deadline.
  */
 export function listInbox(ctx: Ctx) {
   const today = parisDate(ctxNow(ctx));
   const horizon = addDays(today, getSettings(ctx)['inbox.recurring_horizon_days']);
-  const all = listTasks(ctx, { projectId: 'inbox', status: 'todo,done' });
+  // D-121: most important domain first, no domain last; inside a domain the manual order (position) stays.
+  const ranks = new Map(listDomains(ctx).map((d) => [d.id, d.priorityRank]));
+  const rank = (t: { domainId: string | null }) =>
+    (t.domainId ? ranks.get(t.domainId) : undefined) ?? Number.MAX_SAFE_INTEGER;
+  const all = listTasks(ctx, { projectId: 'inbox', status: 'todo,done' }).sort((a, b) => rank(a) - rank(b));
   const later = (t: (typeof all)[number]) => !!t.recurrenceRule && !!t.dueDate && t.dueDate > horizon;
   const month = today.slice(0, 7);
   return {

@@ -464,7 +464,7 @@ export function buildServer(call: Call) {
   );
   tool(
     'get_daily_recap',
-    'Bilan du jour (D-77, D-78) : faits du jour (le dimanche : le week-end ; ou date = AAAA-MM-JJ), 7 derniers jours, semaines d’affilée et volume des 4 semaines, semaine, pistes si rien n’est fait, et le rapport simple.',
+    'Bilan du jour (D-77, D-78) : faits des 24 dernières heures (D-121 ; le dimanche : 48 h ; ou date = AAAA-MM-JJ : les 24 h jusqu’à l’heure d’envoi de ce jour), 7 derniers jours, semaines d’affilée et volume des 4 semaines, semaine, pistes si rien n’est fait, et le rapport simple.',
     { date: z.string().optional() },
     (a) => call('GET', `/daily-recap${qs(a)}`),
   );

@@ -14,6 +14,35 @@ export function parisDate(at: Date = new Date()): string {
   }).format(at);
 }
 
+/** Date and HH:MM in Europe/Paris for a given instant. */
+export function parisClock(at: Date) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(at)
+      .map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
+/** The instant of a Europe/Paris wall clock (date, HH:MM). */
+export function parisInstant(date: string, time: string): Date {
+  const wall = Date.parse(`${date}T${time}:00Z`);
+  const offset = (ms: number) => {
+    const c = parisClock(new Date(ms));
+    return Date.parse(`${c.date}T${c.time}:00Z`) - ms;
+  };
+  // Twice: the offset of the real instant, which differs from the first guess around a clock change.
+  return new Date(wall - offset(wall - offset(wall)));
+}
+
 const toUtc = (d: string): number => Date.parse(`${d}T00:00:00Z`);
 const fromUtc = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 

@@ -60,6 +60,32 @@ Règles :
 - Tiens compte des réponses et remarques de Mehdi dans conversation : la dernière prime.`,
   daily: `Tu écris le bilan du soir de Mehdi, envoyé sur Telegram. C'est un rapport, pas une conversation : pas de salutation, pas de formule d'introduction.
 Règles :
+- Le bilan couvre les 24 h depuis le précédent (period), à cheval sur deux jours, pas la journée calendaire : ne dis pas « aujourd'hui » pour les tâches faites.
+- Uniquement les faits des données (tâches faites, semaine, semaines précédentes, pistes). N'invente aucun chiffre ; si une donnée manque, écris « n/d ».
+- La régularité se juge à la semaine, jamais au jour : pas de série de jours, pas de reproche, pas de pression sur « demain ».
+- Tâches faites (nothingDone = false), mode "day" — gabarit, dans cet ordre :
+<b>📊 Bilan du {jour}</b>
+{1 phrase qui résume les grandes réalisations des dernières 24 h, nommées précisément}
+
+📈 Semaine : <b>{fait} / {budget}</b> ({%})
+🗓 Semaines d'affilée : <b>{weekStreak}</b> (seulement si ≥ 1)
+📦 4 semaines : <b>{volume de chaque semaine de weeks, la plus ancienne d'abord}</b>
+
+<b>Fait ces dernières 24 h</b>
+✓ {tâche} · {projet} ({durée})
+- Rien de fait (nothingDone = true), mode "day" : <b>🌱 {jour}</b>, 1 à 2 phrases d'encouragement sincères (une journée sans tâche cochée, ça arrive ; la semaine se joue sur plusieurs jours), puis <b>Ce qui compte ces prochains jours</b> : 1 à 3 pistes tirées de focus (→ {tâche} · {projet}). Aucun chiffre à zéro.
+- Mode "weekend" (samedi, envoyé seulement si quelque chose est fait ; le week-end est sacré, aucune pression) : <b>🌿 {jour}</b>, 1 à 2 phrases d'encouragement qui félicitent en nommant ce qui est fait, puis la liste « Fait ce week-end ». Pas de KPI, pas de pistes, rien sur ce qui reste à faire.
+- Tutoiement, phrases courtes, pas de superlatif sans chiffre qui le justifie.`,
+};
+
+/**
+ * D-72: earlier default texts. A stored prompt still equal to one of them was never edited by Mehdi: the seed
+ * moves it to the current default at startup. An edited prompt is never touched.
+ */
+export const PREVIOUS_AI_PROMPTS: Partial<Record<keyof typeof DEFAULT_AI_PROMPTS, string[]>> = {
+  daily: [
+    `Tu écris le bilan du soir de Mehdi, envoyé sur Telegram. C'est un rapport, pas une conversation : pas de salutation, pas de formule d'introduction.
+Règles :
 - Uniquement les faits des données (tâches faites, semaine, semaines précédentes, pistes). N'invente aucun chiffre ; si une donnée manque, écris « n/d ».
 - La régularité se juge à la semaine, jamais au jour : pas de série de jours, pas de reproche, pas de pression sur « demain ».
 - Tâches faites (nothingDone = false), mode "day" — gabarit, dans cet ordre :
@@ -75,14 +101,6 @@ Règles :
 - Rien de fait (nothingDone = true), mode "day" : <b>🌱 {jour}</b>, 1 à 2 phrases d'encouragement sincères (une journée sans tâche cochée, ça arrive ; la semaine se joue sur plusieurs jours), puis <b>Ce qui compte ces prochains jours</b> : 1 à 3 pistes tirées de focus (→ {tâche} · {projet}). Aucun chiffre à zéro.
 - Mode "weekend" (samedi, envoyé seulement si quelque chose est fait ; le week-end est sacré, aucune pression) : <b>🌿 {jour}</b>, 1 à 2 phrases d'encouragement qui félicitent en nommant ce qui est fait, puis la liste « Fait ce week-end ». Pas de KPI, pas de pistes, rien sur ce qui reste à faire.
 - Tutoiement, phrases courtes, pas de superlatif sans chiffre qui le justifie.`,
-};
-
-/**
- * D-72: earlier default texts. A stored prompt still equal to one of them was never edited by Mehdi: the seed
- * moves it to the current default at startup. An edited prompt is never touched.
- */
-export const PREVIOUS_AI_PROMPTS: Partial<Record<keyof typeof DEFAULT_AI_PROMPTS, string[]>> = {
-  daily: [
     `Tu écris le bilan du soir de Mehdi, envoyé sur Telegram. C'est un rapport, pas une conversation : pas de salutation, pas de formule d'introduction.
 Règles :
 - Uniquement les faits des données (tâches faites, semaine, semaines précédentes, pistes). N'invente aucun chiffre ; si une donnée manque, écris « n/d ».
