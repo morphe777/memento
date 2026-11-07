@@ -27,6 +27,13 @@ export function openDb(file = resolveDbFile()): { db: Db; sqlite: Database.Datab
   return { db, sqlite };
 }
 
+/** Read-only connection, no migration, no pragma that writes: for checks on a live (production) database. */
+export function openDbReadonly(file = resolveDbFile()): Database.Database {
+  const sqlite = new Database(file, { readonly: true, fileMustExist: true });
+  sqlite.pragma('busy_timeout = 5000');
+  return sqlite;
+}
+
 /** Applies pending migrations. Safe to run repeatedly (L0: "migrations rejouables"). */
 export function runMigrations(db: Db): void {
   migrate(db, { migrationsFolder });

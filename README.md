@@ -95,6 +95,14 @@ Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la
 Manager en HTTPS, passer `MEMENTO_COOKIE_SECURE: "true"`. Mise à jour : nouvelle image puis « Pull and redeploy »
 (les migrations s'appliquent au démarrage ; une copie de la base est conseillée avant).
 
+Contrôle des données, en lecture seule (aucune écriture, aucune migration) : il liste les dates impossibles et les règles
+de récurrence illisibles enregistrées avant la v1.0, à corriger à la main. Code de sortie 1 s'il en trouve.
+
+```bash
+pnpm db:check                     # en dev (MEMENTO_DB_FILE, sinon data/memento.db)
+docker exec memento node_modules/.bin/tsx packages/domain/src/cli/check-data.ts   # en production
+```
+
 Si le déploiement échoue avec `container memento is unhealthy` : `docker logs memento`. Le plus souvent, le dossier
 de données n'est pas accessible en écriture par l'uid 1000 (dossier créé par Docker en root) → `chown` ci-dessus.
 

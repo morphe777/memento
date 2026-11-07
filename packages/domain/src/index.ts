@@ -21,6 +21,7 @@ export * from './services/dependencies.ts';
 export * from './services/duplicate.ts';
 export * from './services/experiences.ts';
 export * from './services/export.ts';
+export * from './services/integrity.ts';
 export * from './services/jobs.ts';
 export * from './services/month.ts';
 export * from './services/natural.ts';
