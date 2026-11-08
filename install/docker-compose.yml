@@ -7,7 +7,7 @@
 
 x-memento: &memento
   # H-17: a fixed version, never « latest ». Update = change the version here; going back = put the previous one.
-  image: morphe777/memento:1.0.0
+  image: morphe777/memento:1.1.0
   restart: unless-stopped
   environment: &env
     TZ: Europe/Paris

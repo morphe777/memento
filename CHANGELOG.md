@@ -3,6 +3,48 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.1.0 — 2026-11
+
+Demandes de Mehdi (budget, répartition, graphe des projets) et lot 2 de l'audit v1.0.
+
+### Fonctionnalités
+
+- **Budget = fait + prévu** : la charge d'une semaine ou d'un mois compte ce qui est déjà fait dans la période (jour
+  de Paris), plus ce qui reste prévu. Une tâche faite en avance consomme sa semaine et libère la suivante. « Plus de
+  budget disponible » quand le fait atteint le budget (alerte, jamais bloquant) (D-137).
+- **Planifier › Mois** : « Répartition prévue » par domaine, au-dessus des alertes (D-138).
+- **Ma semaine** : graphe « Projets du mois » (aide à côté du titre) ; rien d'écrit pour un projet dans les temps ;
+  projet terminé grisé, « terminé » à la place du délai ; « dans les temps » partout (D-139).
+- Un projet ne « rate » pas : « Terminer » = réussi ; un récurrent non fini au changement de mois est abandonné, ses
+  tâches faites restent faites (D-140).
+
+### Règles et rapports
+
+- Une semaine à cheval appartient au mois de son jeudi ; le rapport mensuel attend sa dernière semaine ; le rapport
+  trimestriel attend la clôture des objectifs récurrents (D-142).
+- Récurrentes, replanification, mois d'un projet rouvert, renouvellement par duplication, journal complété (D-143).
+- Migrations de données une seule fois (D-141).
+
+### API, MCP et IA
+
+- Créations en plusieurs étapes en un appel, tout ou rien : tâche + semaine, projet + tâches + promotion, plusieurs
+  projets (D-144).
+- Un `GET` n'écrit jamais ; 409 pour un nom pris, 404 pour un jeton inconnu ; booléens stricts ; `GET /tasks` par pages.
+- MCP : paramètres décrits, outils marqués lecture / destructifs, un jeton lecture ne voit que la lecture, nouveaux
+  `list_tasks`, `list_inbox`, `get_task` (D-146). OpenAPI : erreurs et droits par opération.
+- Données envoyées à l'IA délimitées et marquées « non fiables » ; une clé enregistrée ne part que vers son serveur
+  (D-145).
+
+### Données, exploitation
+
+- Import vérifié à blanc avant toute écriture ; copie de sécurité ensuite, 5 gardées ; copies en mode 600 (D-145).
+- La base refuse un statut inconnu et un jour qui n'existe pas ; index sur les colonnes filtrées (migration 0009).
+- `/health` lit la base ; échecs de connexion et appels MCP journalisés ; recherche masquée dans les logs.
+- Image de production allégée (578 → 378 Mo), dépendances à jour ; compose d'exemple : MCP sans accès aux données,
+  ports sur `MEMENTO_BIND_IP` (D-147).
+- Tests : sessions, révocations, chaque outil MCP, worker (D-148) ; parcours de bout en bout (Playwright).
+- Documentation resynchronisée ; statut de chaque décision (D-149).
+
 ## 1.0.0 — 2026-11
 
 Première version publiée. Correctifs issus de l'audit de sortie v1.0.
