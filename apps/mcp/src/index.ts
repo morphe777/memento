@@ -281,9 +281,9 @@ export function buildServer(call: Call) {
   );
   tool(
     'complete_project',
-    'Termine un projet : critère de succès atteint ? (oui/non).',
-    { id: S.uuid, success: z.boolean() },
-    (a) => call('POST', p`/projects/${a.id}/complete`, { success: a.success }),
+    'Termine un projet réussi (critère de succès atteint). Un projet qui ne l’atteindra pas s’abandonne (update_project status « abandoned ») : ses tâches faites restent faites (D-140).',
+    { id: S.uuid },
+    (a) => call('POST', p`/projects/${a.id}/complete`, {}),
   );
 
   tool(

@@ -283,8 +283,7 @@ describe('Vue Plan — model and rules', () => {
     ctx.setNow('2026-11-01T08:00:00.000Z');
     rollMonth(ctx, '2026-11');
     const old = getProject(ctx, rec.id);
-    expect(old.status).toBe('done');
-    expect(old.success).toBe(false);
+    expect(old.status).toBe('abandoned'); // D-140: not « done, success false »
     const next = ctx.db.select().from(schema.project).where(eq(schema.project.previousId, rec.id)).get()!;
     expect(next).toBeTruthy();
     expect(next.title).toBe('Revue');

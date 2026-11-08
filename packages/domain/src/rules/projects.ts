@@ -102,10 +102,16 @@ export function assertPromotable(p: PromotionInput, code = 'PROMOTION_INCOMPLETE
   }
 }
 
-/** RB-12: completing a project requires answering "critère de succès atteint ?". */
-export function assertCompletion(success: unknown): asserts success is boolean {
-  if (typeof success !== 'boolean') {
-    throw new DomainError('SUCCESS_ANSWER_REQUIRED', 'Critère de succès atteint ? Réponds oui ou non.');
+/**
+ * D-140 (replaces RB-12's yes/no, audit M-05): a project does not fail. « Terminer » means it succeeded; one that
+ * will not reach its criterion is abandoned (its done tasks stay done). `success: false` is refused.
+ */
+export function assertCompletion(success: unknown): void {
+  if (success === false) {
+    throw new DomainError(
+      'USE_ABANDON',
+      "Un projet terminé est réussi. S'il n'atteindra pas son critère, abandonne-le : ses tâches faites restent faites.",
+    );
   }
 }
 

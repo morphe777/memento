@@ -248,9 +248,10 @@ describe('RB-11 recurrence', () => {
 });
 
 describe('RB-12 completion and DM-89 lifecycle', () => {
-  it('requires a yes/no answer', () => {
-    expect(code(() => assertCompletion(undefined))).toBe('SUCCESS_ANSWER_REQUIRED');
-    expect(code(() => assertCompletion(false))).toBeNull();
+  it('D-140: « Terminer » means succeeded; « not succeeded » is refused (abandon instead)', () => {
+    expect(code(() => assertCompletion(undefined))).toBeNull();
+    expect(code(() => assertCompletion(true))).toBeNull();
+    expect(code(() => assertCompletion(false))).toBe('USE_ABANDON');
   });
   it('D-42: idea → ready only through promotion, → active only through the month plan', () => {
     expect(code(() => assertStatusTransition('idea', 'ready'))).toBe('INVALID_STATUS_TRANSITION');

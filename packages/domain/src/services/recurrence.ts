@@ -8,7 +8,7 @@ import { DomainError } from '../errors.ts';
 import { OBJECTIVE_RECURRENCE_MONTHS } from '../rules/recurrence.ts';
 import { addMonths, monthOf, parisDate, quarterOf, shiftMonth } from '../time.ts';
 import { createProject, getProject, getProjectRow, promoteProject, setProjectMonth } from './projects.ts';
-import { createObjective, getObjective, updateObjective } from './referential.ts';
+import { createObjective, getObjective, refreshObjectiveProgress, updateObjective } from './referential.ts';
 import { createTask } from './tasks.ts';
 
 const { project, projectGroup, task, objective } = schema;
@@ -119,9 +119,10 @@ export function renewObjective(ctx: Ctx, id: string) {
 }
 
 /**
- * DM-108: a recurring project still open at the end of its month is closed without carry-over (done, success
- * false, Q-07) and the next occurrence is created. Called by the month roll before the « back to prêt » rule,
- * which never applies to recurring projects.
+ * DM-108: a recurring project still open at the end of its month is closed without carry-over and the next
+ * occurrence is created. Called by the month roll before the « back to prêt » rule, which never applies to
+ * recurring projects. D-140 (audit M-05): it is abandoned, not « done, success false »: it never counts as progress,
+ * and its done tasks stay done.
  */
 export function closeMissedRecurringProjects(ctx: Ctx, month: string) {
   const rows = ctx.db
@@ -133,17 +134,11 @@ export function closeMissedRecurringProjects(ctx: Ctx, month: string) {
   for (const r of rows) {
     ctx.db
       .update(project)
-      .set({ status: 'done', success: false, completedAt: ctxNowIso(ctx), updatedAt: ctxNowIso(ctx) })
+      .set({ status: 'abandoned', updatedAt: ctxNowIso(ctx) })
       .where(eq(project.id, r.id))
       .run();
-    audit(
-      ctx,
-      'project',
-      r.id,
-      'recurrence_missed',
-      { status: r.status },
-      { status: 'done', success: false },
-    );
+    audit(ctx, 'project', r.id, 'recurrence_missed', { status: r.status }, { status: 'abandoned' });
+    refreshObjectiveProgress(ctx, r.objectiveId);
     renewProject(ctx, r.id, { missed: true });
   }
   return rows.length;

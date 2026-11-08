@@ -330,13 +330,13 @@ describe('L1 référentiel', () => {
     expect(r.next?.status).toBe('todo');
   });
 
-  it('RB-12: completion needs yes/no and updates stored objective progress (D-05)', () => {
+  it('D-140: completion (always a success) updates stored objective progress (D-05)', () => {
     const ctx = makeCtx();
     const o = createObjective(ctx, { title: 'Sport', deadline: '2026-12-31' });
     const { project } = activeProject(ctx, 'Tennis', 'Sport', 1, { objectiveId: o.id });
     activeProject(ctx, 'Natation', 'Sport', 1, { objectiveId: o.id });
-    expect(errCode(() => completeProject(ctx, project.id, undefined))).toBe('SUCCESS_ANSWER_REQUIRED');
-    completeProject(ctx, project.id, true);
+    expect(errCode(() => completeProject(ctx, project.id, false))).toBe('USE_ABANDON');
+    completeProject(ctx, project.id);
     expect(getObjective(ctx, o.id).progressPct).toBe(50);
   });
 

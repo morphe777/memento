@@ -23,6 +23,7 @@ export * from './services/experiences.ts';
 export * from './services/export.ts';
 export * from './services/integrity.ts';
 export * from './services/jobs.ts';
+export * from './services/migrations.ts';
 export * from './services/month.ts';
 export * from './services/natural.ts';
 export * from './services/notifications.ts';

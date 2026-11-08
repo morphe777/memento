@@ -68,7 +68,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `ready` | « prêt », le backlog considéré | `POST /projects/{id}/promote` (jamais bloquant) |
 | `active` | **projet du mois** | `POST /projects/{id}/month` `{ "month": "AAAA-MM" }` (mois courant) |
 | `paused` | en pause | `PATCH { status: "paused" }` ; reprise : `PATCH { status: "ready" }` |
-| `done` | terminé | `POST /projects/{id}/complete` `{ "success": true\|false }` (critère atteint ?) |
+| `done` | terminé, réussi | `POST /projects/{id}/complete` `{}` ; un projet qui n'atteindra pas son critère passe en `abandoned` (ses tâches faites restent faites, D-140) |
 | `abandoned` | abandonné | `PATCH { status: "abandoned" }` ; retour : `PATCH { status: "idea" }` |
 
 - Un projet est **complet** (RB-02) s'il a : un critère de succès oui / non, ≥ 1 groupe, ≥ 1 tâche, une durée sur
@@ -172,7 +172,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `MONTH_PROJECT_INCOMPLETE` / `ACTIVE_PROJECT_INCOMPLETE` | projet du mois incomplet (`details` = manques) |
 | `MONTH_IN_PAST` | mois déjà passé |
 | `INVALID_STATUS_TRANSITION` | passage de statut interdit (le message dit lequel utiliser) |
-| `SUCCESS_ANSWER_REQUIRED` | terminer exige `success: true\|false` |
+| `USE_ABANDON` | `success: false` refusé : un projet terminé est réussi, sinon il est abandonné (D-140) |
 | `INVALID_DURATION` | durée 5, 15, 30, 60 ou 120 min |
 | `TASK_LOCKED` | la tâche attend la précédente ou un prérequis |
 | `TASK_NOT_TODO` / `TASK_CANCELLED` | tâche déjà faite / annulée |

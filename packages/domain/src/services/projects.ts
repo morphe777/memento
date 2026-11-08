@@ -372,8 +372,8 @@ export function promoteProject(ctx: Ctx, id: string) {
   });
 }
 
-/** RB-12: complete with "critère de succès atteint ?" yes/no. */
-export function completeProject(ctx: Ctx, id: string, success: unknown) {
+/** D-140: « Terminer » = succeeded (RB-12's yes/no question is gone, audit M-05). */
+export function completeProject(ctx: Ctx, id: string, success?: unknown) {
   assertCompletion(success);
   return tx(ctx, () => {
     const before = getProject(ctx, id);
@@ -387,7 +387,7 @@ export function completeProject(ctx: Ctx, id: string, success: unknown) {
       .update(project)
       .set({
         status: 'done',
-        success,
+        success: true,
         completedAt: ctxNowIso(ctx),
         monthFlag: before.monthFlag,
         updatedAt: ctxNowIso(ctx),

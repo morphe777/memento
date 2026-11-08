@@ -545,24 +545,29 @@ function KanbanCard({ p }: { p: Project }) {
 }
 
 function CompletePanel({ project, onClose }: { project: Project | null; onClose: () => void }) {
-  const complete = useAction((success: boolean) => post(`/projects/${project!.id}/complete`, { success }), {
+  // D-140: « Terminer » = réussi; a project that will not reach its criterion is abandoned instead.
+  const complete = useAction(() => post(`/projects/${project!.id}/complete`, {}), {
     onSuccess: onClose,
     toast: 'Projet terminé.',
   });
   return (
     <Panel open={!!project} onClose={onClose} title="Terminer le projet" side={false} width={460}>
       <p className="m-0 text-[15px]">
-        Critère de succès atteint ?<br />
+        Critère de succès atteint :<br />
         <span className="text-[14px]" style={{ color: 'var(--text-muted)' }}>
           « {project?.successCriterion || 'non renseigné'} »
         </span>
       </p>
+      <p className="m-0 text-[13px]" style={{ color: 'var(--text-muted)' }}>
+        Pas atteint et tu t'arrêtes là ? Abandonne plutôt le projet (statut « Abandonné ») : ses tâches faites
+        restent faites.
+      </p>
       <div className="flex gap-2 justify-end">
-        <button type="button" className="btn" onClick={() => complete.mutate(false)}>
-          Non
+        <button type="button" className="btn" onClick={onClose}>
+          Annuler
         </button>
-        <button type="button" className="btn btn-primary" onClick={() => complete.mutate(true)}>
-          Oui
+        <button type="button" className="btn btn-primary" onClick={() => complete.mutate(undefined)}>
+          Terminer
         </button>
       </div>
     </Panel>
@@ -707,7 +712,6 @@ export function ProjectPage({ id, tache, vue: vueParam }: { id: string; tache?: 
             <span className="flex items-center gap-2">
               <span className="dot" style={{ background: color }} />
               {p.domainIds.map((d) => dl.name(d)).join(' · ')} · {STATUS_LABEL[p.status]}
-              {p.success !== null && p.status === 'done' && (p.success ? ' · réussi' : ' · échec')}
             </span>
           }
           title={p.title}

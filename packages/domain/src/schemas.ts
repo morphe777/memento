@@ -120,7 +120,8 @@ export const projectGroupsBody = z.object({
   groupIds: z.array(uuid).min(1),
   primaryDomainId: uuid.nullable().optional(),
 });
-export const projectCompleteBody = z.object({ success: z.boolean() });
+// D-140: `success` is optional and only `true` is accepted (a project that does not succeed is abandoned).
+export const projectCompleteBody = z.object({ success: z.boolean().optional() });
 /** D-58: « Proposer avec l'IA » on one tab of Planifier. */
 export const aiProposeBody = z.object({
   scope: z.enum(['week', 'month', 'quarter']),
