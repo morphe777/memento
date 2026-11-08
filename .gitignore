@@ -8,3 +8,7 @@ data/
 !.env.example
 coverage/
 *.tsbuildinfo
+
+# Playwright (H-16)
+e2e/test-results/
+e2e/playwright-report/

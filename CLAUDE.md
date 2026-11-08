@@ -57,6 +57,7 @@ Le dépôt GitHub est **public**. Chaque changement passe ces règles.
 **Version et livraison**
 - Commits locaux en anglais, fichiers ajoutés un par un, messages factuels.
 - Me demander avant tout push, tag, image Docker, ou action sur la production.
+- Avant une version : aussi `pnpm test:e2e` (parcours Playwright, base jetable).
 - Version : la même dans tous les `package.json` et `docker-compose.yml`, une entrée dans `CHANGELOG.md`, puis CI
   verte, tag `vX.Y.Z`, `./install/build-and-push.sh` (refuse sans le tag).
 - Migration de base : `pnpm db:backup` avant ; après, `pnpm db:check` doit être propre.

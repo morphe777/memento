@@ -21,6 +21,7 @@
     "apps/*/test",
     "packages/*/test",
     "apps/web/vite.config.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "e2e"
   ]
 }
