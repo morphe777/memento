@@ -147,7 +147,7 @@ const PARAMS: Record<string, string> = {
   recurrence: 'Récurrence : monthly, quarterly ou yearly ; null = aucune.',
   recurrenceRule: "Règle de récurrence RRULE d'une tâche de l'Inbox (ex. FREQ=WEEKLY;BYDAY=MO), ou null.",
   sequenceMode: "sequential (une tâche après l'autre) ou parallel.",
-  since: 'Depuis : une date ISO, « 7d » (7 jours), « last_visit » ou « all ».',
+  since: 'Depuis : une date ISO, « 24h », « 7d », « last-visit » (dernière visite) ou « all ».',
   smartCurrent: "Valeur actuelle de l'indicateur.",
   smartIndicator: "Indicateur mesurable de l'objectif.",
   smartTarget: "Valeur cible de l'indicateur.",
@@ -613,8 +613,11 @@ export function buildServer(call: Call, canWrite = true) {
       kind: z.enum(['week', 'month', 'quarter']).optional(),
       periodKey: S.reportPeriodKey.optional(),
     },
-    (a) =>
-      a.id ? call('GET', p`/reports/${a.id}`) : call('GET', p`/reports/by-period/${a.kind}/${a.periodKey}`),
+    async (a) => {
+      if (a.id) return call('GET', p`/reports/${a.id}`);
+      if (!a.kind || !a.periodKey) throw new Error('Donner id, ou kind et periodKey (ex. week, 2026-W43).');
+      return call('GET', p`/reports/by-period/${a.kind}/${a.periodKey}`);
+    },
   );
   tool(
     'get_daily_recap',
