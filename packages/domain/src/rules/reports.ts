@@ -136,7 +136,7 @@ export interface DelayBar {
 
 /** DelayBar geometry shared by Ma semaine and reports (mockups: ±4 h fills half the bar). */
 export function delayLabel(deltaMin: number): string {
-  if (Math.abs(deltaMin) < 15) return "à l'heure";
+  if (Math.abs(deltaMin) < 15) return 'dans les temps'; // D-139
   return `${deltaMin > 0 ? '+' : '−'}${fmtMin(Math.abs(deltaMin))}`;
 }
 

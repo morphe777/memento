@@ -333,7 +333,7 @@ describe('R-06 / RB-16 delay (D-118: time available, judged by the week)', () =>
   it('labels', () => {
     expect(delayLabel(-120)).toBe('−2 h');
     expect(delayLabel(60)).toBe('+1 h');
-    expect(delayLabel(0)).toBe("à l'heure");
+    expect(delayLabel(0)).toBe('dans les temps');
   });
 });
 

@@ -126,7 +126,7 @@ export const DELAY_HELP = (
     </span>
     <span className="tip-p">
       <b>Lecture</b>
-      <span className="tip-li">moins de 15 min d'écart : à l'heure ;</span>
+      <span className="tip-li">moins de 15 min d'écart : dans les temps ;</span>
       <span className="tip-li">barre pleine à ±4 h.</span>
     </span>
     <span className="tip-p">

@@ -696,7 +696,7 @@ function PaceBadge({ deltaMin }: { deltaMin: number }) {
       }}
     >
       {onTime
-        ? "à l'heure"
+        ? 'dans les temps'
         : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))} ${late ? 'de retard' : "d'avance"}`}
     </span>
   );
