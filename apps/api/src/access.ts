@@ -2,7 +2,8 @@
 // signed-in user only: 403 USER_ONLY. `read`: a read token may call it too (it writes nothing); `write`: read_write
 // tokens only (403 READ_ONLY_TOKEN). The API refuses to start if a listed route does not exist.
 // Closed to tokens by D-123: GET /settings, POST /changes/mark-reviewed, POST /reports/generate, writes on domains
-// and groups; and, as before, accounts, tokens, AI settings and helpers, notifications setup, import, export, purge.
+// and groups; by D-136: POST /notifications/read-all, POST /plan/migrate-dependencies; and, as before, accounts,
+// tokens, AI settings and helpers, notifications setup, import, export, purge.
 export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'POST /api/v1/auth/logout': 'write',
   'GET /api/v1/auth/me': 'read',
@@ -26,7 +27,6 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'GET /api/v1/month-plans/:month': 'read',
   'GET /api/v1/notifications': 'read',
   'GET /api/v1/notifications/:id': 'read',
-  'POST /api/v1/notifications/read-all': 'write',
   'GET /api/v1/objectives': 'read',
   'POST /api/v1/objectives': 'write',
   'DELETE /api/v1/objectives/:id': 'write',
@@ -40,7 +40,6 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'GET /api/v1/plan-graph': 'read',
   'GET /api/v1/plan-graph/reserve': 'read',
   'POST /api/v1/plan/apply': 'write',
-  'POST /api/v1/plan/migrate-dependencies': 'write',
   'POST /api/v1/plan/preview': 'read',
   'GET /api/v1/projects': 'read',
   'POST /api/v1/projects': 'write',
@@ -80,6 +79,7 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'POST /api/v1/tasks/done': 'write',
   'POST /api/v1/tasks/parse': 'read',
   'POST /api/v1/tasks/reorder': 'write',
+  'GET /api/v1/templates': 'read',
   'GET /api/v1/vacations': 'read',
   'POST /api/v1/vacations': 'write',
   'DELETE /api/v1/vacations/:from': 'write',

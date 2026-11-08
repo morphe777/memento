@@ -132,6 +132,17 @@ export const settingsPatchSchema = settingsSchema.partial();
 
 export type TemplateKind = 'meta_objective' | 'objective' | 'project' | 'task';
 
+/** D-136: the description templates alone (the only settings an API token may read, to write like the user). */
+export function getTemplates(ctx: Pick<Ctx, 'db'>): Record<TemplateKind, string> {
+  const s = getSettings(ctx);
+  return {
+    meta_objective: s['templates.meta_objective'],
+    objective: s['templates.objective'],
+    project: s['templates.project'],
+    task: s['templates.task'],
+  };
+}
+
 /** Reads all settings, falling back to defaults for missing keys. */
 export function getSettings(ctx: Pick<Ctx, 'db'>): Settings {
   const rows = ctx.db.select().from(schema.setting).all();

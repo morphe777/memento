@@ -273,6 +273,8 @@ export async function buildApp(opts: AppOptions) {
       r.patch('/settings', { schema: { ...tag('Réglages'), body: D.settingsPatchSchema } }, async (req) =>
         D.patchSettings(ctx(req), req.body),
       );
+      // D-136: the description templates, also readable by tokens (GET /settings stays closed to them, D-123).
+      r.get('/templates', { schema: tag('Réglages') }, async (req) => D.getTemplates(ctx(req)));
       r.get('/tokens', { schema: tag('Accès') }, async () => A.listTokens(db));
       // D-50: restore an export (replaces all business data). A SQLite backup is taken first.
       r.post(

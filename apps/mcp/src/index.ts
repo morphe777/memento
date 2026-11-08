@@ -243,6 +243,13 @@ export function buildServer(call: Call) {
     (a) => call('POST', p`/projects/${a.id}/promote`),
   );
   tool(
+    'get_templates',
+    'Modèles de description de l’utilisateur (méta-objectif, objectif, projet, tâche) : la structure à suivre quand tu rédiges une description. Ils ne sont jamais copiés tels quels (D-119).',
+    {},
+    () => call('GET', '/templates'),
+  );
+
+  tool(
     'get_guide',
     'Guide d’utilisation de Mémento pour une IA (Markdown) : modèle, cycle de vie, planification, recettes, codes d’erreur. À lire en premier.',
     {},

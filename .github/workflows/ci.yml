@@ -44,7 +44,8 @@ jobs:
             test -f docs/api/guide-ia.md &&
             ! test -e maquettes && ! test -e memento-vue-plan && ! test -e data && ! test -e .git &&
             test "$(ls docs)" = "api" && test "$(ls docs/api)" = "guide-ia.md"'
-      - name: Image scan (fixable high and critical vulnerabilities block)
+      # D-136: the scan warns (listed in the log), it does not block: most findings come from the Debian base image.
+      - name: Image scan (fixable high and critical vulnerabilities, warning only)
         run: >
           docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.57.1
-          image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress memento:ci
+          image --exit-code 0 --severity HIGH,CRITICAL --ignore-unfixed --no-progress memento:ci

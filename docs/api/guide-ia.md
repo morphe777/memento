@@ -17,7 +17,9 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'ut
 - Jeton « lecture-écriture » : création, modification, planification et suppression (journalisée avec son contenu).
 - Fermé à tout jeton : réglages (même en lecture), jetons, compte, export / import, purge des données,
   « Proposer avec l'IA » (`/ai/*`), notifications (Telegram, push), écriture sur les domaines et les groupes,
-  génération d'un rapport (`POST /reports/generate`) et « Marquer comme revu » (`POST /changes/mark-reviewed`).
+  génération d'un rapport (`POST /reports/generate`), « Marquer comme revu » (`POST /changes/mark-reviewed`),
+  « Tout marquer comme lu » dans les notifications et la migration des chemins (`POST /plan/migrate-dependencies`).
+- Lisible par tout jeton : les modèles de description (`GET /templates`).
 
 ## 2. Conventions
 
@@ -113,7 +115,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   - `POST /plan/preview { ops }` (sans écriture, autorisé en lecture seule) puis `POST /plan/apply { ops,
     baseVersion? }` (atomique : 422 = rien n'est appliqué ; 409 `PLAN_APPLY_CONFLICT` si `baseVersion` est périmée).
     Ops : `setDependencies`, `attachProject`, `detachProject`, `setFree`, `setObjectiveQuarter`, `setObjectiveMeta`,
-    `reorderObjectives`. `POST /plan/migrate-dependencies { dryRun }` convertit les anciens chemins (DM-109).
+    `reorderObjectives`.
 - **Mois** : `GET /month-plans/{mois}` : capacité (budgets des semaines au prorata), projets du mois, backlog
   classé, objectifs du trimestre couverts ou non, alertes (`MONTH_OVER`, `TOO_MANY_PROJECTS`, `OBJECTIVE_EMPTY`,
   `OFF_OBJECTIVE`, `CARRIED_OVER`). Choisir : `POST /projects/{id}/month`.
@@ -135,8 +137,8 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 ## 5. Recettes
 
 1. **Capturer une idée de projet** : `GET /domains` + `GET /groups` → `POST /projects { title, groupIds,
-   description }`. Écris une vraie description : sans elle, le projet reste sans description (aucun modèle n'est
-   copié, D-119).
+   description }`. Écris une vraie description en suivant le modèle de l'utilisateur (`GET /templates`, outil MCP
+   `get_templates`) : sans elle, le projet reste sans description (aucun modèle n'est copié, D-119).
 2. **Découper un projet** : `POST /tasks/batch { projectId, tasks: [{ title, durationMin }] }` (ordre = ordre
    d'exécution), puis `POST /projects/{id}/promote`. Vérifie `gaps` et complète (`PATCH /projects/{id}`
    `{ successCriterion }`).

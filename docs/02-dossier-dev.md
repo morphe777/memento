@@ -219,7 +219,7 @@ Préfixe `/api/v1`, JSON, contrat OpenAPI généré depuis les schémas Zod et s
 | Rapports | GET /reports?kind=&from=&to=, GET /reports/{id}, POST /reports/generate | Lecture seule ensuite |
 | Recherche | GET /search?q= | Résultats groupés par type |
 | À revoir | GET /changes?since=&actor=, POST /changes/mark-reviewed | F-25 |
-| Réglages | GET/PATCH /settings | V-14 |
+| Réglages | GET/PATCH /settings, GET /templates | V-14 ; /templates : les seuls modèles de description, lisibles par un jeton (D-136) |
 | Jetons | GET/POST/DELETE /tokens | Valeur affichée une seule fois |
 
 Les endpoints « page prête » (planification, exécution) existent parce que le front en a besoin : c'est le front qui façonne le back. Ils restent dans l'API, donc l'IA y a accès aussi.
@@ -246,7 +246,7 @@ Outils nommés en anglais, description en français, chacun = un ou deux appels 
 | `add_resource` | Lien vers la doc (DM-70) |
 
 Suppression : outils `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective` (D-60, D-123),
-journalisés avec le contenu supprimé. Pas d'outil de réglages. Les routes ouvertes aux jetons sont fixées par une
+journalisés avec le contenu supprimé. Pas d'outil de réglages ; `get_templates` lit les modèles de description (D-136). Les routes ouvertes aux jetons sont fixées par une
 seule liste (`apps/api/src/access.ts`, H-03) ; les autres sont réservées à l'interface.
 
 ## 10. Arborescence des pages et fil d'Ariane

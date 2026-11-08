@@ -88,6 +88,17 @@ describe('H-14 access matrix', () => {
     expect(wrong).toEqual([]);
   });
 
+  it('D-136: a read token reads the description templates, and nothing else of the settings', async () => {
+    const res = await app.inject({
+      method: 'GET',
+      url: '/api/v1/templates',
+      headers: { authorization: `Bearer ${read}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(Object.keys(res.json()).sort()).toEqual(['meta_objective', 'objective', 'project', 'task']);
+    expect(res.json().task).toContain('Quoi faire');
+  });
+
   it('D-123: the routes closed to tokens', async () => {
     for (const r of [
       'GET /api/v1/settings',
@@ -100,6 +111,8 @@ describe('H-14 access matrix', () => {
       'PATCH /api/v1/groups/:id',
       'DELETE /api/v1/groups/:id',
       'POST /api/v1/import',
+      'POST /api/v1/notifications/read-all', // D-136
+      'POST /api/v1/plan/migrate-dependencies', // D-136
       'GET /api/v1/tokens',
       'POST /api/v1/tokens',
     ]) {
