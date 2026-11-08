@@ -23,6 +23,38 @@ Priorité en cas de conflit : décisions datées (Specs §9.0) > dossier de dev 
 - Ne pas exposer de service sur Internet ; aucun secret dans le dépôt.
 - Les décisions encore ouvertes sont listées en dossier de dev §14 : les valeurs proposées s'appliquent tant que je n'ai pas tranché.
 
-## Démarrer
+## Depuis la v1.0 (publiée le 08/11/2026)
 
-Commencer par le lot **L0 Socle**.
+Le dépôt GitHub est **public**. Chaque changement passe ces règles.
+
+**Données personnelles et confidentialité**
+- Aucune donnée réelle dans Git : exemples, tests, fixtures, docs et seed sont fictifs. Mes données restent dans
+  `data/` (ignoré).
+- Ne jamais committer `docs/audit/` ni `data/private/` (failles décrites, chaînes personnelles, scripts privés).
+- Le hook `.githooks/pre-push` refuse un push contenant une chaîne personnelle (`git config core.hooksPath .githooks`
+  dans chaque clone). Ne jamais le contourner (`--no-verify`).
+
+**Code**
+- Une règle métier = `packages/domain` + test + ID en commentaire + ligne dans `docs/DECISIONS.md` si elle est
+  nouvelle. Règles simples, sans cas particuliers.
+- Nouvelle route API : la classer dans `apps/api/src/access.ts` (`read`, `write`, ou absente = interface seule). Le
+  test matriciel (`apps/api/test/access-matrix.test.ts`) couvre toutes les routes et doit rester vert.
+- Dates : valider les jours réels (D-126) ; heure de Paris, jamais UTC, pour jours, semaines et mois.
+- Jobs planifiés : passer par `once()` de `services/jobs.ts` (tout ou rien, relance, échec signalé, C-07). Pas de
+  `catch` vide.
+- Une route ou un outil MCP qui change : mettre à jour `docs/api/guide-ia.md` (lu par l'IA à l'exécution).
+
+**Tests**
+- Écrire d'abord le test qui échoue, puis la correction.
+- Avant chaque commit : `pnpm check` (lint, typage, tests) et `pnpm test:dates` (autres jours, ordre aléatoire).
+  Tests à horloge fixe (`makeCtx(date)`), jamais dépendants du jour réel.
+- Essais manuels : instance isolée (copie de base dans le scratchpad, ports 4520 et plus, faux LLM). Ne jamais
+  modifier `data/memento.db`. Redémarrer l'instance de dev avant de me demander de vérifier.
+
+**Version et livraison**
+- Commits locaux en anglais, fichiers ajoutés un par un, messages factuels.
+- Me demander avant tout push, tag, image Docker, ou action sur la production.
+- Version : la même dans tous les `package.json` et `docker-compose.yml`, une entrée dans `CHANGELOG.md`, puis CI
+  verte, tag `vX.Y.Z`, `./install/build-and-push.sh` (refuse sans le tag).
+- Migration de base : `pnpm db:backup` avant ; après, `pnpm db:check` doit être propre.
+- `install/docker-compose.yml` n'est qu'un exemple public : la production utilise son propre compose.
