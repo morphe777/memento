@@ -2,7 +2,7 @@
 // adapters around @memento/domain services.
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { basename, join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
@@ -45,6 +45,8 @@ export interface AppOptions {
   cookieSecure: boolean;
   webDist?: string;
   logger?: boolean;
+  /** Log lines go there (tests); implies logging. */
+  logStream?: NodeJS.WritableStream;
   now?: () => Date;
   /** Where the SQLite backup is written before an import (D-50); no backup when absent (tests). */
   backupDir?: string;
@@ -66,9 +68,25 @@ declare module 'fastify' {
   }
 }
 
+/** M-20: the search words (`q`) never reach the logs. */
+export const maskQuery = (url: string) => url.replace(/([?&]q=)[^&]*/g, '$1***');
+
 export async function buildApp(opts: AppOptions) {
   const app = Fastify({
-    logger: opts.logger ? { redact: ['req.headers.authorization', 'req.headers.cookie'] } : false,
+    logger:
+      opts.logger || opts.logStream
+        ? {
+            redact: ['req.headers.authorization', 'req.headers.cookie'],
+            serializers: {
+              req: (req: { method: string; url: string; ip?: string }) => ({
+                method: req.method,
+                url: maskQuery(req.url),
+                remoteAddress: req.ip,
+              }),
+            },
+            ...(opts.logStream ? { stream: opts.logStream } : {}),
+          }
+        : false,
     trustProxy: opts.trustProxy?.trim() || false,
   });
   // H-03, H-14: every API route, for the token list check below and the access matrix test.
@@ -180,7 +198,16 @@ export async function buildApp(opts: AppOptions) {
       const tag = (t: string) => ({ tags: [t] });
 
       // ---------- Health, auth ----------
-      r.get('/health', { schema: tag('Système') }, async () => ({ ok: true, version: D.APP_VERSION }));
+      // M-20: the database is read, so a broken database is a 503, not « ok ».
+      r.get('/health', { schema: tag('Système') }, async (req, reply) => {
+        try {
+          sqlite.prepare('select 1').get();
+          return { ok: true, db: true, version: D.APP_VERSION };
+        } catch (e) {
+          req.log.error({ err: e }, 'health: database unreadable');
+          return reply.code(503).send({ ok: false, db: false, version: D.APP_VERSION });
+        }
+      });
       // Guide for AI clients (docs/api/guide-ia.md), also served by the MCP tool get_guide.
       r.get('/guide', { schema: tag('Système') }, async () => ({
         format: 'markdown',
@@ -199,10 +226,12 @@ export async function buildApp(opts: AppOptions) {
         },
         async (req, reply) => {
           const res = await A.login(db, req.body.login, req.body.password);
-          if (!res)
+          if (!res) {
+            req.log.warn({ ip: req.ip }, 'login failed'); // M-20 (never the password)
             return reply
               .code(401)
               .send({ code: 'BAD_CREDENTIALS', message: 'Identifiant ou mot de passe incorrect.' });
+          }
           reply.setCookie(A.SESSION_COOKIE, res.raw, {
             path: '/',
             httpOnly: true,
@@ -279,7 +308,7 @@ export async function buildApp(opts: AppOptions) {
       // D-136: the description templates, also readable by tokens (GET /settings stays closed to them, D-123).
       r.get('/templates', { schema: tag('Réglages') }, async (req) => D.getTemplates(ctx(req)));
       r.get('/tokens', { schema: tag('Accès') }, async () => A.listTokens(db));
-      // D-50: restore an export (replaces all business data). A SQLite backup is taken first.
+      // D-50: restore an export (replaces all business data). M-13: checked first, then a safety copy.
       r.post(
         '/import',
         {
@@ -287,15 +316,10 @@ export async function buildApp(opts: AppOptions) {
           bodyLimit: 100 * 1024 * 1024,
         },
         async (req) => {
-          let backup: string | null = null;
-          if (opts.backupDir) {
-            backup = join(
-              opts.backupDir,
-              `backup-avant-import-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
-            );
-            await sqlite.backup(backup);
-          }
-          return { ...D.importData(ctx(req), req.body), backup: backup ? basename(backup) : null };
+          const c = ctx(req);
+          D.checkImport(c, req.body);
+          const backup = opts.backupDir ? await D.safetyCopy(c, opts.backupDir, 'import') : null;
+          return { ...D.importData(c, req.body), backup };
         },
       );
       // D-58: « Proposer avec l'IA ». Interface only (it spends the user's AI credits); the proposal is
@@ -310,7 +334,7 @@ export async function buildApp(opts: AppOptions) {
       );
       // D-66: connection test + model list, with the form's values (not yet saved).
       r.post('/ai/check', { schema: { ...tag('IA'), body: D.aiCheckBody } }, async (req) =>
-        D.checkAi(req.body, process.env, D.getAiKey(ctx(req), req.body.provider)),
+        D.checkAi(req.body, process.env, D.getAiKey(ctx(req), req.body.provider), D.getSettings(ctx(req))),
       );
       r.post('/ai/propose', { schema: { ...tag('IA'), body: D.aiProposeBody } }, async (req) => {
         const c = ctx(req);
@@ -348,18 +372,9 @@ export async function buildApp(opts: AppOptions) {
       });
       // D-57: wipe objectives, projects and tasks (configuration kept). A SQLite backup is taken first.
       r.post('/purge', { schema: { ...tag('Réglages'), body: D.purgeBody } }, async (req) => {
-        let backup: string | null = null;
-        if (opts.backupDir) {
-          backup = join(
-            opts.backupDir,
-            `backup-avant-purge-${new Date().toISOString().replace(/[:.]/g, '-')}.db`,
-          );
-          await sqlite.backup(backup);
-        }
-        return {
-          ...D.purgeData(ctx(req), { history: req.body.history }),
-          backup: backup ? basename(backup) : null,
-        };
+        const c = ctx(req);
+        const backup = opts.backupDir ? await D.safetyCopy(c, opts.backupDir, 'purge') : null;
+        return { ...D.purgeData(c, { history: req.body.history }), backup };
       });
       // D-45: full JSON export (backup), interface only, without any secret.
       r.get('/export', { schema: tag('Réglages') }, async (req, reply) => {

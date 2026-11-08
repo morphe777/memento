@@ -12,6 +12,7 @@ import { listDomains } from '../services/referential.ts';
 import { getReport, listReports } from '../services/reports.ts';
 import { getSettings } from '../settings.ts';
 import { parisDate } from '../time.ts';
+import { DATA_RULE, dataBlock } from './prompts.ts';
 import type { Llm } from './providers.ts';
 
 export type AiScope = 'week' | 'month' | 'quarter';
@@ -181,8 +182,8 @@ async function ask<S extends AiScope>(ctx: Ctx, llm: Llm, scope: S, data: unknow
   const schema = z.toJSONSchema(OUTPUT[scope]) as Record<string, unknown>;
   const prompts = getSettings(ctx);
   const { text, model } = await llm({
-    system: `${prompts['ai.prompt.system']}\n\n${FORMAT_RULE}`,
-    user: `${prompts[`ai.prompt.${scope}`]}\n\nSchéma de la réponse : ${FORMAT[scope]}\n\nDonnées (JSON) :\n${JSON.stringify(data)}`,
+    system: `${prompts['ai.prompt.system']}\n\n${FORMAT_RULE}\n\n${DATA_RULE}`,
+    user: `${prompts[`ai.prompt.${scope}`]}\n\nSchéma de la réponse : ${FORMAT[scope]}\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema,
   });
   const parsed = OUTPUT[scope].safeParse(parseJsonObject(text));

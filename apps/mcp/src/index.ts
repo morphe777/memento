@@ -40,6 +40,19 @@ class ApiFailure extends Error {
   }
 }
 
+/** M-20: one line per tool call (name, result, duration), never the arguments (they hold personal data). */
+const logCall = (tool: string, started: number, status: number) =>
+  console.log(
+    JSON.stringify({
+      level: status === 200 ? 30 : 40,
+      time: Date.now(),
+      msg: 'mcp tool',
+      tool,
+      status,
+      ms: Date.now() - started,
+    }),
+  );
+
 const ok = (data: unknown) => ({
   content: [{ type: 'text' as const, text: typeof data === 'string' ? data : JSON.stringify(data, null, 2) }],
 });
@@ -99,9 +112,13 @@ export function buildServer(call: Call) {
     run: (a: Args<T>) => Promise<unknown>,
   ) =>
     server.registerTool(name, { description, inputSchema: shape }, (async (args: Args<T>) => {
+      const started = Date.now();
       try {
-        return ok(await run(args));
+        const out = ok(await run(args));
+        logCall(name, started, 200);
+        return out;
       } catch (e) {
+        logCall(name, started, e instanceof ApiFailure ? e.status : 0);
         return fail(e);
       }
     }) as never);

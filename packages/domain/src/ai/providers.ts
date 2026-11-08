@@ -333,11 +333,27 @@ const perMillion = (perToken: string | undefined) => {
  * Checks the URL and key by listing the provider's models (GET /models), plus, for OpenRouter, the key's
  * credit (GET /key). OpenRouter models that cannot return structured JSON are listed last.
  */
-export async function checkAi(input: AiCheckInput, env: Env, storedKey = '') {
+export async function checkAi(input: AiCheckInput, env: Env, storedKey = '', saved?: Settings) {
   const s = { 'ai.provider': input.provider, 'ai.base_url': input.baseUrl ?? '', 'ai.model': '' } as Settings;
-  const r = resolve(s, env, input.key?.trim() || storedKey);
+  const typed = input.key?.trim() ?? '';
+  let r = resolve(s, env, typed || storedKey);
+  // M-15: a stored or environment key only goes to the server it was saved for; another URL needs the key typed.
+  let otherServer = false;
+  if (r && !typed) {
+    const savedUrl = saved?.['ai.provider'] === input.provider ? saved['ai.base_url'] : '';
+    const home = resolve({ ...s, 'ai.base_url': savedUrl }, {}, '');
+    if (home && r.baseUrl !== home.baseUrl) {
+      r = resolve(s, {}, '');
+      otherServer = true;
+    }
+  }
   if (!r) throw new DomainError('AI_NOT_CONFIGURED', 'Choisis d’abord un fournisseur.');
   if (!r.baseUrl) throw new DomainError('AI_NOT_CONFIGURED', 'URL du serveur non renseignée.');
+  if (otherServer && r.preset.keyRequired)
+    throw new DomainError(
+      'AI_NOT_CONFIGURED',
+      'Nouvelle URL : saisis la clé pour la vérifier (la clé enregistrée ne part que vers son serveur).',
+    );
   if (r.preset.keyRequired && !r.key) throw new DomainError('AI_NOT_CONFIGURED', 'Clé d’API non renseignée.');
   const models = r.provider === 'anthropic' ? await anthropicModels(r) : await openAiModels(r);
   let info: string | null = null;

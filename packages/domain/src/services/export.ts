@@ -1,9 +1,13 @@
 // Configuration › Données (decision D-45): full export of the data as JSON, as a backup / for other tools.
 // Secrets are never exported: password hashes, sessions, API token hashes and AI keys (D-66) are left out.
-import { schema, sql } from '@memento/db';
+import { chmodSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { copyDb, schema, sql } from '@memento/db';
 import { SECRET_SETTING_PREFIX } from '../ai/providers.ts';
 import { audit, type Ctx, ctxNow, tx } from '../context.ts';
 import { DomainError } from '../errors.ts';
+import { settingsSchema } from '../settings.ts';
+import { findInvalidData } from './integrity.ts';
 
 export const EXPORT_VERSION = 1;
 
@@ -71,11 +75,9 @@ const IMPORT_ORDER = [
   ['auditLog', schema.auditLog],
 ] as const;
 
-/**
- * D-50: restore a JSON export, replacing all business data in one transaction (all or nothing).
- * The API takes a SQLite backup of the current database just before calling this.
- */
-export function importData(ctx: Ctx, data: unknown) {
+type ExportFile = { exportedAt?: string; tables: Record<string, unknown> };
+
+function readExport(data: unknown): ExportFile {
   const d = data as { app?: unknown; exportVersion?: unknown; tables?: Record<string, unknown> };
   if (
     !d ||
@@ -91,33 +93,100 @@ export function importData(ctx: Ctx, data: unknown) {
   for (const [key] of IMPORT_ORDER)
     if (!Array.isArray(d.tables[key]))
       throw new DomainError('INVALID_EXPORT', `Export incomplet : table « ${key} » absente.`);
-  return tx(ctx, () => {
-    // The stored AI keys (D-66) are not in the file: they stay as they are.
-    for (const [, table] of [...IMPORT_ORDER].reverse())
-      if (table === schema.setting)
-        ctx.db
-          .delete(table)
-          .where(sql`${schema.setting.key} not like ${`${SECRET_SETTING_PREFIX}%`}`)
-          .run();
-      else ctx.db.delete(table).run();
-    const counts: Record<string, number> = {};
-    for (const [key, table] of IMPORT_ORDER) {
-      let rows = d.tables![key] as Record<string, unknown>[];
-      if (table === schema.setting)
-        rows = rows.filter((r) => !String(r.key).startsWith(SECRET_SETTING_PREFIX));
-      for (let i = 0; i < rows.length; i += 200)
+  return d as ExportFile;
+}
+
+const invalid = (message: string) => new DomainError('INVALID_EXPORT', `Export refusé : ${message}`);
+
+/** Replaces the business data, then checks what was written (M-13). Runs inside a transaction. */
+function writeImport(ctx: Ctx, d: ExportFile) {
+  // The stored AI keys (D-66) are not in the file: they stay as they are.
+  for (const [, table] of [...IMPORT_ORDER].reverse())
+    if (table === schema.setting)
+      ctx.db
+        .delete(table)
+        .where(sql`${schema.setting.key} not like ${`${SECRET_SETTING_PREFIX}%`}`)
+        .run();
+    else ctx.db.delete(table).run();
+  const counts: Record<string, number> = {};
+  for (const [key, table] of IMPORT_ORDER) {
+    let rows = d.tables[key] as Record<string, unknown>[];
+    if (table === schema.setting) {
+      rows = rows.filter((r) => !String(r?.key).startsWith(SECRET_SETTING_PREFIX));
+      // M-13: a known setting must have a valid value (as when saved from Configuration).
+      for (const r of rows) {
+        const rule = settingsSchema.shape[r?.key as keyof typeof settingsSchema.shape];
+        if (rule && !rule.safeParse(r.value).success) throw invalid(`réglage « ${r.key} » invalide.`);
+      }
+    }
+    for (let i = 0; i < rows.length; i += 200)
+      try {
         ctx.db
           .insert(table)
           .values(rows.slice(i, i + 200) as never)
           .run();
-      counts[key] = rows.length;
-    }
-    audit(ctx, 'import', 'import', 'import', null, {
-      exportedAt: (d as { exportedAt?: string }).exportedAt ?? null,
-      counts,
+      } catch (e) {
+        throw invalid(`ligne invalide dans « ${key} » (${(e as Error).message}).`);
+      }
+    counts[key] = rows.length;
+  }
+  // M-13: the same checks as `pnpm db:check` (C-05, C-06), plus the links between rows.
+  const wrong = findInvalidData(ctx.sqlite);
+  if (wrong.length)
+    throw invalid(
+      `${wrong[0].table}.${wrong[0].column} = ${JSON.stringify(wrong[0].value)} (date ou règle invalide).`,
+    );
+  const broken = ctx.sqlite.pragma('foreign_key_check') as { table: string }[];
+  if (broken.length) throw invalid(`lien cassé dans « ${broken[0].table} ».`);
+  audit(ctx, 'import', 'import', 'import', null, { exportedAt: d.exportedAt ?? null, counts });
+  return { ok: true as const, counts };
+}
+
+/**
+ * D-50: restore a JSON export, replacing all business data in one transaction (all or nothing).
+ * M-13: the API calls checkImport first, then takes its safety copy, then imports.
+ */
+export function importData(ctx: Ctx, data: unknown) {
+  const d = readExport(data);
+  return tx(ctx, () => writeImport(ctx, d));
+}
+
+const ROLLBACK = Symbol('rollback');
+
+/** M-13: the whole import, checked, then rolled back: nothing is written. Throws INVALID_EXPORT when refused. */
+export function checkImport(ctx: Ctx, data: unknown) {
+  const d = readExport(data);
+  try {
+    tx(ctx, () => {
+      writeImport(ctx, d);
+      throw ROLLBACK;
     });
-    return { ok: true as const, counts };
-  });
+  } catch (e) {
+    if (e !== ROLLBACK) throw e;
+  }
+  return { ok: true as const };
+}
+
+/** M-13: safety copies taken before an import or a purge, per kind. */
+export const SAFETY_COPY_KEEP = 5;
+
+/**
+ * M-13, M-15: a checked copy of the database before an import or a purge, readable by its owner only (it holds the
+ * stored AI keys); only the SAFETY_COPY_KEEP most recent copies of that kind are kept. Returns the file name.
+ */
+export async function safetyCopy(ctx: Ctx, dir: string, kind: 'import' | 'purge') {
+  mkdirSync(dir, { recursive: true });
+  const prefix = `backup-avant-${kind}-`;
+  const name = `${prefix}${ctxNow(ctx).toISOString().replace(/[:.]/g, '-')}.db`;
+  await copyDb(ctx.sqlite, join(dir, name));
+  chmodSync(join(dir, name), 0o600);
+  const old = readdirSync(dir)
+    .filter((n) => n.startsWith(prefix) && n.endsWith('.db'))
+    .sort()
+    .reverse()
+    .slice(SAFETY_COPY_KEEP);
+  for (const n of old) rmSync(join(dir, n));
+  return name;
 }
 
 // D-57: « Vider les données » — removes every meta-objective, objective, project and task (with their links),

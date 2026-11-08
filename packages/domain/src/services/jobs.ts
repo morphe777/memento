@@ -1,7 +1,7 @@
 // Scheduled jobs (WF-01 to WF-03, G-04): Sunday evening weekly report, Monday plan, monthly and quarterly reports.
 // Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time,
 // and retries a failed job at the next tick (C-07). Nightly backup of the database (D-135).
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, copyDb, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, newId, tx } from '../context.ts';
@@ -112,6 +112,7 @@ export async function runBackupJob(ctx: Ctx, dir: string): Promise<'done' | 'ski
     mkdirSync(dir, { recursive: true });
     rmSync(partial, { force: true });
     await copyDb(ctx.sqlite, partial);
+    chmodSync(partial, 0o600); // M-15: the copy holds the stored AI keys
     renameSync(partial, file);
     for (const old of backupsToDelete(readdirSync(dir))) rmSync(join(dir, old));
     saveRun(ctx, 'backup', date, true, null);

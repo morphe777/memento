@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Ctx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { getSettings } from '../settings.ts';
+import { DATA_RULE, dataBlock } from './prompts.ts';
 import { parseJsonObject } from './propose.ts';
 import type { Llm } from './providers.ts';
 
@@ -63,8 +64,8 @@ export async function pathWithAi(ctx: Ctx, raw: AiPathInput, llm: Llm) {
     conversation: input.messages,
   };
   const { text, model } = await llm({
-    system: `${settings['ai.prompt.path']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "projects": [{"title": string, "successCriterion": string, "description": string}]}.`,
-    user: `Propose le chemin (les projets dans l'ordre) de cet objectif.\n\nDonnées (JSON) :\n${JSON.stringify(data)}`,
+    system: `${settings['ai.prompt.path']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "projects": [{"title": string, "successCriterion": string, "description": string}]}.\n\n${DATA_RULE}`,
+    user: `Propose le chemin (les projets dans l'ordre) de cet objectif.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,
   });
   const parsed = OUTPUT.safeParse(parseJsonObject(text));

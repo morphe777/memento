@@ -1055,7 +1055,7 @@ describe('D-68 rédiger une description avec l’IA', () => {
       llm,
     );
     expect(r.text).toMatch(/voiture rentre/);
-    const data = JSON.parse(sent!.user.slice(sent!.user.indexOf('{')));
+    const data = JSON.parse(sent!.user.slice(sent!.user.indexOf('{'), sent!.user.lastIndexOf('}') + 1));
     expect(data.kind).toBe('projet');
     expect(data.item.objective.title).toBe('Garage rangé');
     expect(data.item.tasks).toEqual(tasks.map((t) => t.title));
@@ -1067,7 +1067,9 @@ describe('D-68 rédiger une description avec l’IA', () => {
     // A creation form: title + parent, no id; the untouched template is not sent as « current ».
     const tpl = getSettings(ctx)['templates.objective'];
     await describeWithAi(ctx, { kind: 'objective', title: 'Courir 10 km', current: tpl }, llm);
-    expect(JSON.parse(sent!.user.slice(sent!.user.indexOf('{'))).current).toBeNull();
+    expect(
+      JSON.parse(sent!.user.slice(sent!.user.indexOf('{'), sent!.user.lastIndexOf('}') + 1)).current,
+    ).toBeNull();
     await expect(describeWithAi(ctx, { kind: 'task', current: '' }, llm)).rejects.toMatchObject({
       code: 'AI_DESCRIBE_EMPTY',
     });
@@ -1116,7 +1118,7 @@ describe('D-70 découper un projet avec l’IA', () => {
       ['Poster les annonces', 15],
       ['Déposer à la déchetterie', 120],
     ]);
-    const data = JSON.parse(user.slice(user.indexOf('{')));
+    const data = JSON.parse(user.slice(user.indexOf('{'), user.lastIndexOf('}') + 1));
     expect(data.existingTasks.map((t: { title: string }) => t.title)).toEqual([tasks[0].title]);
     expect(data.conversation).toEqual([{ role: 'user', text: 'oublie la partie admin' }]);
     expect(data.allowedDurationsMin).toEqual([5, 15, 30, 60, 120]);
@@ -1154,7 +1156,7 @@ describe('D-75 proposer un chemin avec l’IA', () => {
     expect(system).toContain(getSettings(ctx)['ai.prompt.path']);
     expect(r.questions).toEqual(['Toit orienté sud ?']);
     expect(r.projects.map((p) => p.title)).toEqual(['Choisir le cuisiniste', 'Démarches mairie']);
-    const data = JSON.parse(user.slice(user.indexOf('{')));
+    const data = JSON.parse(user.slice(user.indexOf('{'), user.lastIndexOf('}') + 1));
     expect(data.metaObjective.title).toBe('Autonomie énergétique');
     expect(data.existingProjects.map((p: { title: string }) => p.title)).toEqual([project.title]);
     expect(getObjectivePath(ctx, o.id)).toHaveLength(1); // nothing created

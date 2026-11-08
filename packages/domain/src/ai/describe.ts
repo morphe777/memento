@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Ctx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { getSettings } from '../settings.ts';
+import { DATA_RULE, dataBlock } from './prompts.ts';
 import { parseJsonObject } from './propose.ts';
 import type { Llm } from './providers.ts';
 
@@ -217,8 +218,8 @@ export async function describeWithAi(ctx: Ctx, raw: AiDescribeInput, llm: Llm) {
     userContext: settings['ai.instructions'].trim() || null,
   };
   const { text, model } = await llm({
-    system: `${settings['ai.prompt.describe']}\n\nRéponds uniquement par un objet JSON {"text": string} : text est la description en Markdown.`,
-    user: `Rédige la description de ce ${LABEL[input.kind]}.\n\nDonnées (JSON) :\n${JSON.stringify(data)}`,
+    system: `${settings['ai.prompt.describe']}\n\nRéponds uniquement par un objet JSON {"text": string} : text est la description en Markdown.\n\n${DATA_RULE}`,
+    user: `Rédige la description de ce ${LABEL[input.kind]}.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,
   });
   const parsed = OUTPUT.safeParse(parseJsonObject(text));

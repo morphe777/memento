@@ -6,6 +6,7 @@ import type { Ctx } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { getSettings } from '../settings.ts';
 import { describeContext } from './describe.ts';
+import { DATA_RULE, dataBlock } from './prompts.ts';
 import { parseJsonObject } from './propose.ts';
 import type { Llm } from './providers.ts';
 
@@ -85,14 +86,14 @@ export async function fillWithAi(ctx: Ctx, raw: AiFillInput, llm: Llm) {
     userContext: settings['ai.instructions'].trim() || null,
   };
   const { text, model } = await llm({
-    system: `${settings['ai.prompt.fill']}\n\nRéponds uniquement par un objet JSON {"titles": string[], "fields": {${wanted.map((k) => `"${k}": string`).join(', ')}}, "comment": string}.`,
+    system: `${settings['ai.prompt.fill']}\n\nRéponds uniquement par un objet JSON {"titles": string[], "fields": {${wanted.map((k) => `"${k}": string`).join(', ')}}, "comment": string}.\n\n${DATA_RULE}`,
     user: `${
       input.only === 'title'
         ? `Propose seulement 3 autres titres pour ce ${LABEL[input.kind]} (fields vide).`
         : input.only
           ? `Propose seulement une nouvelle valeur du champ ${input.only} de ce ${LABEL[input.kind]}, différente de l'actuelle (titles vide).`
           : `Complète la fiche de ce ${LABEL[input.kind]}.`
-    }\n\nDonnées (JSON) :\n${JSON.stringify(data)}`,
+    }\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,
   });
   const parsed = OUTPUT.safeParse(parseJsonObject(text));

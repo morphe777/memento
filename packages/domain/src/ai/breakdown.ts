@@ -9,6 +9,7 @@ import { DomainError } from '../errors.ts';
 import { ALLOWED_DURATIONS, type TaskDuration } from '../rules/tasks.ts';
 import { getProject } from '../services/projects.ts';
 import { getSettings } from '../settings.ts';
+import { DATA_RULE, dataBlock } from './prompts.ts';
 import { parseJsonObject } from './propose.ts';
 import type { Llm } from './providers.ts';
 
@@ -86,8 +87,8 @@ export async function breakdownWithAi(ctx: Ctx, raw: AiBreakdownInput, llm: Llm)
     conversation: input.messages,
   };
   const { text, model } = await llm({
-    system: `${settings['ai.prompt.breakdown']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "tasks": [{"title": string, "durationMin": ${ALLOWED_DURATIONS.join('|')}, "description": string}]}.`,
-    user: `Propose les tâches de ce projet.\n\nDonnées (JSON) :\n${JSON.stringify(data)}`,
+    system: `${settings['ai.prompt.breakdown']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "tasks": [{"title": string, "durationMin": ${ALLOWED_DURATIONS.join('|')}, "description": string}]}.\n\n${DATA_RULE}`,
+    user: `Propose les tâches de ce projet.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,
   });
   const parsed = OUTPUT.safeParse(parseJsonObject(text));

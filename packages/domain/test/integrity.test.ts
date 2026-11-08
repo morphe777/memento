@@ -22,6 +22,8 @@ describe('C-05, C-06 read-only data check', () => {
     const ctx: Ctx = { db, sqlite, actor: 'me' };
     const good = createTask(ctx, { title: 'ok', dueDate: '2026-11-10', recurrenceRule: 'FREQ=WEEKLY' });
     const bad = createTask(ctx, { title: 'ko', dueDate: '2026-11-10', recurrenceRule: 'FREQ=WEEKLY' });
+    // A day written before M-19, when the database did not check it yet.
+    sqlite.exec('drop trigger task_due_date_check_update');
     sqlite
       .prepare(
         "update task set due_date = '2026-02-30', recurrence_rule = 'FREQ=DAILY;INTERVAL=0' where id = ?",

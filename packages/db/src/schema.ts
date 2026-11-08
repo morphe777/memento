@@ -55,29 +55,33 @@ export const metaObjective = sqliteTable('meta_objective', {
   motive: text('motive').notNull().default(''), // D-100: the « why » in a few words, keyword in **bold** (Cap)
 });
 
-export const objective = sqliteTable('objective', {
-  ...base,
-  metaObjectiveId: text('meta_objective_id').references(() => metaObjective.id),
-  title: text('title').notNull(),
-  description: text('description').notNull().default(''),
-  smartIndicator: text('smart_indicator').notNull().default(''),
-  smartTarget: text('smart_target').notNull().default(''),
-  smartCurrent: text('smart_current').notNull().default(''),
-  // Stored, not recomputed on read (user decision 2026-10-23): updated by the API on project changes.
-  progressPct: integer('progress_pct').notNull().default(0),
-  deadline: text('deadline').notNull(),
-  quarter: text('quarter').notNull(), // e.g. 2026-Q4
-  criticality: integer('criticality').notNull().default(2),
-  status: text('status', { enum: ['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'] })
-    .notNull()
-    .default('active'),
-  // D-62: a recurring objective is renewed (next quarter / next year) when it is closed.
-  recurrence: text('recurrence', { enum: ['quarterly', 'yearly'] }),
-  previousId: text('previous_id'), // the occurrence this one renews
-  position: integer('position').notNull().default(0), // D-69: order inside a (meta-objective, quarter) cell
-  outcomeTitle: text('outcome_title'), // DM-113
-  motive: text('motive').notNull().default(''), // D-100
-});
+export const objective = sqliteTable(
+  'objective',
+  {
+    ...base,
+    metaObjectiveId: text('meta_objective_id').references(() => metaObjective.id),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    smartIndicator: text('smart_indicator').notNull().default(''),
+    smartTarget: text('smart_target').notNull().default(''),
+    smartCurrent: text('smart_current').notNull().default(''),
+    // Stored, not recomputed on read (user decision 2026-10-23): updated by the API on project changes.
+    progressPct: integer('progress_pct').notNull().default(0),
+    deadline: text('deadline').notNull(),
+    quarter: text('quarter').notNull(), // e.g. 2026-Q4
+    criticality: integer('criticality').notNull().default(2),
+    status: text('status', { enum: ['active', 'paused', 'achieved', 'partial', 'failed', 'abandoned'] })
+      .notNull()
+      .default('active'),
+    // D-62: a recurring objective is renewed (next quarter / next year) when it is closed.
+    recurrence: text('recurrence', { enum: ['quarterly', 'yearly'] }),
+    previousId: text('previous_id'), // the occurrence this one renews
+    position: integer('position').notNull().default(0), // D-69: order inside a (meta-objective, quarter) cell
+    outcomeTitle: text('outcome_title'), // DM-113
+    motive: text('motive').notNull().default(''), // D-100
+  },
+  (t) => [index('objective_quarter_idx').on(t.quarter)], // M-19
+);
 
 export const project = sqliteTable(
   'project',
@@ -114,7 +118,11 @@ export const project = sqliteTable(
     description: text('description').notNull().default(''),
     motive: text('motive').notNull().default(''), // D-100
   },
-  (t) => [index('project_status_idx').on(t.status), index('project_objective_idx').on(t.objectiveId)],
+  (t) => [
+    index('project_status_idx').on(t.status),
+    index('project_objective_idx').on(t.objectiveId),
+    index('project_month_idx').on(t.monthFlag), // M-19
+  ],
 );
 
 export const projectGroup = sqliteTable(
@@ -127,7 +135,7 @@ export const projectGroup = sqliteTable(
       .notNull()
       .references(() => group.id),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.groupId] })],
+  (t) => [primaryKey({ columns: [t.projectId, t.groupId] }), index('project_group_group_idx').on(t.groupId)],
 );
 
 export const task = sqliteTable(
@@ -152,7 +160,12 @@ export const task = sqliteTable(
     // D-61: time actually spent (minutes), entered when it differs from the estimate. Null = as estimated.
     actualMin: integer('actual_min'),
   },
-  (t) => [index('task_project_idx').on(t.projectId), index('task_status_idx').on(t.status)],
+  (t) => [
+    index('task_project_idx').on(t.projectId),
+    index('task_status_idx').on(t.status),
+    index('task_due_idx').on(t.dueDate), // M-19
+    index('task_done_idx').on(t.doneAt),
+  ],
 );
 
 export const taskDependency = sqliteTable(
@@ -165,7 +178,10 @@ export const taskDependency = sqliteTable(
       .notNull()
       .references(() => task.id),
   },
-  (t) => [primaryKey({ columns: [t.taskId, t.dependsOnTaskId] })],
+  (t) => [
+    primaryKey({ columns: [t.taskId, t.dependsOnTaskId] }),
+    index('task_dep_on_idx').on(t.dependsOnTaskId),
+  ],
 );
 
 export const projectDependency = sqliteTable(
@@ -178,7 +194,10 @@ export const projectDependency = sqliteTable(
       .notNull()
       .references(() => project.id),
   },
-  (t) => [primaryKey({ columns: [t.projectId, t.dependsOnProjectId] })],
+  (t) => [
+    primaryKey({ columns: [t.projectId, t.dependsOnProjectId] }),
+    index('project_dep_on_idx').on(t.dependsOnProjectId),
+  ],
 );
 
 export const resourceLink = sqliteTable(
@@ -227,7 +246,10 @@ export const weekPlanItem = sqliteTable(
     why: text('why'),
     position: integer('position').notNull().default(0),
   },
-  (t) => [uniqueIndex('week_plan_item_uq').on(t.weekPlanId, t.taskId)],
+  (t) => [
+    uniqueIndex('week_plan_item_uq').on(t.weekPlanId, t.taskId),
+    index('week_plan_item_task_idx').on(t.taskId),
+  ],
 );
 
 export const report = sqliteTable(
@@ -256,7 +278,11 @@ export const auditLog = sqliteTable(
     reviewedAt: text('reviewed_at'),
     batchId: text('batch_id'), // API-08: the writes of one applied plan draft share a batch
   },
-  (t) => [index('audit_at_idx').on(t.at), index('audit_entity_idx').on(t.entityType, t.entityId)],
+  (t) => [
+    index('audit_at_idx').on(t.at),
+    index('audit_entity_idx').on(t.entityType, t.entityId),
+    index('audit_reviewed_idx').on(t.reviewedAt), // M-19
+  ],
 );
 
 export const setting = sqliteTable('setting', {
@@ -311,7 +337,7 @@ export const notification = sqliteTable(
     createdAt: text('created_at').notNull().default(now),
     readAt: text('read_at'),
   },
-  (t) => [index('notification_created_idx').on(t.createdAt)],
+  (t) => [index('notification_created_idx').on(t.createdAt), index('notification_read_idx').on(t.readAt)],
 );
 
 // Worker bookkeeping: one row per executed scheduled job and period (idempotence).
