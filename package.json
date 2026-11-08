@@ -31,12 +31,14 @@
     "check": "pnpm lint && pnpm typecheck && pnpm test",
     "db:demo-map": "pnpm --filter @memento/domain demo-map"
   },
+  "dependencies": {
+    "tsx": "4.23.15"
+  },
   "devDependencies": {
-    "@biomejs/biome": "2.6.2",
+    "@biomejs/biome": "2.6.6",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.19.2",
-    "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vitest": "5.0.5"
+    "vitest": "5.1.0"
   }
 }

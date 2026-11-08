@@ -2,8 +2,8 @@
 #   API + web front (port 4500), worker (scheduled jobs), MCP server (port 4502).
 # TypeScript runs through tsx, exactly as in development (no separate compile step).
 
-# ── Stage 1: install dependencies and build the web front ──────────────
-FROM node:24-bookworm-slim AS build
+# ── Stage 1: tools and manifests shared by the two install stages ──────
+FROM node:24-bookworm-slim AS base
 WORKDIR /app
 
 # Build tools in case a native module (better-sqlite3, argon2) has no prebuilt binary.
@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
     && rm -rf /var/lib/apt/lists/*
 RUN npm install -g pnpm@12.15.0
 
-# Manifests first, so that the dependency layer is cached between code changes.
+# Manifests first, so that the dependency layers are cached between code changes.
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
@@ -19,12 +19,18 @@ COPY apps/worker/package.json apps/worker/
 COPY apps/mcp/package.json apps/mcp/
 COPY packages/db/package.json packages/db/
 COPY packages/domain/package.json packages/domain/
-RUN pnpm install --frozen-lockfile
 
+# ── Stage 2: all dependencies, build of the web front ──────────────────
+FROM base AS build
+RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm --filter @memento/web build
 
-# ── Stage 2: runtime ───────────────────────────────────────────────────
+# ── Stage 3: production dependencies only (H-18: no test, lint or type tools) ──
+FROM base AS prod-deps
+RUN pnpm install --frozen-lockfile --prod
+
+# ── Stage 4: runtime ───────────────────────────────────────────────────
 FROM node:24-bookworm-slim
 WORKDIR /app
 
@@ -37,10 +43,20 @@ LABEL org.opencontainers.image.title="Mémento" \
       org.opencontainers.image.source="https://github.com/morphe777/memento" \
       org.opencontainers.image.description="Objectifs, projets, charge mentale — outil personnel de pilotage"
 
-RUN apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends tzdata ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=build --chown=node:node /app /app
+# H-18: only what runs — production dependencies, server sources, migrations, the built front and the AI guide.
+COPY --from=prod-deps --chown=node:node /app /app
+COPY --chown=node:node tsconfig.json ./
+COPY --chown=node:node packages/db/src packages/db/src
+COPY --chown=node:node packages/db/migrations packages/db/migrations
+COPY --chown=node:node packages/domain/src packages/domain/src
+COPY --chown=node:node apps/api/src apps/api/src
+COPY --chown=node:node apps/worker/src apps/worker/src
+COPY --chown=node:node apps/mcp/src apps/mcp/src
+COPY --chown=node:node docs/api/guide-ia.md docs/api/guide-ia.md
+COPY --from=build --chown=node:node /app/apps/web/dist apps/web/dist
 RUN mkdir -p /data && chown node:node /data
 
 ENV NODE_ENV=production \

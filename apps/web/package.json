@@ -15,8 +15,8 @@
     "@dnd-kit/utilities": "3.2.2",
     "@fontsource/ibm-plex-mono": "5.3.0",
     "@fontsource/ibm-plex-sans": "5.3.0",
-    "@tanstack/react-query": "5.104.5",
-    "@tanstack/react-router": "1.170.44",
+    "@tanstack/react-query": "5.107.1",
+    "@tanstack/react-router": "1.170.46",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-markdown": "10.1.0",
@@ -24,11 +24,11 @@
   },
   "devDependencies": {
     "@memento/domain": "workspace:*",
-    "@tailwindcss/vite": "4.3.3",
+    "@tailwindcss/vite": "4.3.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.2",
-    "tailwindcss": "4.3.3",
-    "vite": "8.3.5"
+    "@vitejs/plugin-react": "6.2.1",
+    "tailwindcss": "4.3.5",
+    "vite": "8.3.6"
   }
 }

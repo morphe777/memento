@@ -38,12 +38,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the image (not pushed)
         run: docker build --build-arg VERSION=ci -t memento:ci .
-      - name: No personal or design files in the image
+      - name: No personal or design files in the image, no test or dev tools (H-18)
         run: |
           docker run --rm --entrypoint sh memento:ci -c '
             test -f docs/api/guide-ia.md &&
             ! test -e maquettes && ! test -e memento-vue-plan && ! test -e data && ! test -e .git &&
-            test "$(ls docs)" = "api" && test "$(ls docs/api)" = "guide-ia.md"'
+            test "$(ls docs)" = "api" && test "$(ls docs/api)" = "guide-ia.md" &&
+            ! test -e node_modules/.bin/vitest && ! test -e node_modules/.bin/biome && ! test -e apps/api/test &&
+            test -x node_modules/.bin/tsx && test -f apps/web/dist/index.html'
       # D-136: the scan warns (listed in the log), it does not block: most findings come from the Debian base image.
       - name: Image scan (fixable high and critical vulnerabilities, warning only)
         run: >
