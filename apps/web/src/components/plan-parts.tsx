@@ -55,10 +55,13 @@ export function FoldButton({ open, onClick, what }: { open: boolean; onClick: ()
 /**
  * The time of the period, at the top (user request 01/11/2026): it moves with each choice, so it stays in sight
  * while scrolling (PC / iPad); the breakdown is folded behind « Détail ».
+ * F2 (D-137): the load = done in the period (dark part of the bar) + planned still to do (light part), against
+ * the budget; once what is done reaches the budget, nothing is left.
  */
 export function PlanTime({
   title,
   info,
+  doneMin,
   usedMin,
   totalMin,
   overMin,
@@ -68,6 +71,7 @@ export function PlanTime({
 }: {
   title: string;
   info: ReactNode;
+  doneMin: number;
   usedMin: number;
   totalMin: number;
   overMin: number;
@@ -77,7 +81,10 @@ export function PlanTime({
 }) {
   const phone = useIsPhone();
   const [open, setOpen] = useState(false);
-  const pct = `${Math.min(100, Math.round((usedMin / Math.max(1, totalMin)) * 100))}%`;
+  const scale = Math.max(1, totalMin, usedMin);
+  const width = (m: number) => `${Math.round((Math.max(0, m) / scale) * 100)}%`;
+  const spent = totalMin > 0 && doneMin >= totalMin;
+  const over = overMin > 0;
   return (
     <section
       className="card flex flex-col gap-2"
@@ -95,13 +102,18 @@ export function PlanTime({
           {fmtMin(usedMin)}{' '}
           <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {fmtMin(totalMin)}</span>
         </span>
+        <span className="text-[13px]" style={{ color: 'var(--text-muted)' }}>
+          fait {fmtMin(doneMin)} · prévu {fmtMin(Math.max(0, usedMin - doneMin))}
+        </span>
         <span
           className="text-[14px] font-medium"
-          style={{ color: overMin ? 'var(--status-red)' : 'var(--ok)' }}
+          style={{ color: over || spent ? 'var(--status-red)' : 'var(--ok)' }}
         >
-          {overMin
-            ? `${fmtMin(overMin)} de trop : ${overText}`
-            : `Reste ${fmtMin(Math.max(0, totalMin - usedMin))}`}
+          {spent
+            ? 'Plus de budget disponible'
+            : over
+              ? `${fmtMin(overMin)} de trop : ${overText}`
+              : `Reste ${fmtMin(Math.max(0, totalMin - usedMin))}`}
         </span>
         <span className="flex-1" />
         {actions}
@@ -115,9 +127,21 @@ export function PlanTime({
           {open ? 'Masquer le détail' : 'Détail'}
         </button>
       </div>
-      <div className="track" style={{ height: 10 }}>
+      <div className="track flex" style={{ height: 10 }} title="Foncé : fait · clair : prévu">
         <div
-          style={{ height: 10, width: pct, background: overMin ? 'var(--status-red)' : 'var(--primary)' }}
+          style={{
+            height: 10,
+            width: width(doneMin),
+            background: over || spent ? 'var(--status-red)' : 'var(--text)',
+          }}
+        />
+        <div
+          style={{
+            height: 10,
+            width: width(usedMin - doneMin),
+            background: over || spent ? 'var(--status-red)' : 'var(--primary)',
+            opacity: over || spent ? 0.55 : 1,
+          }}
         />
       </div>
       {open && (

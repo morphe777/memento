@@ -27,6 +27,7 @@ import {
   isValidIsoWeek,
   monthOf,
   parisDate,
+  parisDayStartIso,
   shiftWeek,
   weekMonday,
   weekSunday,
@@ -65,7 +66,11 @@ function doneStats(ctx: Ctx, from: string, to: string) {
     })
     .from(task)
     .where(
-      and(eq(task.status, 'done'), gte(task.doneAt, `${from}T00:00:00`), lt(task.doneAt, `${to}T00:00:00`)),
+      and(
+        eq(task.status, 'done'),
+        gte(task.doneAt, parisDayStartIso(from)),
+        lt(task.doneAt, parisDayStartIso(to)),
+      ),
     )
     .all();
   const links = ctx.db
@@ -83,6 +88,48 @@ function doneStats(ctx: Ctx, from: string, to: string) {
     for (const d of doms) minutes[d] = (minutes[d] ?? 0) + (r.durationMin ?? 0);
   }
   return { minutes, experiences: rows.filter((r) => r.isExperience).length };
+}
+
+/**
+ * F2 / M-10 (D-137): the one definition of « Fait » for a week: every task done between its Monday and Sunday
+ * (Paris days, M-01), whatever it was (planned, bonus, outside the plan, Inbox, project since abandoned). A task
+ * deleted or unchecked is no longer done. `workMin` is what counts in the budget (experiences aside, RB-09;
+ * time spent when entered, D-61); `mix` is by primary domain, experiences included, like the planned mix.
+ */
+export function weekDone(ctx: Ctx, isoWeek: string) {
+  const monday = weekMonday(isoWeek);
+  const rows = ctx.db
+    .select()
+    .from(task)
+    .where(
+      and(
+        eq(task.status, 'done'),
+        gte(task.doneAt, parisDayStartIso(monday)),
+        lt(task.doneAt, parisDayStartIso(addDays(monday, 7))),
+      ),
+    )
+    .all();
+  const pids = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
+  const primary = new Map(
+    serializeProjects(
+      ctx,
+      pids.length ? ctx.db.select().from(project).where(inArray(project.id, pids)).all() : [],
+    ).map((p) => [p.id, p.domainIds[0] ?? null]),
+  );
+  const spent = (t: (typeof rows)[number]) => t.actualMin ?? t.durationMin ?? 0;
+  const mix = new Map<string | null, number>();
+  for (const t of rows) {
+    const d = t.projectId ? (primary.get(t.projectId) ?? null) : t.domainId;
+    mix.set(d, (mix.get(d) ?? 0) + spent(t));
+  }
+  return {
+    taskIds: rows.map((t) => t.id),
+    projectIds: pids,
+    count: rows.length,
+    experiences: rows.filter((t) => t.isExperience).length,
+    workMin: rows.filter((t) => !t.isExperience).reduce((a, t) => a + spent(t), 0),
+    mix: [...mix].map(([domainId, minutes]) => ({ domainId, minutes })),
+  };
 }
 
 /** Snapshot of the data the engine needs (deterministic for a given database state and day). */
@@ -196,6 +243,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     tasks,
     taskDeps: taskDependencies(ctx),
     paceCalendar: paceCalendar(ctx),
+    doneInWeek: weekDone(ctx, isoWeek), // F2 (D-137)
   };
 }
 
@@ -580,20 +628,22 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
       };
     })
     .filter((r): r is NonNullable<typeof r> => !!r);
-  const listed = rows.filter((r) => r.kind === 'week' || r.done);
+  // F2 / M-10 (D-137): « Fait » is what was done in this week; a task done in another week is listed there.
+  const done = weekDone(ctx, isoWeek);
+  const doneHere = new Set(done.taskIds);
+  const listed = rows.filter((r) => (r.kind === 'week' && !r.done) || doneHere.has(r.taskId));
   const tasks = [...listed.filter((r) => !r.done), ...listed.filter((r) => r.done)];
   const bonusOpen = rows.filter((r) => r.kind === 'bonus' && !r.done);
 
   const weekRows = rows.filter((r) => r.kind === 'week');
   const plannedMin = budgetMinutes(
-    weekRows.map((r) => ({ durationMin: r.durationMin, isExperience: r.isExperience })),
+    weekRows
+      .filter((r) => !r.done)
+      .map((r) => ({ durationMin: r.durationMin, isExperience: r.isExperience })),
   );
   const budgetMin = plan?.budgetMin ?? s['budget.weekly_min'];
-  const doneMin = budgetMinutes(
-    rows
-      .filter((r) => r.done)
-      .map((r) => ({ durationMin: r.actualMin ?? r.durationMin, isExperience: r.isExperience })),
-  );
+  const doneMin = done.workMin;
+  const usedMin = doneMin + plannedMin;
   // D-99: drift from the plan: what was planned and done vs what was done outside the plan.
   const unplannedRows = rows.filter((r) => r.kind === 'unplanned' && r.done);
   const drift = {
@@ -608,9 +658,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
   const window = s['experience.window_weeks'];
   const experiences = doneStats(ctx, addDays(monday, -7 * (window - 1)), addDays(monday, 7)).experiences;
 
-  const mixMap = new Map<string | null, number>();
-  for (const r of rows.filter((x) => x.done))
-    mixMap.set(r.domainId, (mixMap.get(r.domainId) ?? 0) + (r.durationMin ?? 0));
+  const mixMap = new Map<string | null, number>(done.mix.map((m) => [m.domainId, m.minutes]));
   const domainMix = [
     ...domains
       .filter((d) => !d.archived)
@@ -650,7 +698,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
     tasks,
     remaining: tasks.filter((t) => !t.done).length,
     bonusOpen,
-    budget: { budgetMin, plannedMin, ...budgetStatus(plannedMin, budgetMin) },
+    budget: { budgetMin, doneMin, plannedMin, usedMin, ...budgetStatus(usedMin, budgetMin) },
     doneMin,
     drift,
     experiences: { done: experiences, target: s['experience.target'], windowWeeks: window },

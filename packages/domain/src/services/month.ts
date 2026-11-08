@@ -13,6 +13,7 @@ import {
   monthOf,
   monthStart,
   parisDate,
+  parisDayStartIso,
   quarterOf,
   shiftMonth,
 } from '../time.ts';
@@ -53,8 +54,8 @@ export function workDoneBetween(ctx: Ctx, first: string, last: string) {
     .where(
       and(
         eq(task.status, 'done'),
-        gte(task.doneAt, `${first}T00:00:00`),
-        lt(task.doneAt, `${addDays(last, 1)}T00:00:00`),
+        gte(task.doneAt, parisDayStartIso(first)),
+        lt(task.doneAt, parisDayStartIso(addDays(last, 1))),
       ),
     )
     .all()

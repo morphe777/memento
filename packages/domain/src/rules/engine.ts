@@ -8,6 +8,7 @@ import {
   frShort,
   monthEnd,
   monthOf,
+  parisDate,
   weekMonday,
   weekSunday,
 } from '../time.ts';
@@ -96,7 +97,21 @@ export interface EngineInput {
   taskDeps: { taskId: string; dependsOnTaskId: string; dependsOnStatus?: 'todo' | 'done' | 'cancelled' }[];
   /** D-118: time available per day for the delay; absent = every day weighs the same. */
   paceCalendar?: PaceCalendar;
+  /** F2 (D-137): what is already done in the planned week; it counts in its load. Absent = nothing done. */
+  doneInWeek?: DoneInWeek;
 }
+
+export interface DoneInWeek {
+  count: number;
+  experiences: number;
+  /** Budget minutes done (experiences aside, RB-09). */
+  workMin: number;
+  /** By primary domain, experiences included. */
+  mix: { domainId: string | null; minutes: number }[];
+  projectIds: string[];
+}
+
+const NOTHING_DONE: DoneInWeek = { count: 0, experiences: 0, workMin: 0, mix: [], projectIds: [] };
 
 export type Selection = 'week' | 'bonus';
 
@@ -237,7 +252,10 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
     const since = addDays(P.monday, -14);
     C = (P.tasksByProject.get(project.id) ?? []).some(
       (x) =>
-        x.status === 'done' && x.doneAt && x.doneAt.slice(0, 10) >= since && x.doneAt.slice(0, 10) < P.monday,
+        x.status === 'done' &&
+        !!x.doneAt &&
+        parisDate(new Date(x.doneAt)) >= since &&
+        parisDate(new Date(x.doneAt)) < P.monday, // M-01: Paris day
     )
       ? 1
       : 0;
@@ -396,8 +414,20 @@ export interface PlanningPage {
   groups: PageGroup[];
   /** D-79: the other eligible projects (not shown in a group), for « + Tâche d'un autre projet ». */
   more: PageCard[];
-  budget: { budgetMin: number; plannedMin: number; overMin: number; remainingMin: number };
-  counts: { week: number; experiences: number; bonus: number };
+  /**
+   * F2 (D-137): the load of the week = done in the week + planned still to do (« Semaine » tasks), against the
+   * budget. `remainingMin` = budget left for new tasks; nothing left once what is done reaches the budget.
+   */
+  budget: {
+    budgetMin: number;
+    doneMin: number;
+    plannedMin: number;
+    usedMin: number;
+    overMin: number;
+    remainingMin: number;
+  };
+  /** `week`: « Semaine » tasks still to do; `done`: tasks done in the week. */
+  counts: { week: number; done: number; experiences: number; bonus: number };
   alerts: Alert[];
   mix: { domainId: string | null; minutes: number }[];
 }
@@ -597,22 +627,28 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
   return { groups, more, ...summarize(input, chosen) };
 }
 
-/** Live summary of a selection: budget (RB-09, RB-14), counts, alerts (§6), planned mix by primary domain. */
+/**
+ * Live summary of a selection: budget (RB-09, RB-14), counts, alerts (§6), mix by primary domain.
+ * F2 (D-137): the week's load is what is done in it plus the « Semaine » tasks still to do; a chosen task done in
+ * another week does not count here (it counted in the week it was done).
+ */
 export function summarize(
   input: EngineInput,
   chosen: Map<string, Selection>,
 ): Omit<PlanningPage, 'groups' | 'more'> {
   const P = prepare(input);
+  const done = input.doneInWeek ?? NOTHING_DONE;
   const taskById = new Map(input.tasks.map((t) => [t.id, t]));
   const weekTasks = [...chosen]
     .filter(([, k]) => k === 'week')
     .map(([id]) => taskById.get(id))
-    .filter((t): t is EngineTask => !!t);
+    .filter((t): t is EngineTask => !!t && t.status === 'todo');
   const plannedMin = budgetMinutes(weekTasks);
-  const { overMin, remainingMin } = budgetStatus(plannedMin, input.budgetMin);
+  const usedMin = done.workMin + plannedMin;
+  const { overMin, remainingMin } = budgetStatus(usedMin, input.budgetMin);
   const domainOfTask = (t: EngineTask): string | null =>
     t.projectId ? (P.projectById.get(t.projectId)?.domainIds[0] ?? null) : t.domainId;
-  const mixMap = new Map<string | null, number>();
+  const mixMap = new Map<string | null, number>(done.mix.map((m) => [m.domainId, m.minutes]));
   for (const t of weekTasks)
     mixMap.set(domainOfTask(t), (mixMap.get(domainOfTask(t)) ?? 0) + (t.durationMin ?? 0));
   const orderedDomains = [...input.domains].sort((a, b) => a.priorityRank - b.priorityRank);
@@ -620,15 +656,22 @@ export function summarize(
     ...orderedDomains.map((d) => ({ domainId: d.id as string | null, minutes: mixMap.get(d.id) ?? 0 })),
     { domainId: null, minutes: mixMap.get(null) ?? 0 },
   ];
-  const experiences = weekTasks.filter((t) => t.isExperience).length;
+  const experiences = weekTasks.filter((t) => t.isExperience).length + done.experiences;
 
   const alerts: Alert[] = [];
   const plural = (n: number, one: string, many: string) => `${n} ${n > 1 ? many : one}`;
-  if (overMin > 0) {
+  if (input.budgetMin > 0 && done.workMin >= input.budgetMin) {
+    // F2: the budget is a guard-rail on the mental load: what is done already uses it up.
+    alerts.push({
+      level: overMin > input.budgetMin * WEEK_OVER_CRITICAL ? 'critical' : 'warn',
+      code: 'BUDGET_SPENT',
+      text: `Plus de budget disponible : ${fmtMin(done.workMin)} déjà fait sur ${fmtMin(input.budgetMin)}${plannedMin ? `, et ${fmtMin(plannedMin)} encore prévu` : ''}. N'ajoute une tâche que si tu t'en sens capable.`,
+    });
+  } else if (overMin > 0) {
     alerts.push({
       level: overMin > input.budgetMin * WEEK_OVER_CRITICAL ? 'critical' : 'warn',
       code: 'BUDGET_OVER',
-      text: `Dépassement de ${fmtMin(overMin)} au-delà de ${fmtMin(input.budgetMin)}. Tu peux valider quand même.`,
+      text: `Dépassement de ${fmtMin(overMin)} au-delà de ${fmtMin(input.budgetMin)} (fait + prévu). Tu peux valider quand même.`,
     });
   }
   // D-112: a task due by Sunday (or already late) that is not in the week.
@@ -660,7 +703,7 @@ export function summarize(
     }
   }
   // D-112: a month project with work left and nothing this week falls behind its pace (R).
-  const planned = new Set(weekTasks.map((t) => t.projectId));
+  const planned = new Set([...weekTasks.map((t) => t.projectId), ...done.projectIds]);
   const idle = input.projects.filter(
     (p) =>
       eligibleProject(p) &&
@@ -701,9 +744,10 @@ export function summarize(
     alerts.push({ level: 'ok', code: 'OK', text: 'Rien à signaler : semaine équilibrée.' });
 
   return {
-    budget: { budgetMin: input.budgetMin, plannedMin, overMin, remainingMin },
+    budget: { budgetMin: input.budgetMin, doneMin: done.workMin, plannedMin, usedMin, overMin, remainingMin },
     counts: {
       week: weekTasks.length,
+      done: done.count,
       experiences,
       bonus: [...chosen.values()].filter((k) => k === 'bonus').length,
     },

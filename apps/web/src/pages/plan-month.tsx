@@ -137,13 +137,18 @@ function MonthTime({ page }: { page: MonthPlanningPage }) {
             défaut), au prorata de ses jours dans le mois.
           </span>
           <span className="tip-p">
-            <b>Besoin</b> = travail restant des projets du mois + tâches Inbox à deadline ce mois-ci
-            (réservées d'office).
+            <b>Fait</b> = tout ce que tu as fait ce mois-ci (projets, Inbox, hors plan) : ça a consommé de la
+            capacité.
+          </span>
+          <span className="tip-p">
+            <b>Prévu</b> = travail restant des projets du mois + tâches Inbox à deadline ce mois-ci (réservées
+            d'office).
           </span>
         </>
       }
-      usedMin={b.neededMin}
-      totalMin={b.availableMin}
+      doneMin={b.spentMin}
+      usedMin={b.spentMin + b.neededMin}
+      totalMin={b.capacityMin}
       overMin={b.overMin}
       overText="retire un projet ou étale-le"
       detail={

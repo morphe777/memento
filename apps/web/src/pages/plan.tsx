@@ -164,7 +164,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
         <div className="min-w-0" style={{ flex: '3 1 420px' }}>
           <Section
             title="Répartition prévue"
-            info="Temps prévu par domaine, dans l'ordre de tes priorités ; les expériences comptent ici."
+            info="Temps par domaine, dans l'ordre de tes priorités : déjà fait cette semaine + prévu encore à faire ; les expériences comptent ici."
           >
             <DomainBars rows={mixRows} />
           </Section>
@@ -243,11 +243,17 @@ function WeekTime({ page, onBudget }: { page: PlanningPage; onBudget: () => void
             ou celui ajusté ici.
           </span>
           <span className="tip-p">
-            <b>Prévu</b> = durées des tâches « Semaine ». Les expériences et le bonus n'y comptent pas.
+            <b>Fait</b> = tout ce que tu as fait cette semaine (prévu, bonus ou hors plan) : ça a consommé du
+            budget. Une tâche faite une autre semaine compte pour celle-là.
+          </span>
+          <span className="tip-p">
+            <b>Prévu</b> = durées des tâches « Semaine » encore à faire. Les expériences et le bonus n'y
+            comptent pas.
           </span>
         </>
       }
-      usedMin={b.plannedMin}
+      doneMin={b.doneMin}
+      usedMin={b.usedMin}
       totalMin={b.budgetMin}
       overMin={b.overMin}
       overText="passe une tâche en bonus ou retire-la"
@@ -265,7 +271,8 @@ function WeekTime({ page, onBudget }: { page: PlanningPage; onBudget: () => void
       detail={
         <>
           <span>
-            {page.counts.week} tâche{page.counts.week > 1 ? 's' : ''} · {page.counts.experiences} expérience
+            {page.counts.done} faite{page.counts.done > 1 ? 's' : ''} · {page.counts.week} à faire ·{' '}
+            {page.counts.experiences} expérience
             {page.counts.experiences > 1 ? 's' : ''} (hors budget) · {page.counts.bonus} bonus
           </span>
           {page.plan?.budgetReason && <span>Budget ajusté : {page.plan.budgetReason}</span>}

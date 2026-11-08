@@ -43,6 +43,12 @@ export function parisInstant(date: string, time: string): Date {
   return new Date(wall - offset(wall - offset(wall)));
 }
 
+/**
+ * M-01: the instant (ISO UTC, like the stored timestamps) at which a Paris calendar day starts. Every « done in
+ * a period » query compares timestamps with these bounds, never with a bare 'YYYY-MM-DDT00:00:00'.
+ */
+export const parisDayStartIso = (date: string): string => parisInstant(date, '00:00').toISOString();
+
 const toUtc = (d: string): number => Date.parse(`${d}T00:00:00Z`);
 const fromUtc = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 

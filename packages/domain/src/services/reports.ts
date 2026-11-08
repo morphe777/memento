@@ -25,6 +25,7 @@ import {
   monthOf,
   monthStart,
   parisClock,
+  parisDayStartIso,
   quarterEnd,
   quarterStart,
   shiftMonth,
@@ -70,7 +71,11 @@ function doneTasksBetween(ctx: Ctx, from: string, to: string, bonusIds: Set<stri
     .select()
     .from(task)
     .where(
-      and(eq(task.status, 'done'), gte(task.doneAt, `${from}T00:00:00`), lt(task.doneAt, `${to}T00:00:00`)),
+      and(
+        eq(task.status, 'done'),
+        gte(task.doneAt, parisDayStartIso(from)),
+        lt(task.doneAt, parisDayStartIso(to)),
+      ),
     )
     .all();
   const pids = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
@@ -170,7 +175,7 @@ function driftOf(ctx: Ctx, from: string, to: string, doneMin: number) {
   );
   // Done in time: a planned task checked after the period does not count for it.
   const plannedDone = planned.filter(
-    (t) => t.status === 'done' && (t.doneAt ?? '') < `${to}T00:00:00`,
+    (t) => t.status === 'done' && (t.doneAt ?? '') < parisDayStartIso(to),
   ).length;
   return {
     plannedCount: planned.length,
@@ -279,8 +284,8 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
         and(
           eq(project.status, 'done'),
           eq(project.success, true),
-          gte(project.completedAt, `${monday}T00:00:00`),
-          lt(project.completedAt, `${nextMonday}T00:00:00`),
+          gte(project.completedAt, parisDayStartIso(monday)),
+          lt(project.completedAt, parisDayStartIso(nextMonday)),
         ),
       )
       .all(),
@@ -386,8 +391,8 @@ function buildMonthPayload(ctx: Ctx, month: string) {
       .where(
         and(
           eq(project.status, 'done'),
-          gte(project.completedAt, `${from}T00:00:00`),
-          lt(project.completedAt, `${to}T00:00:00`),
+          gte(project.completedAt, parisDayStartIso(from)),
+          lt(project.completedAt, parisDayStartIso(to)),
         ),
       )
       .all(),
@@ -405,8 +410,8 @@ function buildMonthPayload(ctx: Ctx, month: string) {
         and(
           eq(auditLog.entityType, entityType),
           eq(auditLog.action, action),
-          gte(auditLog.at, `${from}T00:00:00`),
-          lt(auditLog.at, `${to}T00:00:00`),
+          gte(auditLog.at, parisDayStartIso(from)),
+          lt(auditLog.at, parisDayStartIso(to)),
         ),
       )
       .all();
