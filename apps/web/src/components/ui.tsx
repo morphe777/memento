@@ -146,10 +146,7 @@ export function DelayLegend() {
       <span className="flex-none" style={{ width: DELAY_LABEL_W }} />
       <span className="flex-1 min-w-0 flex justify-between items-center gap-1">
         <span style={{ color: 'var(--late-text)' }}>← retard</span>
-        <span className="flex items-center gap-1">
-          à l'heure
-          <InfoTip>{DELAY_HELP}</InfoTip>
-        </span>
+        <span>dans les temps</span>
         <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
       </span>
       <span className="flex-none" style={{ width: DELAY_VALUE_W }} />
@@ -160,24 +157,28 @@ export function DelayLegend() {
 /**
  * Centred delay bar (R-06): centre = on time, left = late (orange), right = ahead (blue); ±4 h = half bar.
  * One line: title, bar, value (user request 02/11/2026).
+ * D-139 (user request 08/11/2026): nothing written when on time; a finished project is never « ahead »: the line
+ * and its bar are greyed and say « terminé ».
  */
 export function DelayBar({
   title,
   color,
   deltaMin,
+  done = false,
   to,
 }: {
   title: string;
   color: string;
   deltaMin: number;
+  done?: boolean;
   to?: { id: string };
 }) {
   const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   const late = deltaMin < 0;
   const onTime = Math.abs(deltaMin) < 15;
-  const label = onTime ? "à l'heure" : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
+  const label = done ? 'terminé' : onTime ? '' : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
   return (
-    <div className="flex items-center gap-2.5 text-[13px]">
+    <div className="flex items-center gap-2.5 text-[13px]" style={done ? { opacity: 0.55 } : undefined}>
       <span className="flex-none flex items-center gap-2 min-w-0" style={{ width: DELAY_LABEL_W }}>
         <DomainDot color={color} />
         {to ? (
@@ -197,7 +198,7 @@ export function DelayBar({
         )}
       </span>
       <div className="relative flex-1" style={{ height: 8, background: 'var(--track)', borderRadius: 999 }}>
-        {!onTime && (
+        {!onTime && !done && (
           <div
             className="absolute top-0"
             style={{
@@ -225,7 +226,7 @@ export function DelayBar({
         className="mono text-right flex-none"
         style={{
           width: DELAY_VALUE_W,
-          color: onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)',
+          color: done || onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)',
         }}
       >
         {label}

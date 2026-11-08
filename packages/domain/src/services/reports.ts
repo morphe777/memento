@@ -258,6 +258,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     return {
       projectId: p.id,
       title: p.title,
+      done: p.status === 'done', // D-139: shown « terminé », never « ahead »
       ...domainView(domains.find((d) => d.id === p.domainIds[0])),
       deltaMin: projectDelayMin(
         {

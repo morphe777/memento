@@ -8,6 +8,7 @@ import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { ActualTime, openTask } from '../components/tasks.tsx';
 import {
   BonusBadge,
+  DELAY_HELP,
   DelayBar,
   DelayLegend,
   DomainBars,
@@ -15,6 +16,7 @@ import {
   Empty,
   ErrorBox,
   ExperienceBadge,
+  InfoTip,
   Kpi,
   Loading,
   PageHeader,
@@ -312,7 +314,10 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           style={{ padding: '18px 20px', flex: '3 1 440px' }}
         >
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="h2">Projets du mois · avance / retard</h2>
+            <h2 className="h2 flex items-center gap-2">
+              Projets du mois
+              <InfoTip>{DELAY_HELP}</InfoTip>
+            </h2>
             {ex.monthProjects.length > 0 && (
               <button type="button" className="btn btn-sm" onClick={() => setReplanOpen(true)}>
                 Replanifier
@@ -331,6 +336,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
               title={p.title}
               color={dl.color(p.domainId)}
               deltaMin={p.deltaMin}
+              done={p.status === 'done'}
               to={{ id: p.projectId }}
             />
           ))}

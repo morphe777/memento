@@ -4,11 +4,13 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
+  DELAY_HELP,
   DelayBar,
   DelayLegend,
   DomainBars,
   Empty,
   ErrorBox,
+  InfoTip,
   Loading,
   PageHeader,
   Section,
@@ -386,7 +388,10 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
           style={{ flex: '1 1 520px', padding: '20px 24px' }}
         >
           <div className="flex justify-between items-baseline gap-3">
-            <h2 className="h2">Avance / retard · projets du mois</h2>
+            <h2 className="h2 flex items-center gap-2">
+              Projets du mois
+              <InfoTip>{DELAY_HELP}</InfoTip>
+            </h2>
           </div>
           {p.delays.length > 0 && <DelayLegend />}
           {p.delays.length === 0 && (
@@ -400,6 +405,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
               title={d.title}
               color={color(d)}
               deltaMin={d.deltaMin}
+              done={'done' in d && !!d.done}
               to={{ id: d.projectId }}
             />
           ))}
