@@ -46,6 +46,7 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
         ideas: path.filter((p) => p.status === 'idea').length,
       },
       remainingMin: open.reduce((a, p) => a + (p.taskStats.totalMin - p.taskStats.doneMin), 0),
+      workLeftMin: open.reduce((a, p) => a + p.taskStats.workLeftMin, 0), // M-03
       /** Projects whose size is unknown (no task, or tasks without duration): the estimate is a floor. */
       unknownSize: open.filter((p) => p.taskStats.todo === 0 || p.taskStats.withoutDuration > 0).length,
       domainId: path[0]?.domainIds[0] ?? null,
@@ -59,7 +60,7 @@ export function getQuarterPlanningPage(ctx: Ctx, quarter: string) {
     .sort((a, b) => Number(b.overdue) - Number(a.overdue) || a.deadline.localeCompare(b.deadline));
 
   const openChosen = chosen.filter((o) => OPEN.has(o.status));
-  const neededMin = openChosen.reduce((a, o) => a + o.remainingMin, 0);
+  const neededMin = openChosen.reduce((a, o) => a + o.workLeftMin, 0); // M-03 (RB-09)
   const availableMin = capacityMin - spentMin;
   const metaRows = metas
     .filter((m) => m.status === 'active')

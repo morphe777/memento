@@ -33,6 +33,7 @@ import {
   weekSunday,
 } from '../time.ts';
 import { taskDependencies } from './dependencies.ts';
+import { doneBetween } from './done.ts';
 import { serializeProjects } from './projects.ts';
 import { getOrCreatePlan, getPlanRow } from './unplanned.ts';
 
@@ -90,47 +91,9 @@ function doneStats(ctx: Ctx, from: string, to: string) {
   return { minutes, experiences: rows.filter((r) => r.isExperience).length };
 }
 
-/**
- * F2 / M-10 (D-137): the one definition of « Fait » for a week: every task done between its Monday and Sunday
- * (Paris days, M-01), whatever it was (planned, bonus, outside the plan, Inbox, project since abandoned). A task
- * deleted or unchecked is no longer done. `workMin` is what counts in the budget (experiences aside, RB-09;
- * time spent when entered, D-61); `mix` is by primary domain, experiences included, like the planned mix.
- */
-export function weekDone(ctx: Ctx, isoWeek: string) {
-  const monday = weekMonday(isoWeek);
-  const rows = ctx.db
-    .select()
-    .from(task)
-    .where(
-      and(
-        eq(task.status, 'done'),
-        gte(task.doneAt, parisDayStartIso(monday)),
-        lt(task.doneAt, parisDayStartIso(addDays(monday, 7))),
-      ),
-    )
-    .all();
-  const pids = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
-  const primary = new Map(
-    serializeProjects(
-      ctx,
-      pids.length ? ctx.db.select().from(project).where(inArray(project.id, pids)).all() : [],
-    ).map((p) => [p.id, p.domainIds[0] ?? null]),
-  );
-  const spent = (t: (typeof rows)[number]) => t.actualMin ?? t.durationMin ?? 0;
-  const mix = new Map<string | null, number>();
-  for (const t of rows) {
-    const d = t.projectId ? (primary.get(t.projectId) ?? null) : t.domainId;
-    mix.set(d, (mix.get(d) ?? 0) + spent(t));
-  }
-  return {
-    taskIds: rows.map((t) => t.id),
-    projectIds: pids,
-    count: rows.length,
-    experiences: rows.filter((t) => t.isExperience).length,
-    workMin: rows.filter((t) => !t.isExperience).reduce((a, t) => a + spent(t), 0),
-    mix: [...mix].map(([domainId, minutes]) => ({ domainId, minutes })),
-  };
-}
+/** F2 / M-10 (D-137): what was done in a week (Monday to Sunday), see `doneBetween`. */
+export const weekDone = (ctx: Ctx, isoWeek: string) =>
+  doneBetween(ctx, weekMonday(isoWeek), weekSunday(isoWeek));
 
 /** Snapshot of the data the engine needs (deterministic for a given database state and day). */
 /**

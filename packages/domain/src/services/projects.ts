@@ -80,6 +80,8 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
       status: task.status,
       n: sql<number>`count(*)`,
       minutes: sql<number>`coalesce(sum(${task.durationMin}), 0)`,
+      // M-03 (RB-09): the minutes that count in a budget, experiences aside.
+      workMinutes: sql<number>`coalesce(sum(case when ${task.isExperience} then 0 else ${task.durationMin} end), 0)`,
       noDuration: sql<number>`sum(case when ${task.durationMin} is null then 1 else 0 end)`,
     })
     .from(task)
@@ -134,6 +136,8 @@ export function serializeProjects(ctx: Ctx, rows: ProjectRow[]) {
         done: by('done')?.n ?? 0,
         totalMin: (by('todo')?.minutes ?? 0) + (by('done')?.minutes ?? 0),
         doneMin: by('done')?.minutes ?? 0,
+        /** M-03 (RB-09): budget minutes still to do (experiences aside), for the month and quarter loads. */
+        workLeftMin: by('todo')?.workMinutes ?? 0,
         withoutDuration: (by('todo')?.noDuration ?? 0) + (by('done')?.noDuration ?? 0),
       },
       /** RB-02 gaps (D-42): a « prêt » project with gaps is flagged « à compléter ». */

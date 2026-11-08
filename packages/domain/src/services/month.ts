@@ -1,6 +1,6 @@
 // Planifier › Mois (decision D-43): choose the month projects against the time available in the month.
 // Ready-to-display page: capacity from the weekly budgets, chosen projects, backlog candidates, quarter objectives.
-import { and, asc, eq, gte, inArray, isNull, lt, lte, schema } from '@memento/db';
+import { and, asc, eq, gte, inArray, isNull, lte, schema } from '@memento/db';
 import { type Ctx, ctxNow } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { FOCUS_ORDER, objectiveFocus } from '../rules/objectives.ts';
@@ -13,10 +13,10 @@ import {
   monthOf,
   monthStart,
   parisDate,
-  parisDayStartIso,
   quarterOf,
   shiftMonth,
 } from '../time.ts';
+import { doneBetween } from './done.ts';
 import { serializeProjects } from './projects.ts';
 
 const { project, objective, task, weekPlan, domain } = schema;
@@ -46,22 +46,9 @@ export function capacityBetween(ctx: Ctx, first: string, last: string) {
   return { weeks, capacityMin: weeks.reduce((a, w) => a + w.shareMin, 0) };
 }
 
-/** Work minutes done in [first, last] (experiences excluded, RB-09; actual time when entered, D-61). */
-export function workDoneBetween(ctx: Ctx, first: string, last: string) {
-  return ctx.db
-    .select({ m: task.durationMin, actual: task.actualMin, exp: task.isExperience })
-    .from(task)
-    .where(
-      and(
-        eq(task.status, 'done'),
-        gte(task.doneAt, parisDayStartIso(first)),
-        lt(task.doneAt, parisDayStartIso(addDays(last, 1))),
-      ),
-    )
-    .all()
-    .filter((t) => !t.exp)
-    .reduce((a, t) => a + (t.actual ?? t.m ?? 0), 0); // D-61: time spent when entered
-}
+/** Work minutes done in [first, last] (D-137: `doneBetween`, experiences excluded, time spent when entered). */
+export const workDoneBetween = (ctx: Ctx, first: string, last: string) =>
+  doneBetween(ctx, first, last).workMin;
 
 export function getMonthPlanningPage(ctx: Ctx, month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))
@@ -73,7 +60,9 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
   const last = monthEnd(month);
 
   const { weeks, capacityMin } = capacityBetween(ctx, first, last);
-  const spentMin = month === current ? workDoneBetween(ctx, first, last) : 0;
+  // F2 (D-137): what is done in the month used part of its capacity.
+  const done = doneBetween(ctx, first, last);
+  const spentMin = done.workMin;
   // Reserve for Inbox tasks due this month (they must be done whatever the projects).
   const inboxDue = ctx.db
     .select()
@@ -82,7 +71,7 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
       and(isNull(task.projectId), eq(task.status, 'todo'), gte(task.dueDate, first), lte(task.dueDate, last)),
     )
     .all();
-  const inboxReserveMin = inboxDue.reduce((a, t) => a + (t.durationMin ?? 0), 0);
+  const inboxReserveMin = inboxDue.reduce((a, t) => a + (t.isExperience ? 0 : (t.durationMin ?? 0)), 0);
 
   const quarter = quarterOf(first);
   const objectives = ctx.db.select().from(objective).orderBy(asc(objective.deadline)).all();
@@ -107,6 +96,7 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
     // D-103: deadline of the project, else of its objective (sort « Deadline » and box « du trimestre »).
     deadline: p.dueDate ?? objectives.find((o) => o.id === p.objectiveId)?.deadline ?? null,
     remainingMin: p.taskStats.totalMin - p.taskStats.doneMin,
+    workLeftMin: p.taskStats.workLeftMin, // M-03: what counts in the load
     doneMin: p.taskStats.doneMin,
     todo: p.taskStats.todo,
     gaps: p.gaps,
@@ -133,8 +123,25 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
         a.title.localeCompare(b.title),
     );
 
-  const plannedMin = chosen.filter((p) => p.status !== 'done').reduce((a, p) => a + p.remainingMin, 0);
+  // M-03 (RB-09): experiences never count in a load.
+  const plannedMin = chosen.filter((p) => p.status !== 'done').reduce((a, p) => a + p.workLeftMin, 0);
   const availableMin = capacityMin - spentMin;
+  // F1 (D-138): planned mix of the month by primary domain, like the week's: done in the month + work left of the
+  // month projects + Inbox tasks due this month (experiences included).
+  const mixMap = new Map<string | null, number>(done.mix.map((m) => [m.domainId, m.minutes]));
+  const addMix = (d: string | null, m: number) => mixMap.set(d, (mixMap.get(d) ?? 0) + m);
+  for (const p of chosen.filter((x) => x.status !== 'done')) addMix(p.domainId, p.remainingMin);
+  for (const t of inboxDue) addMix(t.domainId, t.durationMin ?? 0);
+  const mix = [
+    ...ctx.db
+      .select()
+      .from(domain)
+      .where(eq(domain.archived, false))
+      .orderBy(asc(domain.priorityRank))
+      .all()
+      .map((d) => ({ domainId: d.id as string | null, minutes: mixMap.get(d.id) ?? 0 })),
+    { domainId: null, minutes: mixMap.get(null) ?? 0 },
+  ];
   const neededMin = plannedMin + inboxReserveMin;
   // D-108: the path of each quarter objective (ideas and abandoned projects aside), to tell where it stands.
   const pathProjects = quarterObjectives.length
@@ -291,6 +298,7 @@ export function getMonthPlanningPage(ctx: Ctx, month: string) {
       durationMin: t.durationMin,
       dueDate: t.dueDate,
     })),
+    mix,
     chosen,
     candidates,
     objectives: objectiveRows,

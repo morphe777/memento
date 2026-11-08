@@ -5,7 +5,17 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { AiProposeButton } from '../components/ai.tsx';
 import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
-import { Empty, ErrorBox, InfoTip, Loading, PageHeader, Panel, Section } from '../components/ui.tsx';
+import {
+  DomainBars,
+  Empty,
+  ErrorBox,
+  InfoTip,
+  Loading,
+  PageHeader,
+  Panel,
+  Section,
+  useDomainRows,
+} from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
 import { fmtDate, fmtMin } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
@@ -31,6 +41,7 @@ export function MonthPlanPage({ mois, tabs }: { mois?: string; tabs: React.React
 
 function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactNode }) {
   const navigate = useNavigate();
+  const mixRows = useDomainRows(page.mix);
   const [gaps, setGaps] = useState<{ title: string; items: { code: string; label: string }[] } | null>(null);
   const choose = useAction((v: { row: Row; month: string | null }) =>
     post(`/projects/${v.row.id}/month`, { month: v.month }),
@@ -82,7 +93,14 @@ function MonthPlan({ page, tabs }: { page: MonthPlanningPage; tabs: React.ReactN
         <div className="min-w-0" style={{ flex: '3 1 420px' }}>
           <QuarterObjectives page={page} />
         </div>
-        <div className="min-w-0" style={{ flex: '2 1 300px' }}>
+        <div className="min-w-0 flex flex-col gap-6" style={{ flex: '2 1 300px' }}>
+          {/* F1 (D-138): the balance of effort between the domains, above the alerts. */}
+          <Section
+            title="Répartition prévue"
+            info="Temps par domaine, dans l'ordre de tes priorités : déjà fait ce mois-ci + travail restant des projets du mois + tâches Inbox à deadline ce mois-ci ; les expériences comptent ici."
+          >
+            <DomainBars rows={mixRows} />
+          </Section>
           <PlanAlerts alerts={page.alerts} okWord="valider le mois" />
         </div>
       </div>
