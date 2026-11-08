@@ -1,7 +1,9 @@
 // Scheduled jobs (WF-01 to WF-03, G-04): Sunday evening weekly report, Monday plan, monthly and quarterly reports.
 // Idempotent through job_run (one row per job and period); catches up if the worker was down at the due time,
-// and retries a failed job at the next tick (C-07).
-import { and, eq, schema } from '@memento/db';
+// and retries a failed job at the next tick (C-07). Nightly backup of the database (D-135).
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { and, copyDb, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, newId, tx } from '../context.ts';
 import { escapeHtml, isOnVacation } from '../rules/daily.ts';
 import { getSettings } from '../settings.ts';
@@ -29,7 +31,37 @@ const JOB_LABELS: Record<string, string> = {
   week_report: 'Rapport de la semaine',
   week: 'Clôture de la semaine et proposition du plan',
   quarter: 'Rapport du trimestre et objectifs récurrents',
+  backup: 'Sauvegarde de la nuit',
 };
+
+/** Records the outcome of a job for its period (one job_run row, updated on a retry); returns the row it found. */
+function saveRun(ctx: Ctx, job: string, periodKey: string, ok: boolean, error: string | null) {
+  const { jobRun } = schema;
+  const ranAt = ctxNow(ctx).toISOString();
+  const existing = lastRun(ctx, job, periodKey);
+  if (existing) ctx.db.update(jobRun).set({ ranAt, ok, error }).where(eq(jobRun.id, existing.id)).run();
+  else ctx.db.insert(jobRun).values({ id: newId(), job, periodKey, ranAt, ok, error }).run();
+  return existing;
+}
+
+const lastRun = (ctx: Ctx, job: string, periodKey: string) =>
+  ctx.db
+    .select()
+    .from(schema.jobRun)
+    .where(and(eq(schema.jobRun.job, job), eq(schema.jobRun.periodKey, periodKey)))
+    .get();
+
+/** C-07: records a failure; only the first failure of a job and period is announced in the notifications. */
+function recordFailure(ctx: Ctx, job: string, periodKey: string, error: string) {
+  tx(ctx, () => {
+    if (saveRun(ctx, job, periodKey, false, error)) return; // already announced at the first failure
+    recordNotification(ctx, {
+      kind: 'job',
+      title: `Échec : ${JOB_LABELS[job] ?? job} (${periodKey})`,
+      html: `<b>${escapeHtml(JOB_LABELS[job] ?? job)}</b> (${escapeHtml(periodKey)}) a échoué ; nouvel essai à chaque minute.\n\n<i>${escapeHtml(error)}</i>`,
+    });
+  });
+}
 
 /**
  * C-07: a job counts as done only once it succeeded. It runs in one transaction (all or nothing, its job_run row
@@ -37,37 +69,54 @@ const JOB_LABELS: Record<string, string> = {
  * period (the first failure).
  */
 function once(ctx: Ctx, job: string, periodKey: string, fn: () => void): 'done' | 'skipped' | 'failed' {
-  const { jobRun } = schema;
-  const row = () =>
-    ctx.db
-      .select()
-      .from(jobRun)
-      .where(and(eq(jobRun.job, job), eq(jobRun.periodKey, periodKey)))
-      .get();
-  const save = (ok: boolean, error: string | null) => {
-    const ranAt = ctxNow(ctx).toISOString();
-    const existing = row();
-    if (existing) ctx.db.update(jobRun).set({ ranAt, ok, error }).where(eq(jobRun.id, existing.id)).run();
-    else ctx.db.insert(jobRun).values({ id: newId(), job, periodKey, ranAt, ok, error }).run();
-    return existing;
-  };
-  if (row()?.ok) return 'skipped';
+  if (lastRun(ctx, job, periodKey)?.ok) return 'skipped';
   try {
     tx(ctx, () => {
       fn();
-      save(true, null);
+      saveRun(ctx, job, periodKey, true, null);
     });
     return 'done';
   } catch (e) {
-    const error = (e as Error).message;
-    tx(ctx, () => {
-      if (save(false, error)) return; // already announced at the first failure
-      recordNotification(ctx, {
-        kind: 'job',
-        title: `Échec : ${JOB_LABELS[job] ?? job} (${periodKey})`,
-        html: `<b>${escapeHtml(JOB_LABELS[job] ?? job)}</b> (${escapeHtml(periodKey)}) a échoué ; nouvel essai à chaque minute.\n\n<i>${escapeHtml(error)}</i>`,
-      });
-    });
+    recordFailure(ctx, job, periodKey, (e as Error).message);
+    return 'failed';
+  }
+}
+
+/** D-135: time (Paris) from which the nightly backup is taken, and number of daily copies kept. */
+export const BACKUP_TIME = '03:00';
+export const BACKUP_KEEP = 7;
+const BACKUP_NAME = /^memento-\d{4}-\d{2}-\d{2}\.db$/;
+
+/** D-135: the backup files beyond the BACKUP_KEEP most recent ones (other files of the folder are never listed). */
+export function backupsToDelete(names: string[], keep = BACKUP_KEEP): string[] {
+  return names
+    .filter((n) => BACKUP_NAME.test(n))
+    .sort()
+    .reverse()
+    .slice(keep);
+}
+
+/**
+ * D-135: every day from 03:00 (Paris), a consistent copy of the database (SQLite backup API, safe while the app
+ * writes) in `dir`/memento-YYYY-MM-DD.db, checked, then only the 7 most recent copies are kept. Same rule as the
+ * other jobs (C-07): retried at every tick until it succeeds, first failure announced.
+ */
+export async function runBackupJob(ctx: Ctx, dir: string): Promise<'done' | 'skipped' | 'failed'> {
+  const { date, time } = parisClock(ctxNow(ctx));
+  if (time < BACKUP_TIME || lastRun(ctx, 'backup', date)?.ok) return 'skipped';
+  const file = join(dir, `memento-${date}.db`);
+  const partial = `${file}.partial`;
+  try {
+    mkdirSync(dir, { recursive: true });
+    rmSync(partial, { force: true });
+    await copyDb(ctx.sqlite, partial);
+    renameSync(partial, file);
+    for (const old of backupsToDelete(readdirSync(dir))) rmSync(join(dir, old));
+    saveRun(ctx, 'backup', date, true, null);
+    return 'done';
+  } catch (e) {
+    if (existsSync(partial)) rmSync(partial);
+    recordFailure(ctx, 'backup', date, (e as Error).message);
     return 'failed';
   }
 }

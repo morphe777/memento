@@ -1,8 +1,10 @@
 // Worker: runs the scheduled jobs of @memento/domain every minute (no business logic here).
-import { openDb, runMigrations } from '@memento/db';
-import { notifyFrozenReports, runDailyRecapJob, runDueJobs, seed } from '@memento/domain';
+import { dirname, join } from 'node:path';
+import { openDb, resolveDbFile, runMigrations } from '@memento/db';
+import { notifyFrozenReports, runBackupJob, runDailyRecapJob, runDueJobs, seed } from '@memento/domain';
 
 const { db, sqlite } = openDb();
+const backupDir = join(dirname(resolveDbFile()), 'backups'); // D-135: <data folder>/backups (the bind in Docker)
 runMigrations(db);
 seed({ db, sqlite, actor: 'me' });
 
@@ -11,6 +13,7 @@ async function tick() {
     const r: Record<string, string> = runDueJobs({ db, sqlite, actor: 'me' });
     Object.assign(r, await notifyFrozenReports({ db, sqlite, actor: 'me' }, process.env, r));
     r.daily_recap = await runDailyRecapJob({ db, sqlite, actor: 'me' }, process.env); // D-77
+    r.backup = await runBackupJob({ db, sqlite, actor: 'me' }, backupDir); // D-135
     const ran = Object.entries(r).filter(([, v]) => v !== 'skipped');
     if (ran.length)
       console.log(

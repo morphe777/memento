@@ -57,18 +57,29 @@ export function describeDb(sqlite: Database.Database) {
 }
 
 /** H-19: hot, consistent copy (SQLite online backup, WAL included), then checked. No sqlite3 CLI needed. */
+/**
+ * H-19 / D-135: consistent copy of an open database (SQLite backup API, safe while the app writes) into
+ * `destination`, as a single file (rollback journal: no -wal or -shm beside it), checked before it is returned.
+ */
+export async function copyDb(sqlite: Database.Database, destination: string) {
+  await sqlite.backup(destination);
+  const copy = new Database(destination, { fileMustExist: true });
+  try {
+    copy.pragma('journal_mode = DELETE');
+    const info = describeDb(copy);
+    if (!info.ok) throw new Error(`copie invalide (${info.integrity})`);
+    return info;
+  } finally {
+    copy.close();
+  }
+}
+
 export async function backupDb(source: string, destination: string) {
   if (existsSync(destination)) throw new Error(`${destination} existe déjà : choisir un autre nom.`);
   mkdirSync(dirname(destination), { recursive: true });
   const src = openDbReadonly(source);
   try {
-    await src.backup(destination);
-    const copy = new Database(destination, { readonly: true, fileMustExist: true });
-    try {
-      return { source: describeDb(src), copy: describeDb(copy) };
-    } finally {
-      copy.close();
-    }
+    return { source: describeDb(src), copy: await copyDb(src, destination) };
   } finally {
     src.close();
   }

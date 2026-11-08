@@ -166,18 +166,23 @@ le fichier seul pendant que l'application tourne peut donner une copie incomplè
 copie à chaud cohérente (API de sauvegarde de SQLite, sans le CLI `sqlite3`), puis la vérifient (intégrité, nombre
 de domaines, objectifs, projets, tâches, rapports, migrations) ; elles n'écrasent jamais un fichier existant.
 
+**Chaque nuit, automatiquement** (worker, D-135) : à partir de 03:00 (heure de Paris), une copie vérifiée dans
+`backups/memento-AAAA-MM-JJ.db` du dossier de données (en production : le bind de l'hôte), puis seules les
+7 dernières sont gardées (les autres fichiers du dossier ne sont jamais touchés). Si le worker était arrêté à 03:00,
+la copie est faite plus tard dans la journée ; un échec est réessayé chaque minute et signalé une fois dans la cloche.
+Les commandes ci-dessous servent pour une copie à la main (avant une mise à jour par exemple).
+
 ```bash
 # En dev
-pnpm db:backup sauvegardes/$(date +%F).db
-pnpm db:verify sauvegardes/2026-11-07.db
+pnpm db:backup backups/$(date +%F).db
+pnpm db:verify backups/2026-11-07.db
 # En production (le fichier atterrit dans le dossier de données de l'hôte)
-docker exec memento node_modules/.bin/tsx packages/db/src/backup-cli.ts /data/sauvegardes/$(date +%F).db
-docker exec memento node_modules/.bin/tsx packages/db/src/verify-cli.ts /data/sauvegardes/2026-11-07.db
+docker exec memento node_modules/.bin/tsx packages/db/src/backup-cli.ts /data/backups/$(date +%F).db
+docker exec memento node_modules/.bin/tsx packages/db/src/verify-cli.ts /data/backups/2026-11-07.db
 ```
 
 La sauvegarde externe du dossier de données (bind) copie `memento.db` et `memento.db-wal` à des instants
-différents : elle n'est sûre que pour les fichiers de `sauvegardes/`. Planifier `backup-cli.ts` (cron de l'hôte,
-chaque nuit) avant la sauvegarde externe.
+différents : elle n'est sûre que pour les fichiers de `backups/`. La placer après 03:30.
 
 ### Restaurer
 
@@ -185,7 +190,7 @@ chaque nuit) avant la sauvegarde externe.
 2. Arrêter la stack (les trois conteneurs).
 3. Mettre de côté la base actuelle : `mv memento.db memento.db.avant-restauration`, de même pour `memento.db-wal`
    et `memento.db-shm` s'ils existent.
-4. Copier la sauvegarde à la place : `cp sauvegardes/<date>.db memento.db` (propriétaire uid 1000).
+4. Copier la sauvegarde à la place : `cp backups/<date>.db memento.db` (propriétaire uid 1000).
 5. Démarrer la stack : les migrations éventuelles s'appliquent. `GET /api/v1/health` doit répondre `ok`.
 6. Contrôler : `verify-cli.ts /data/memento.db` (mêmes nombres qu'à l'étape 1, migrations à jour) et
    `check-data.ts` (aucune donnée invalide).
