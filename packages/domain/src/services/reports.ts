@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, lt, schema } from '@memento/db';
+import { and, asc, desc, eq, gte, inArray, lt, or, schema } from '@memento/db';
 // Frozen reports (WF-08, dossier de dev §7). The payload holds every displayed value; it is never recomputed.
 import { type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
@@ -22,7 +22,7 @@ import {
   isValidIsoWeek,
   isValidQuarter,
   monthEnd,
-  monthOf,
+  monthOfWeek,
   monthStart,
   parisClock,
   parisDayStartIso,
@@ -250,7 +250,15 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
       .select()
       .from(project)
       .where(
-        and(eq(project.monthFlag, monthOf(monday)), inArray(project.status, ['active', 'paused', 'done'])),
+        // H-07: the month of the week (H-06), its projects even if the month roll already sent the unfinished
+        // ones back to « prêt » (their previousMonthFlag keeps the month).
+        and(
+          or(
+            eq(project.monthFlag, monthOfWeek(isoWeek)),
+            eq(project.previousMonthFlag, monthOfWeek(isoWeek)),
+          ),
+          inArray(project.status, ['ready', 'active', 'paused', 'done']),
+        ),
       )
       .all(),
   ).map((p) => {
@@ -323,7 +331,11 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
       from: monday,
       to: weekSunday(isoWeek),
     },
-    navigation: { previous: shiftWeek(isoWeek, -1), next: shiftWeek(isoWeek, 1), month: monthOf(monday) },
+    navigation: {
+      previous: shiftWeek(isoWeek, -1),
+      next: shiftWeek(isoWeek, 1),
+      month: monthOfWeek(isoWeek),
+    },
     global,
     successes,
     tasksDone: { count: done.length, bonus: done.filter((t) => t.isBonus).length, previousWeek: prevCount },
@@ -371,7 +383,8 @@ function buildMonthPayload(ctx: Ctx, month: string) {
     .where(eq(report.kind, 'week'))
     .orderBy(asc(report.periodKey))
     .all()
-    .filter((r) => isValidIsoWeek(r.periodKey) && monthOf(weekMonday(r.periodKey)) === month);
+    // H-06 (D-142): the weeks of the month are those holding 4 of their days or more in it.
+    .filter((r) => isValidIsoWeek(r.periodKey) && monthOfWeek(r.periodKey) === month);
   const weeks = weekly.map((r) => {
     const p = r.payload as ReturnType<typeof buildWeekPayload>;
     return {

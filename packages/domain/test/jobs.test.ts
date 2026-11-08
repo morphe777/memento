@@ -48,25 +48,28 @@ describe('C-07 scheduled jobs', () => {
     expect(runDueJobs(ctx).week_report).toBe('skipped');
   });
 
-  it('the month job is all or nothing: a failing roll leaves no frozen report, then both happen', () => {
+  it('the month roll is all or nothing; the month report is its own job (D-142)', () => {
     const ctx = makeCtx('2026-12-01T07:00:00.000Z'); // Tuesday 1 Dec 2026, 08:00 Paris
     ctx.sqlite.exec(
       "create trigger fail_roll before update on project begin select raise(abort, 'roll failed'); end",
     );
     ctx.sqlite.exec(
-      "insert into project (id, title, status, month_flag, sequence_mode, importance, created_by) values ('00000000-0000-4000-8000-000000000001', 'Octobre', 'active', '2026-11', 'sequential', 'normal', 'me')",
+      "insert into project (id, title, status, month_flag, sequence_mode, importance, created_by) values ('00000000-0000-4000-8000-000000000001', 'Novembre', 'active', '2026-11', 'sequential', 'normal', 'me')",
     );
-    expect(runDueJobs(ctx).month).toBe('failed');
-    expect(
+    const r = runDueJobs(ctx);
+    expect(r.month).toBe('failed');
+    expect(r.month_report).toBe('done'); // November is over and its last week (W48) frozen
+    const status = () =>
       ctx.db
         .select()
-        .from(schema.report)
+        .from(schema.project)
         .all()
-        .filter((r) => r.kind === 'month'),
-    ).toHaveLength(0);
+        .find((p) => p.title === 'Novembre')!.status;
+    expect(status()).toBe('active'); // nothing half done
     ctx.sqlite.exec('drop trigger fail_roll');
     ctx.setNow('2026-12-01T07:01:00.000Z');
     expect(runDueJobs(ctx).month).toBe('done');
+    expect(status()).toBe('ready');
     expect(
       ctx.db
         .select()
@@ -74,8 +77,6 @@ describe('C-07 scheduled jobs', () => {
         .all()
         .filter((r) => r.kind === 'month'),
     ).toHaveLength(1);
-    const p = ctx.db.select().from(schema.project).all()[0];
-    expect([p.status, p.monthFlag]).toEqual(['ready', null]);
   });
 
   it('a failing week proposal is a failed job, no longer a silent « done »', () => {

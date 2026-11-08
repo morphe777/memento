@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { and, copyDb, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, newId, tx } from '../context.ts';
 import { escapeHtml, isOnVacation } from '../rules/daily.ts';
+import { reportFreezableFrom } from '../rules/reports.ts';
 import { getSettings } from '../settings.ts';
 import {
   isoDay,
@@ -27,7 +28,8 @@ import { closeRecurringObjectives } from './recurrence.ts';
 import { generateReport } from './reports.ts';
 
 const JOB_LABELS: Record<string, string> = {
-  month: 'Rapport du mois et bascule des projets du mois',
+  month: 'Bascule des projets du mois',
+  month_report: 'Rapport du mois',
   week_report: 'Rapport de la semaine',
   week: 'Clôture de la semaine et proposition du plan',
   quarter: 'Rapport du trimestre et objectifs récurrents',
@@ -131,11 +133,7 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
   const month = monthOf(date);
   // Month first: on a Monday the 1st, the week proposal must see the new month projects.
   if (date > `${month}-01` || time >= reportTime) {
-    // WF-02, then D-42 month roll (after the report, which freezes last month's projects as they were).
-    out.month = once(ctx, 'month', month, () => {
-      generateReport(ctx, 'month', shiftMonth(month, -1));
-      rollMonth(ctx, month);
-    });
+    out.month = once(ctx, 'month', month, () => rollMonth(ctx, month)); // D-42 month roll
   }
   // D-116: the week report is frozen on Sunday evening (the weekend counts); on the other days, catch-up of
   // the last week's one if the worker was down then. Before the Monday close, as before (R-07 reads the reports).
@@ -149,6 +147,20 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
     // Already frozen by hand or by an earlier version: nothing new to announce.
     out.week_report = r === 'done' && !created ? 'skipped' : r;
   }
+  // WF-02, H-06 (D-142): last month's report once its last week is frozen too (just after it on that Sunday).
+  // It reads no month flag, so it may come after the roll.
+  const lastMonth = shiftMonth(month, -1);
+  const due = reportFreezableFrom('month', lastMonth, {
+    weekReport: s['schedule.week_report'].time,
+    reports: reportTime,
+  });
+  if (date > due.date || (date === due.date && time >= due.time)) {
+    let created = false;
+    const r = once(ctx, 'month_report', lastMonth, () => {
+      created = generateReport(ctx, 'month', lastMonth).created;
+    });
+    out.month_report = r === 'done' && !created ? 'skipped' : r;
+  }
   const plan = s['schedule.week_plan'];
   // Weekly: from the configured day/time until the end of the ISO week (catch-up).
   if (isoDay(date) > plan.day || (isoDay(date) === plan.day && time >= plan.time)) {
@@ -160,8 +172,9 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
   const quarter = quarterOf(date);
   if (date > quarterStart(quarter) || time >= reportTime) {
     out.quarter = once(ctx, 'quarter', quarter, () => {
+      // M-06: the recurring objectives are closed first, so the report freezes their real final status.
+      closeRecurringObjectives(ctx, quarter); // DM-108
       generateReport(ctx, 'quarter', shiftQuarter(quarter, -1)); // WF-03
-      closeRecurringObjectives(ctx, quarter); // DM-108, after the report froze the past quarter
     });
   }
   return out;
@@ -239,7 +252,7 @@ export async function notifyFrozenReports(
   };
   const out: Record<string, string> = {};
   for (const kind of ['week', 'month', 'quarter'] as const) {
-    if (ran[kind === 'week' ? 'week_report' : kind] !== 'done') continue;
+    if (ran[kind === 'quarter' ? kind : `${kind}_report`] !== 'done') continue;
     try {
       out[`notify_${kind}`] = await notifyReportReady(ctx, env, kind, periods[kind], pushSender);
     } catch (e) {

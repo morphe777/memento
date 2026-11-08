@@ -1,12 +1,21 @@
 // Weekly report indicators (dossier de dev §7, Specs §5b). Pure functions over a data snapshot.
-import { fmtMin, monthStart, quarterStart, shiftMonth, shiftQuarter, weekSunday } from '../time.ts';
+import {
+  fmtMin,
+  lastWeekOfMonth,
+  monthStart,
+  quarterStart,
+  shiftMonth,
+  shiftQuarter,
+  weekSunday,
+} from '../time.ts';
 
 export const isValidMonth = (m: string): boolean => /^\d{4}-(0[1-9]|1[0-2])$/.test(m);
 
 /**
  * H-05 (D-116): the Europe/Paris moment from which a period may be frozen, by hand as by the job: the time the
- * job freezes it. A week on its Sunday at the week report time; a month or a quarter on the first day of the
- * next one at the reports time.
+ * job freezes it. A week on its Sunday at the week report time; a quarter on the first day of the next one at the
+ * reports time. H-06 (D-142): a month once it is over (1st of the next one, reports time) and its last week is
+ * frozen (the Sunday of the week holding its last Thursday, week report time), whichever comes later.
  */
 export function reportFreezableFrom(
   kind: 'week' | 'month' | 'quarter',
@@ -14,7 +23,11 @@ export function reportFreezableFrom(
   times: { weekReport: string; reports: string },
 ): { date: string; time: string } {
   if (kind === 'week') return { date: weekSunday(periodKey), time: times.weekReport };
-  if (kind === 'month') return { date: monthStart(shiftMonth(periodKey, 1)), time: times.reports };
+  if (kind === 'month') {
+    const over = { date: monthStart(shiftMonth(periodKey, 1)), time: times.reports };
+    const lastWeek = { date: weekSunday(lastWeekOfMonth(periodKey)), time: times.weekReport };
+    return `${lastWeek.date}T${lastWeek.time}` > `${over.date}T${over.time}` ? lastWeek : over;
+  }
   return { date: quarterStart(shiftQuarter(periodKey, 1)), time: times.reports };
 }
 

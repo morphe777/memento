@@ -92,10 +92,22 @@ export const isValidIsoWeek = (key: string): boolean => {
 };
 
 export const monthOf = (d: string): string => d.slice(0, 7);
+/**
+ * H-06 (D-142): a week straddling two months belongs to the one holding most of its days (4 or more), which is
+ * the month of its Thursday.
+ */
+export const monthOfWeek = (isoWeek: string): string => monthOf(addDays(weekMonday(isoWeek), 3));
 export const monthStart = (m: string): string => `${m}-01`;
 export function monthEnd(m: string): string {
   const [y, mo] = m.split('-').map(Number);
   return fromUtc(Date.UTC(y, mo, 0));
+}
+
+/** H-06 (D-142): the last week of a month, the one holding its last Thursday. */
+export function lastWeekOfMonth(m: string): string {
+  let d = monthEnd(m);
+  while (isoDay(d) !== 4) d = addDays(d, -1);
+  return isoWeekOf(d);
 }
 /** Same day n months later, clamped to the end of the month (31 Jan + 1 → 28/29 Feb). */
 export function addMonths(d: string, n: number): string {
