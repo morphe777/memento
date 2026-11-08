@@ -134,6 +134,13 @@ export function placeObjective(
     if (target.metaObjectiveId !== before.metaObjectiveId)
       updateObjective(ctx, id, { metaObjectiveId: target.metaObjectiveId });
     const ids = target.ids.includes(id) ? target.ids : [...target.ids, id];
+    const positions = new Map(
+      ctx.db
+        .select({ id: schema.objective.id, position: schema.objective.position })
+        .from(schema.objective)
+        .all()
+        .map((o) => [o.id, o.position]),
+    );
     ids.forEach((oid, i) => {
       ctx.db
         .update(schema.objective)
@@ -148,6 +155,12 @@ export function placeObjective(
           ),
         )
         .run();
+    });
+    // M-11 (RB-15): one line per objective whose position changed.
+    ids.forEach((oid, i) => {
+      const was = positions.get(oid);
+      if (was !== undefined && was !== i)
+        audit(ctx, 'objective', oid, 'reorder', { position: was }, { position: i });
     });
     return getObjective(ctx, id);
   });

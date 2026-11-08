@@ -15,7 +15,7 @@ import {
 import { upcomingObjectiveOccurrences } from '../rules/recurrence.ts';
 import type { ProjectCreate, ProjectPatch } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
-import { monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
+import { monthEnd, monthOf, parisDate, quarterOf, shiftQuarter } from '../time.ts';
 import {
   allDependencies,
   defaultDependsOn,
@@ -302,7 +302,8 @@ export function updateProject(ctx: Ctx, id: string, patch: ProjectPatch) {
       set.completedAt = null;
     }
     // Leaving the month (back to backlog, pause, abandon, idea): the project is no longer a month project.
-    if (patch.status && patch.status !== before.status && before.status !== 'done') set.monthFlag = null;
+    // M-07 (D-143): a finished project reopened (back to « prêt ») leaves its month too.
+    if (patch.status && patch.status !== before.status) set.monthFlag = null;
     ctx.db.update(project).set(set).where(eq(project.id, id)).run();
     if (moved && !patch.objectiveId)
       removeAllDependencies(ctx, id); // back to the reserve: no more links
@@ -495,6 +496,7 @@ export function rollMonth(ctx: Ctx, month: string) {
           .set({ monthFlag: null, updatedAt: ctxNowIso(ctx) })
           .where(eq(project.id, r.id))
           .run();
+        audit(ctx, 'project', r.id, 'month_end', { monthFlag: r.monthFlag }, { monthFlag: null }); // M-11
       }
     }
     return { backToReady, activated, missed };
@@ -534,6 +536,9 @@ export function replanProject(ctx: Ctx, id: string, dueDate?: string) {
   return tx(ctx, () => {
     const before = getProject(ctx, id);
     const today = parisDate(ctxNow(ctx));
+    // M-04 (D-143): replanned without a date, a project whose deadline is past gets the end of the current month
+    // (its month box, D-42), instead of being refused.
+    if (!dueDate && before.dueDate && before.dueDate < today) dueDate = monthEnd(monthOf(today));
     ctx.db
       .update(project)
       .set({

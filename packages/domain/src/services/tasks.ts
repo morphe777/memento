@@ -184,7 +184,24 @@ export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | 
     if (!before.projectId && before.recurrenceRule) {
       const ref = before.dueDate ?? parisDate(ctxNow(ctx));
       const nextDue = nextOccurrence(before.recurrenceRule, ref);
-      if (nextDue) {
+      // M-02 (RB-11): checked, unchecked, checked again: the next occurrence already exists, it is reused.
+      const existing = nextDue
+        ? ctx.db
+            .select()
+            .from(task)
+            .where(
+              and(
+                isNull(task.projectId),
+                eq(task.status, 'todo'),
+                eq(task.title, before.title),
+                eq(task.recurrenceRule, before.recurrenceRule),
+                eq(task.dueDate, nextDue),
+              ),
+            )
+            .get()
+        : undefined;
+      if (existing) next = getTask(ctx, existing.id);
+      else if (nextDue) {
         next = createTask(ctx, {
           title: before.title,
           description: before.description,

@@ -2,14 +2,14 @@
 // renewed: a copy with its tasks (all to do), planned for the next period. A recurring objective, once closed
 // (achieved, partial or failed — not abandoned), is renewed for the next quarter / year. The new occurrence
 // keeps a link to the one it renews (previous_id); stopping the recurrence = removing it on the new occurrence.
-import { and, asc, eq, inArray, schema } from '@memento/db';
+import { eq, inArray, schema } from '@memento/db';
 import { audit, type Ctx, ctxNow, ctxNowIso } from '../context.ts';
 import { DomainError } from '../errors.ts';
 import { OBJECTIVE_RECURRENCE_MONTHS } from '../rules/recurrence.ts';
 import { addMonths, monthOf, parisDate, quarterOf, shiftMonth } from '../time.ts';
-import { createProject, getProject, getProjectRow, promoteProject, setProjectMonth } from './projects.ts';
+import { duplicateProject } from './duplicate.ts';
+import { getProject, getProjectRow, setProjectMonth } from './projects.ts';
 import { createObjective, getObjective, refreshObjectiveProgress, updateObjective } from './referential.ts';
-import { createTask } from './tasks.ts';
 
 const { project, projectGroup, task, objective } = schema;
 
@@ -42,47 +42,24 @@ export function renewProject(ctx: Ctx, id: string, opts: { missed?: boolean } = 
   // The next period follows the one the project was planned for (or now), and is never in the past.
   let month = shiftMonth(p.monthFlag ?? current, months);
   while (opts.missed ? month < current : month <= current) month = shiftMonth(month, months);
-  const groupIds = ctx.db
-    .select({ g: projectGroup.groupId })
-    .from(projectGroup)
-    .where(eq(projectGroup.projectId, id))
-    .all()
-    .map((r) => r.g);
-  const next = createProject(ctx, {
+  // M-09: the renewal is a duplicate (D-109: description, criterion, importance, motive, mode, tasks to do with
+  // their links), plus the recurrence, its dates moved to the next period and no dependency (DM-108).
+  const next = duplicateProject(ctx, id, {
     title: p.title,
-    description: p.description,
-    groupIds,
-    primaryDomainId: p.primaryDomainId,
     objectiveId: p.objectiveId ? openSuccessor(ctx, p.objectiveId) : null,
-    isFree: p.isFree,
-    sequenceMode: p.sequenceMode,
-    successCriterion: p.successCriterion,
-    importance: p.importance,
-    startDate: p.startDate ? addMonths(p.startDate, months) : null,
-    dueDate: p.dueDate ? addMonths(p.dueDate, months) : null,
-    dependsOn: [], // DM-108: a new occurrence inherits no dependency
+    dependsOn: [],
   });
   ctx.db
     .update(project)
-    .set({ recurrence: p.recurrence, previousId: id, updatedAt: ctxNowIso(ctx) })
+    .set({
+      recurrence: p.recurrence,
+      previousId: id,
+      startDate: p.startDate ? addMonths(p.startDate, months) : null,
+      dueDate: p.dueDate ? addMonths(p.dueDate, months) : null,
+      updatedAt: ctxNowIso(ctx),
+    })
     .where(eq(project.id, next.id))
     .run();
-  const tasks = ctx.db
-    .select()
-    .from(task)
-    .where(and(eq(task.projectId, id), inArray(task.status, ['todo', 'done'])))
-    .orderBy(asc(task.position))
-    .all();
-  for (const t of tasks)
-    createTask(ctx, {
-      projectId: next.id,
-      title: t.title,
-      description: t.description,
-      durationMin: t.durationMin,
-      isExperience: t.isExperience,
-      isFree: t.isFree,
-    });
-  promoteProject(ctx, next.id);
   try {
     setProjectMonth(ctx, next.id, month); // planned for the next period (D-42), if complete (RB-02)
   } catch (e) {

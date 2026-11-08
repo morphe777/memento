@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, gte, inArray, lt, or, schema } from '@memento/db';
 // Frozen reports (WF-08, dossier de dev §7). The payload holds every displayed value; it is never recomputed.
-import { type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
+import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { type EngineProject, type EngineTask, projectDelayMin } from '../rules/engine.ts';
 import {
@@ -549,7 +549,9 @@ export function generateReport(ctx: Ctx, kind: Kind, periodKey: string) {
         : kind === 'month'
           ? buildMonthPayload(ctx, periodKey)
           : buildQuarterPayload(ctx, periodKey);
-    return { report: insertReport(ctx, kind, periodKey, payload), created: true };
+    const created = insertReport(ctx, kind, periodKey, payload);
+    audit(ctx, 'report', created.id, 'generate', null, { kind, periodKey }); // M-11 (RB-15)
+    return { report: created, created: true };
   });
 }
 

@@ -561,21 +561,23 @@ function ReplanPanel({
         J'accepte le retard : le plan du projet est recalé sur le réel, la barre revient au centre. Les
         rapports passés gardent la trace.
       </p>
-      {projects.map((p) => (
-        <div key={p.projectId} className="card flex items-center gap-3 p-3">
-          <div className="flex-1 min-w-0">
-            <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} />
+      {projects
+        .filter((p) => p.status !== 'done')
+        .map((p) => (
+          <div key={p.projectId} className="card flex items-center gap-3 p-3">
+            <div className="flex-1 min-w-0">
+              <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} />
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              disabled={Math.abs(p.deltaMin) < 15 || replan.isPending}
+              onClick={() => replan.mutate(p.projectId)}
+            >
+              Replanifier
+            </button>
           </div>
-          <button
-            type="button"
-            className="btn btn-sm"
-            disabled={Math.abs(p.deltaMin) < 15 || replan.isPending}
-            onClick={() => replan.mutate(p.projectId)}
-          >
-            Replanifier
-          </button>
-        </div>
-      ))}
+        ))}
     </Panel>
   );
 }

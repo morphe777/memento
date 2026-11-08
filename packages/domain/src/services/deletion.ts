@@ -97,11 +97,18 @@ export function deleteObjective(ctx: Ctx, id: string) {
 export function deleteMetaObjective(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getMetaObjective(ctx, id);
+    const detached = ctx.db
+      .select({ id: objective.id })
+      .from(objective)
+      .where(eq(objective.metaObjectiveId, id))
+      .all();
     ctx.db
       .update(objective)
       .set({ metaObjectiveId: null, updatedAt: ctxNowIso(ctx) })
       .where(eq(objective.metaObjectiveId, id))
       .run();
+    for (const o of detached) // M-11 (RB-15): every changed row has its line
+      audit(ctx, 'objective', o.id, 'update', { metaObjectiveId: id }, { metaObjectiveId: null });
     ctx.db.delete(metaObjective).where(eq(metaObjective.id, id)).run();
     audit(ctx, 'meta_objective', id, 'delete', before, null);
     return { ok: true as const };
