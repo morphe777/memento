@@ -69,3 +69,24 @@ describe('M-18 task pages', () => {
     expect((await call('GET', '/tasks?limit=0')).statusCode).toBe(400);
   });
 });
+
+describe('H-13 OpenAPI contract', () => {
+  it('declares the errors, the cookie and who may call each operation', async () => {
+    const spec = (await call('GET', '/openapi.json')).json();
+    expect(spec.components.schemas.Error.required).toEqual(['code', 'message']);
+    expect(spec.components.securitySchemes.cookie).toMatchObject({ type: 'apiKey', in: 'cookie' });
+    const promote = spec.paths['/api/v1/projects/{id}/promote'].post;
+    expect(Object.keys(promote.responses)).toEqual(
+      expect.arrayContaining(['200', '400', '401', '403', '404', '409', '422', '429']),
+    );
+    expect(promote.responses['422'].content['application/json'].schema.$ref).toBe(
+      '#/components/schemas/Error',
+    );
+    expect(promote['x-token-access']).toBe('write');
+    expect(promote.security).toEqual([{ bearer: [] }, { cookie: [] }]);
+    const imp = spec.paths['/api/v1/import'].post;
+    expect([imp['x-token-access'], imp.security]).toEqual(['none', [{ cookie: [] }]]);
+    expect(spec.paths['/api/v1/health'].get.security).toEqual([]);
+    expect(spec.paths['/api/v1/tasks'].get['x-token-access']).toBe('read');
+  });
+});

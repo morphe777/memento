@@ -2,7 +2,8 @@
 
 Tu pilotes Mémento, l'outil personnel de l'utilisateur pour ses objectifs, projets et sa charge mentale. Ce guide dit **ce
 que tu peux faire, dans quel ordre, et quelles règles l'API impose**. Le contrat technique exact (schémas JSON) est
-dans `GET /api/v1/openapi.json`. Toute la logique métier est dans l'API : si une règle n'est pas respectée, l'API
+dans `GET /api/v1/openapi.json` : entrées, erreurs (schéma `Error`) et, pour chaque opération, `x-token-access`
+(`read`, `write` ou `none` = interface seule). Toute la logique métier est dans l'API : si une règle n'est pas respectée, l'API
 refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'utilisateur.
 
 ## 1. Accès
@@ -201,9 +202,18 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 
 ## 8. Outils MCP
 
-`get_context` (vue d'ensemble), `get_guide` (ce document), `search`, `list_objectives`, `get_objective`,
-`create_objective`, `update_objective`, `set_objective_quarter`, `list_projects`, `get_project`, `create_idea`,
-`create_project`, `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `set_project_month`, `complete_project`, `create_tasks`,
-`update_task`, `complete_task`, `get_calendar`, `parse_task`, `reorder_tasks`, `add_inbox_task`, `get_week_plan`, `propose_week_plan`,
-`set_week_plan_items`, `get_experiences`, `add_experience_idea`, `list_reports`, `get_report`, `list_changes`,
-`add_resource`, `list_meta_objectives`, `get_meta_objective`, `create_meta_objective`, `update_meta_objective`, `set_objective_meta`, `set_project_dependencies`, `add_project_dependency`, `remove_project_dependency`, `get_plan_graph`, `preview_plan_changes`, `apply_plan_changes`, `reorder_objectives`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`. Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes.
+Chaque outil appelle l'API ci-dessus : mêmes règles, mêmes codes. Chaque paramètre est décrit ; les annotations
+disent si l'outil lit (`readOnlyHint`) ou supprime / remplace l'existant (`destructiveHint` : demande d'abord à
+l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
+
+- **Lecture** : `get_context` (vue d'ensemble), `get_guide` (ce document), `search`, `list_objectives`, `get_objective`,
+  `list_projects`, `get_project`, `get_templates`, `get_experiences`, `list_meta_objectives`, `get_meta_objective`,
+  `get_plan_graph`, `preview_plan_changes`, `list_tasks`, `list_inbox`, `get_task`, `get_calendar`, `parse_task`,
+  `get_cap`, `get_week_plan`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`.
+- **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
+  en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `add_experience_idea`,
+  `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`, `update_meta_objective`,
+  `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`, `update_task`, `complete_task`,
+  `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`, `add_vacation`, `add_resource`.
+- **Suppression ou remplacement** : `set_project_dependencies`, `remove_project_dependency`, `apply_plan_changes`,
+  `set_week_plan_items`, `remove_vacation`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`.

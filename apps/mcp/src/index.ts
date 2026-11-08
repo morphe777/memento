@@ -96,7 +96,88 @@ export function p(parts: TemplateStringsArray, ...values: unknown[]): string {
   }, '');
 }
 
-export function buildServer(call: Call) {
+/** H-12: one description per parameter name, used by every tool that has it (unless the tool gives its own). */
+const PARAMS: Record<string, string> = {
+  actor: "Auteur des changements : « me » (l'utilisateur) ou « ai:<nom du jeton> ».",
+  actualMin: "Temps réellement passé, en minutes (1 à 6000), si différent de l'estimation.",
+  baseVersion: 'Version du graphe lue avec get_plan_graph : refus si le plan a changé entre-temps.',
+  criticality: "Criticité de l'objectif : 1 (faible) à 3 (forte).",
+  date: 'Jour AAAA-MM-JJ (heure de Paris).',
+  deadline: 'Échéance AAAA-MM-JJ.',
+  dependsOn: 'Identifiants (uuid) des projets prérequis.',
+  dependsOnId: 'Identifiant (uuid) du projet prérequis.',
+  description: "Description en Markdown, rédigée selon le modèle de l'utilisateur (get_templates).",
+  domainId: "Identifiant (uuid) d'un domaine (voir get_context).",
+  domainIds: 'Domaines à garder (uuid) ; vide ou absent = tous.',
+  dueDate: "Date due AAAA-MM-JJ, ou null pour l'effacer.",
+  durationMin: 'Durée estimée en minutes : 5, 15, 30, 60 ou 120.',
+  from: 'Premier jour (AAAA-MM-JJ) ou première période incluse.',
+  groupId: "Identifiant (uuid) d'un groupe.",
+  groupIds: 'Groupes du projet (uuid, au moins un) : le domaine en découle.',
+  horizonDate: 'Horizon AAAA-MM-JJ du méta-objectif.',
+  id: "Identifiant (uuid) de l'élément visé, lu dans une réponse précédente.",
+  ids: "Identifiants (uuid) dans l'ordre voulu.",
+  ignore: 'Éléments reconnus à ne pas appliquer (rendus au titre).',
+  importance: 'Importance : low, normal ou high.',
+  inbox: "true pour une tâche de l'Inbox (récurrence, #domaine et « cette semaine » sont lus).",
+  includeReserve: 'Inclure les projets de la réserve (sans objectif).',
+  includeReviewed: 'true pour inclure les changements déjà revus.',
+  isExperience: 'true pour une expérience (R-02), hors budget de travail.',
+  isFree: "true pour un élément libre : il n'attend pas le précédent.",
+  isoWeek: 'Semaine ISO AAAA-Wss (ex. 2026-W45).',
+  items: 'Sélection complète de la semaine : [{ taskId, kind: week | bonus }].',
+  kind: 'Sorte de rapport : week, month ou quarter.',
+  label: 'Libellé du lien.',
+  limit: 'Nombre maximal de lignes (1 à 500).',
+  metaObjectiveId: 'Identifiant (uuid) du méta-objectif, ou null.',
+  month: 'Mois AAAA-MM.',
+  motive: "Pourquoi l'utilisateur le veut (ses mots).",
+  objectiveId: "Identifiant (uuid) de l'objectif, ou null pour la réserve.",
+  offset: 'Lignes à sauter (pages, avec limit).',
+  ops: "Opérations à appliquer, dans l'ordre (voir le guide).",
+  outcomeTitle: 'Résultat visé, formulé comme un état atteint.',
+  ownerId: "Identifiant (uuid) de l'élément qui porte le lien.",
+  ownerType: "Sorte d'élément : objective, project, task ou group.",
+  periodKey: 'Période : AAAA-Wss (semaine), AAAA-MM (mois) ou AAAA-Qn (trimestre).',
+  position: 'Position dans la liste (0 = en tête).',
+  primaryDomainId: 'Domaine principal (uuid) parmi ceux des groupes.',
+  projectId: 'Identifiant (uuid) du projet ; null ou absent = Inbox.',
+  q: 'Mots cherchés.',
+  quarter: 'Trimestre AAAA-Qn (ex. 2026-Q4).',
+  recurrence: 'Récurrence : monthly, quarterly ou yearly ; null = aucune.',
+  recurrenceRule: "Règle de récurrence RRULE d'une tâche de l'Inbox (ex. FREQ=WEEKLY;BYDAY=MO), ou null.",
+  sequenceMode: "sequential (une tâche après l'autre) ou parallel.",
+  since: 'Depuis : une date ISO, « 7d » (7 jours), « last_visit » ou « all ».',
+  smartCurrent: "Valeur actuelle de l'indicateur.",
+  smartIndicator: "Indicateur mesurable de l'objectif.",
+  smartTarget: "Valeur cible de l'indicateur.",
+  startDate: 'Date de début AAAA-MM-JJ, ou null.',
+  status: 'Statut (valeurs listées dans le guide, section Le modèle).',
+  successCriterion: "Critère de succès : comment savoir que c'est fini.",
+  tasks: "Tâches dans l'ordre d'exécution : [{ title, durationMin }].",
+  text: 'Texte en français à lire (ex. « appeler le garage demain 15 min »).',
+  title: 'Titre court.',
+  to: 'Dernier jour (AAAA-MM-JJ) ou dernière période incluse.',
+  url: 'Adresse du lien (https://…).',
+  withProjects: "false pour dupliquer l'objectif sans ses projets.",
+};
+const described = <T extends z.ZodRawShape>(shape: T): T =>
+  Object.fromEntries(
+    Object.entries(shape).map(([k, v]) => {
+      const t = v as z.ZodType;
+      return [k, t.description || !PARAMS[k] ? t : t.describe(PARAMS[k])];
+    }),
+  ) as unknown as T;
+
+/** H-12: tools that only read (readOnlyHint, the only ones a read token sees). */
+export const isReadTool = (name: string) =>
+  /^(get|list)_/.test(name) || ['search', 'preview_plan_changes', 'parse_task'].includes(name);
+/** H-12: tools that delete or replace what exists (destructiveHint: ask the user first). */
+export const isDestructiveTool = (name: string) =>
+  /^(delete|remove)_/.test(name) ||
+  ['set_project_dependencies', 'set_week_plan_items', 'apply_plan_changes'].includes(name);
+
+export function buildServer(call: Call, canWrite = true) {
   const server = new McpServer(
     { name: 'memento', version: APP_VERSION },
     {
@@ -110,18 +191,33 @@ export function buildServer(call: Call) {
     description: string,
     shape: T,
     run: (a: Args<T>) => Promise<unknown>,
-  ) =>
-    server.registerTool(name, { description, inputSchema: shape }, (async (args: Args<T>) => {
-      const started = Date.now();
-      try {
-        const out = ok(await run(args));
-        logCall(name, started, 200);
-        return out;
-      } catch (e) {
-        logCall(name, started, e instanceof ApiFailure ? e.status : 0);
-        return fail(e);
-      }
-    }) as never);
+  ) => {
+    if (!canWrite && !isReadTool(name)) return; // H-12: a read token does not see the writing tools
+    server.registerTool(
+      name,
+      {
+        title: name.replaceAll('_', ' '),
+        description,
+        inputSchema: described(shape),
+        annotations: {
+          readOnlyHint: isReadTool(name),
+          destructiveHint: !isReadTool(name) && isDestructiveTool(name),
+          openWorldHint: false,
+        },
+      },
+      (async (args: Args<T>) => {
+        const started = Date.now();
+        try {
+          const out = ok(await run(args));
+          logCall(name, started, 200);
+          return out;
+        } catch (e) {
+          logCall(name, started, e instanceof ApiFailure ? e.status : 0);
+          return fail(e);
+        }
+      }) as never,
+    );
+  };
 
   tool(
     'search',
@@ -213,7 +309,7 @@ export function buildServer(call: Call) {
     'create_project',
     'Crée un projet (critère de succès, groupes, tâches 5/15/30/60/120 min ; dates facultatives) puis le promeut en « prêt » (backlog). Les manques éventuels sont dans le champ gaps.',
     {
-      ...S.projectCreate.shape,
+      ...S.projectCreate.omit({ promote: true }).shape,
       tasks: z
         .array(
           z.object({
@@ -412,6 +508,27 @@ export function buildServer(call: Call) {
     S.taskBatchCreate.shape,
     (a) => call('POST', '/tasks/batch', a),
   );
+  // H-12: reading the tasks themselves (Inbox included), by pages.
+  tool(
+    'list_tasks',
+    'Liste les tâches d\'un projet (projectId) ou de l\'Inbox (projectId: "inbox"), dans leur ordre ; status : todo, done ou cancelled. Pages avec limit et offset.',
+    {
+      projectId: z.union([S.uuid, z.literal('inbox')]),
+      status: z.enum(['todo', 'done', 'cancelled']).optional(),
+      limit: z.number().int().min(1).max(500).optional(),
+      offset: z.number().int().min(0).optional(),
+    },
+    (a) => call('GET', p`/tasks${qs(a)}`),
+  );
+  tool(
+    'list_inbox',
+    "Liste les tâches à faire de l'Inbox (hors projet), dans leur ordre.",
+    { limit: z.number().int().min(1).max(500).optional(), offset: z.number().int().min(0).optional() },
+    (a) => call('GET', p`/tasks${qs({ projectId: 'inbox', status: 'todo', ...a })}`),
+  );
+  tool('get_task', "Détail d'une tâche (projet, prérequis, liens).", { id: S.uuid }, (a) =>
+    call('GET', p`/tasks/${a.id}`),
+  );
   tool('update_task', 'Modifie une tâche.', { id: S.uuid, ...S.taskPatch.shape }, ({ id, ...rest }) =>
     call('PATCH', p`/tasks/${id}`, rest),
   );
@@ -596,7 +713,9 @@ const http = createServer(async (req, res) => {
   }
   try {
     const body = await readJson(req);
-    const server = buildServer(apiClient(token));
+    const call = apiClient(token);
+    const me = (await call('GET', '/auth/me')) as { canWrite?: boolean };
+    const server = buildServer(call, me.canWrite !== false);
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: undefined,
       enableJsonResponse: true,
@@ -610,7 +729,7 @@ const http = createServer(async (req, res) => {
   } catch (e) {
     if (!res.headersSent)
       res
-        .writeHead(400, { 'content-type': 'application/json' })
+        .writeHead(e instanceof ApiFailure ? e.status : 400, { 'content-type': 'application/json' })
         .end(JSON.stringify({ error: (e as Error).message }));
   }
 });

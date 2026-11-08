@@ -20,6 +20,7 @@ import {
 import { z } from 'zod';
 import { TOKEN_ROUTES, tokenAccess } from './access.ts';
 import * as A from './auth.ts';
+import { PUBLIC_ROUTES, withContract } from './openapi.ts';
 
 const GUIDE_FILE = resolve(import.meta.dirname, '../../../docs/api/guide-ia.md');
 
@@ -111,6 +112,7 @@ export async function buildApp(opts: AppOptions) {
       security: [{ bearer: [] }],
     },
     transform: jsonSchemaTransform,
+    transformObject: (d) => withContract('openapiObject' in d ? d.openapiObject : d.swaggerObject),
   });
 
   const { db, sqlite } = opts;
@@ -127,7 +129,7 @@ export async function buildApp(opts: AppOptions) {
   });
 
   // Authentication for every /api/v1 route except login, health and the OpenAPI document.
-  const PUBLIC = new Set(['/api/v1/auth/login', '/api/v1/health', '/api/v1/openapi.json']);
+  const PUBLIC = PUBLIC_ROUTES;
   // /auth/me answers 200 { authenticated: false } instead of 401 (no console noise before login).
   const SOFT = new Set(['/api/v1/auth/me']);
   // C-02: decided on the route the router matched (decoded URL), never on the raw URL. No route = not an API

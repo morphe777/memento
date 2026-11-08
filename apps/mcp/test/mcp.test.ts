@@ -209,8 +209,60 @@ describe('MCP L6', () => {
     const prev = (await rpc('tools/call', { name: 'preview_plan_changes', arguments: { ops } }, ro)).body;
     expect(JSON.parse(prev.result.content[0].text).code).not.toBe('READ_ONLY_TOKEN');
     const res = (await rpc('tools/call', { name: 'apply_plan_changes', arguments: { ops } }, ro)).body;
-    expect(res.result.isError).toBe(true);
-    expect(JSON.parse(res.result.content[0].text).code).toBe('READ_ONLY_TOKEN');
+    expect(res.result?.isError ?? !!res.error).toBe(true);
+  });
+});
+
+describe('H-12 tools an AI can use safely', () => {
+  type Tool = {
+    name: string;
+    annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean };
+    inputSchema: { properties?: Record<string, { description?: string }> };
+  };
+  const tools = async (auth = token) => (await rpc('tools/list', {}, auth)).body.result.tools as Tool[];
+
+  it('every parameter is described; reading and destructive tools are marked', async () => {
+    const all = await tools();
+    const undescribed = all.flatMap((t) =>
+      Object.entries(t.inputSchema.properties ?? {})
+        .filter(([, v]) => !v.description)
+        .map(([k]) => `${t.name}.${k}`),
+    );
+    expect(undescribed).toEqual([]);
+    const byName = new Map(all.map((t) => [t.name, t.annotations]));
+    expect(byName.get('get_project')).toMatchObject({ readOnlyHint: true, destructiveHint: false });
+    expect(byName.get('delete_task')).toMatchObject({ readOnlyHint: false, destructiveHint: true });
+    expect(byName.get('set_week_plan_items')).toMatchObject({ destructiveHint: true });
+    expect(byName.get('complete_task')).toMatchObject({ readOnlyHint: false, destructiveHint: false });
+  });
+
+  it('a read token sees only the reading tools', async () => {
+    const ro = createToken(testDb, 'lecteur-h12', 'read').token;
+    const names = (await tools(ro)).map((t) => t.name);
+    expect(names).toContain('get_project');
+    expect(names).toContain('list_tasks');
+    expect(names.some((n) => /^(delete|create|update|complete)_/.test(n))).toBe(false);
+  });
+
+  it('list_inbox, list_tasks and get_task read the tasks', async () => {
+    const created = await api.inject({
+      method: 'POST',
+      url: '/api/v1/tasks',
+      headers: { cookie },
+      payload: { title: 'Lire le contrat', durationMin: 15 },
+    });
+    const id = created.json().id;
+    const call = async (name: string, args: object) =>
+      JSON.parse((await rpc('tools/call', { name, arguments: args })).body.result.content[0].text);
+    expect((await call('list_inbox', {})).map((t: { id: string }) => t.id)).toContain(id);
+    expect(
+      (await call('list_tasks', { projectId: 'inbox', limit: 500 })).map((t: { id: string }) => t.id),
+    ).toContain(id);
+    expect((await call('get_task', { id })).title).toBe('Lire le contrat');
+  });
+
+  it('an unknown token is refused at once', async () => {
+    expect((await rpc('tools/list', {}, 'not-a-token')).status).toBe(401);
   });
 });
 
