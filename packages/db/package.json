@@ -9,9 +9,9 @@
   },
   "scripts": {
     "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate-cli.ts",
-    "backup": "tsx src/backup-cli.ts",
-    "verify": "tsx src/verify-cli.ts"
+    "migrate": "tsx --env-file-if-exists=../../.env src/migrate-cli.ts",
+    "backup": "tsx --env-file-if-exists=../../.env src/backup-cli.ts",
+    "verify": "tsx --env-file-if-exists=../../.env src/verify-cli.ts"
   },
   "dependencies": {
     "better-sqlite3": "13.0.3",

@@ -199,6 +199,12 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `PERIOD_NOT_OVER` | rapport demandé pour une période pas encore terminée |
 | `INVALID_DATE` | date impossible ou mal écrite (`AAAA-MM-JJ`) |
 | `USER_ONLY` (403) | route réservée à l'interface |
+| `TASK_NOT_FOUND` / `GROUP_NOT_FOUND` | tâche ou groupe inconnu (dans une sélection, une liste de groupes) |
+| `TASK_TOO_LONG` | tâche de plus de 2 h : la découper |
+| `BAD_REQUEST` (400) / `RATE_LIMITED` (429) / `INTERNAL` (500) | requête illisible / trop de requêtes / erreur inattendue (à signaler) |
+
+Les autres codes (`AI_*`, `BAD_CREDENTIALS`, `INVALID_SETTINGS`, `INVALID_EXPORT`, `NOTIFY_*`, `TOKEN_NAME_TAKEN`…)
+viennent de routes réservées à l'interface.
 
 ## 8. Outils MCP
 

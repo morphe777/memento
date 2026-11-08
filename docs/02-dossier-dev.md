@@ -2,14 +2,14 @@
 
 ## 0. Mode d'emploi pour Claude Code
 
-Ce dossier traduit `01-specs-fonctionnelles.md` en instructions de développement. En cas de conflit : **décisions datées (Specs §9.0) > ce dossier > maquettes > reste des Specs**.
+Ce dossier traduit `01-specs-fonctionnelles.md` en instructions de développement. En cas de conflit : **décisions datées (Specs §9.0, puis `DECISIONS.md`) > ce dossier > maquettes > reste des Specs**. Ce dossier décrit le système tel qu'il est (resynchronisé le 08/11/2026, v1.1) ; chaque écart tranché depuis est dans `DECISIONS.md`.
 
 - **IDs** : chaque règle porte l'ID des Specs (VIS, G, DM, CH, WF, R, V, F, NF) ou de ce dossier (RB). Les citer dans les commits, tests et commentaires de code.
 - **Maquettes** : dossier `../maquettes/` (voir son README). Reproduire la hiérarchie visuelle et les comportements, pas le code de la maquette.
 - **Nom** : l'application s'appelle **Mémento** ; identifiant technique `memento` (dépôt, packages `@memento/*`, images Docker, base, hôte).
 - **Langue** : interface en français ; code, tables, endpoints et commits en anglais.
-- **Règle d'or du dev** : l'API est la seule porte d'entrée de la logique métier. Le front et l'IA appellent la même API (F-26). Aucune règle métier dans le front, sauf du confort d'affichage.
-- **Doute** : choisir la solution la plus simple (G-11) et l'ajouter à la liste des décisions ouvertes (§14), ne jamais inventer une règle métier silencieusement.
+- **Règle d'or du dev** : toute la logique métier est dans `packages/domain`. Le front et l'IA (MCP) passent par l'API (F-26) ; le worker appelle directement `packages/domain`, donc les mêmes règles. Aucune règle métier dans le front, sauf du confort d'affichage.
+- **Doute** : choisir la solution la plus simple (G-11), l'écrire dans `DECISIONS.md` et la signaler ; ne jamais inventer une règle métier silencieusement.
 
 ## 1. Périmètre v1 / v2
 
@@ -44,17 +44,16 @@ flowchart TD
   NPM --> MCP["Serveur MCP<br/>Streamable HTTP · traduit en appels API"]
   WEB --> API["API REST<br/>toute la logique métier · OpenAPI · session ou jeton"]
   MCP --> API
-  API --> DB[("PostgreSQL 17<br/>VM BDD existante · base dédiée")]
-  API --> WK["Worker<br/>moteur du lundi, rapports figés, purge"]
-  WK --> DB
+  API --> DB[("SQLite<br/>fichier memento.db · WAL")]
+  WK["Worker<br/>moteur du lundi, rapports figés, bilans, sauvegarde"] --> DB
 ```
 
 - **Front web** : SPA, aucun accès direct à la base. Il peut révéler des besoins d'API (endpoints d'agrégation pour un écran) : ils s'ajoutent à l'API, jamais en contournement.
 - **Serveur MCP** : couche fine, chaque outil = un appel API avec un jeton IA. Aucune logique propre.
-- **Worker** : même code métier que l'API (package partagé), exécute les jobs planifiés (§6, §7). File de jobs stockée dans PostgreSQL, pas de Redis.
+- **Worker** : appelle `packages/domain` directement (même code, mêmes règles que l'API), un tick par minute (§6, §7). Pas de file de jobs : chaque job est fait une fois par période (table `job_run`), relancé tant qu'il échoue, échec signalé (C-07).
 - **Monorepo** : `apps/api`, `apps/web`, `apps/mcp`, `apps/worker`, `packages/domain` (règles métier + schémas partagés), `packages/db` (schéma et migrations).
 
-## 3. Stack technique (proposition, à confirmer — §14)
+## 3. Stack technique (validée, D-01, D-02)
 
 TypeScript de bout en bout : un seul jeu de schémas partagés entre API, front, MCP et worker, donc zéro divergence entre ce que valide le front et ce que valide l'API.
 
@@ -64,21 +63,22 @@ TypeScript de bout en bout : un seul jeu de schémas partagés entre API, front,
 | Validation | Zod (schémas dans `packages/domain`) | Une source de vérité, génère l'OpenAPI |
 | API | Fastify + OpenAPI généré | Léger, typé, doc d'API automatique pour l'IA |
 | ORM / migrations | Drizzle ORM | SQL lisible, migrations versionnées |
-| Base | PostgreSQL 17 (VM BDD existante, base dédiée) | Déjà en place ; recherche plein texte native |
-| Jobs planifiés | pg-boss (file dans PostgreSQL) | Pas de Redis à ajouter |
+| Base | SQLite (better-sqlite3, mode WAL), un fichier `memento.db` (D-01) | Mono-utilisateur, pas de serveur de base à gérer |
+| Jobs planifiés | Worker Node, tick d'une minute, table `job_run` | Pas de file ni de Redis |
 | MCP | SDK officiel TypeScript, transport Streamable HTTP (https://ts.sdk.modelcontextprotocol.io/) | Standard, réutilisable par Claude, autre agent, n8n |
 | Front | React + Vite, TanStack Router (routes typées, fil d'Ariane), TanStack Query | Cache API, routes déclaratives |
 | Drag & drop | dnd-kit | Souris et tactile (iPad) |
 | Styles | Tailwind CSS sur des variables CSS de thème | Thèmes clair / sombre / auto par variables |
 | Mobile | PWA (installable sur iPhone) | Pas d'app native en v1 |
 | Tests | Vitest (unitaires), Playwright (bout en bout) | Standard de l'écosystème |
-| Déploiement | Docker Compose, dépôt « stacks », Portainer | Identique au reste du homelab |
+| Exécution | TypeScript exécuté par `tsx` (pas de compilation) | Même code en dev et en production |
+| Déploiement | Une image Docker, trois conteneurs (API + front, worker, MCP), Portainer | Identique au reste du homelab |
 
 Versions : prendre les dernières versions stables au moment du dev ; ne pas figer ici des numéros qui vieilliront.
 
 ## 4. Modèle de données
 
-17 tables. Toutes ont `id` (UUID), `created_at`, `updated_at`, `created_by` (`me` ou `ai:<nom du jeton>`). Suppression = statut ou archivage, jamais de suppression physique sans demande explicite.
+20 tables (schéma : `packages/db/src/schema.ts`, migrations Drizzle dans `packages/db/migrations`). Les tables métier ont `id` (UUID), `created_at`, `updated_at`, `created_by` (`me` ou `ai:<nom du jeton>`). Suppression = statut ou archivage ; suppression définitive seulement sur demande explicite, journalisée avec le contenu (D-60). JSON stocké en texte. La base refuse un statut inconnu et un jour qui n'existe pas (D-145).
 
 | Table | Colonnes clés | Contraintes / notes |
 | --- | --- | --- |
@@ -86,19 +86,21 @@ Versions : prendre les dernières versions stables au moment du dev ; ne pas fig
 | `group` | name, domain_id | 1 seul domaine (DM-91). Nom unique, insensible à la casse. |
 | `meta_objective` | title, description, horizon_date?, status | Non SMART possible (DM-17). |
 | `objective` | meta_objective_id?, title, description, smart_indicator, smart_target, deadline, quarter, criticality (1-3), status | deadline obligatoire, dans le trimestre (DM-12). status : active, paused, achieved, partial, failed, abandoned. |
-| `project` | title, status, objective_id?, position_in_objective, sequence_mode, primary_domain_id, success_criterion, start_date, due_date, month_flag (YYYY-MM)?, success?, last_touched_at, description | status : idea, active, paused, done, abandoned. Promotion : §5. sequence_mode : sequential (défaut) ou parallel. |
+| `project` | title, status, objective_id?, position_in_objective, sequence_mode, primary_domain_id, success_criterion, start_date, due_date, month_flag (YYYY-MM)?, success?, last_touched_at, description | status : idea, ready, active, paused, done, abandoned (un projet ne « rate » pas : D-140). Promotion : §5. sequence_mode : sequential (défaut) ou parallel. |
 | `project_group` | project_id, group_id | N-N. Domaines du projet = domaines distincts de ses groupes, 3 max. |
 | `task` | project_id? (null = Inbox), title, description, duration_min, position, is_free, is_experience, status, due_date?, recurrence_rule?, domain_id? (Inbox), postpone_count, done_at | duration_min ∈ {5, 15, 30, 60, 120} (DM-32, D-67). status : todo, done, cancelled. |
 | `task_dependency` | task_id, depends_on_task_id | Prérequis explicites en plus de l'ordre. Pas de cycle. |
 | `project_dependency` | project_id, depends_on_project_id | Idem pour les projets d'un objectif. |
 | `resource_link` | owner_type, owner_id, label, url | DM-70 : objectif, projet, tâche, groupe. |
 | `week_plan` | iso_week (ex. 2026-W45), status (draft, validated), budget_min, budget_reason?, validated_at | Unique par semaine. budget_min = défaut ou surcharge (CH-03). |
-| `week_plan_item` | week_plan_id, task_id, kind (week, bonus), source (engine, me, ai), score?, why?, position | Unique (plan, tâche). |
-| `report` | kind (week, month, quarter), period_key, generated_at, payload (jsonb), schema_version | Figé : jamais modifié après insertion (WF-08). |
-| `audit_log` | at, actor, entity_type, entity_id, action, diff (jsonb), reviewed_at? | Écrit par l'API à chaque mutation (F-23). Base du filtre « À revoir » (F-25). |
-| `setting` | key, value (jsonb) | Voir table des réglages. |
+| `week_plan_item` | week_plan_id, task_id, kind (week, bonus, unplanned), source (engine, me, ai), score?, why?, position | Unique (plan, tâche). unplanned = faite sans être prévue (D-99). |
+| `report` | kind (week, month, quarter), period_key, generated_at, payload (JSON), schema_version | Figé : jamais modifié après insertion (WF-08). |
+| `audit_log` | at, actor, entity_type, entity_id, action, diff (JSON), reviewed_at? | Écrit par l'API à chaque mutation (F-23). Base du filtre « À revoir » (F-25). |
+| `setting` | key, value (JSON) | Voir table des réglages ; clés `secret.*` (clés d'IA) jamais exportées ; `migration.*` = migrations de données faites (D-141). |
 | `api_token` | name, token_hash, scopes, last_used_at, revoked_at? | Jetons IA (MCP, n8n). Stockés hachés. |
-| `user` + `session` | login, password_hash ; session_id, expires_at | Un seul utilisateur. |
+| `app_user` + `session` | login, password_hash ; session_id (haché), expires_at | Un utilisateur en pratique (D-03). |
+| `notification` | kind (daily, report, job), title, html, read_at? | Cloche (D-117). |
+| `job_run` | job, period_key, ok, ran_at, error? | Un job fait une fois par période (C-07). |
 
 **Réglages (`setting`) et valeurs par défaut**
 
@@ -178,7 +180,7 @@ Poids par défaut w = 1, réglables (V-14). Garde-fous (CH-05) : si Santé ou Fa
 
 ## 7. Rapports
 
-Générés par le worker, stockés en `report.payload` (jsonb) et **jamais recalculés** (WF-08). L'écran lit uniquement le payload.
+Générés par le worker, stockés en `report.payload` (JSON) et **jamais recalculés** (WF-08). L'écran lit uniquement le payload.
 
 | ID | Indicateur | Calcul exact | Affichage |
 | --- | --- | --- | --- |
@@ -206,23 +208,7 @@ Préfixe `/api/v1`, JSON, contrat OpenAPI généré depuis les schémas Zod et s
 
 **Conventions (M-16, M-18, D-144)** : succès = 200 avec un corps JSON (pas de 201 ni de 204) ; 400 `VALIDATION_ERROR` (requête mal formée), 401, 403 (`USER_ONLY`, `READ_ONLY_TOKEN`), 404 `NOT_FOUND`, 409 (conflit : `PLAN_APPLY_CONFLICT`, `ALREADY_EXISTS`), 422 (règle métier : code propre), 429, 500 `INTERNAL`. Un `GET` n'écrit jamais. **Compatibilité de `/api/v1`** : seuls des ajouts (route, champ de réponse, paramètre facultatif, code d'erreur) ; un retrait ou un changement de sens passe par `/api/v2`, l'ancienne version restant servie le temps de migrer les clients (web, MCP, scripts).
 
-| Ressource | Endpoints | Notes |
-| --- | --- | --- |
-| Domaines | GET/POST /domains, PATCH /domains/{id}, POST /domains/reorder | Archivage, pas de suppression |
-| Groupes | GET/POST /groups, PATCH/DELETE /groups/{id} | DELETE refusé si projets rattachés |
-| Méta-objectifs | CRUD /meta-objectives | |
-| Objectifs | CRUD /objectives, GET /objectives/{id}/path | path = chemin ordonné des projets (V-02) |
-| Projets / idées | CRUD /projects, POST /projects/{id}/promote, POST /projects/{id}/complete, PUT /projects/{id}/groups, POST /projects/reorder | promote applique RB-02 ; complete applique RB-12 |
-| Tâches | CRUD /tasks, POST /tasks/{id}/complete, POST /tasks/{id}/uncomplete, POST /tasks/reorder, POST /tasks/{id}/move, POST /tasks/parse | project_id null = Inbox ; /tasks/parse lit une tâche en français courant sans rien écrire (D-115, permis à un jeton lecture) |
-| Dépendances | POST/DELETE /tasks/{id}/dependencies, POST/DELETE /projects/{id}/dependencies | RB-07 |
-| Ressources | POST/DELETE /resources | |
-| Planification | GET /week-plans/{iso_week}, POST /week-plans/{iso_week}/propose, PUT /week-plans/{iso_week}/items, PATCH /week-plans/{iso_week} (budget), POST /week-plans/{iso_week}/validate | GET renvoie la page prête à afficher : groupes, tâches visibles, pourquoi, budget, répartition, alertes |
-| Ma semaine | GET /weeks/{iso_week}/execution | Tâches du plan + Bonus + indicateurs live |
-| Rapports | GET /reports?kind=&from=&to=, GET /reports/{id}, POST /reports/generate | Lecture seule ensuite |
-| Recherche | GET /search?q= | Résultats groupés par type |
-| À revoir | GET /changes?since=&actor=, POST /changes/mark-reviewed | F-25 |
-| Réglages | GET/PATCH /settings, GET /templates | V-14 ; /templates : les seuls modèles de description, lisibles par un jeton (D-136) |
-| Jetons | GET/POST/DELETE /tokens | Valeur affichée une seule fois |
+**Liste des routes** : une seule source, le document `GET /api/v1/openapi.json` (généré depuis les schémas Zod ; pour chaque opération, ses erreurs et `x-token-access` : `read`, `write` ou `none` = interface seule, tiré de `apps/api/src/access.ts`). Les parcours pour une IA sont dans `docs/api/guide-ia.md`. Une création en plusieurs étapes se fait en un appel, tout ou rien (H-11, D-144).
 
 Les endpoints « page prête » (planification, exécution) existent parce que le front en a besoin : c'est le front qui façonne le back. Ils restent dans l'API, donc l'IA y a accès aussi.
 
@@ -230,26 +216,7 @@ Les endpoints « page prête » (planification, exécution) existent parce que l
 
 Outils nommés en anglais, description en français, chacun = un ou deux appels API. Le serveur s'authentifie avec un jeton IA dédié : toute action IA est journalisée « ai:<nom> » et visible dans « À revoir ».
 
-| Outil | Rôle |
-| --- | --- |
-| `search` | Recherche globale |
-| `get_context` | Vue d'ensemble : domaines, objectifs actifs, projets du mois, budget, alertes |
-| `list_objectives`, `get_objective` | Avec chemin des projets |
-| `create_objective`, `update_objective` | |
-| `list_projects`, `get_project` | Filtres : statut, groupe, domaine, mois |
-| `create_idea`, `create_project`, `update_project`, `promote_idea`, `complete_project` | promote applique RB-02 et renvoie les manques |
-| `duplicate_project`, `duplicate_objective` | D-109 : copie à neuf (tâches à faire, ni mois ni dates) ; un objectif emporte ses projets et leur chemin |
-| `parse_task` | D-115 : lit « Sortir les poubelles tous les mardis 5 min #maison » → titre, deadline, RRULE, durée, domaine, semaine, sans rien créer |
-| `create_tasks` (lot), `update_task`, `complete_task`, `reorder_tasks` | Création en lot pour découper un projet |
-| `add_inbox_task` | Capture rapide |
-| `get_week_plan`, `propose_week_plan`, `set_week_plan_items` | Base du bouton IA en v2 |
-| `get_report`, `list_reports` | Lecture des rapports figés |
-| `list_changes` | Ce qui a changé (F-25) |
-| `add_resource` | Lien vers la doc (DM-70) |
-
-Suppression : outils `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective` (D-60, D-123),
-journalisés avec le contenu supprimé. Pas d'outil de réglages ; `get_templates` lit les modèles de description (D-136). Les routes ouvertes aux jetons sont fixées par une
-seule liste (`apps/api/src/access.ts`, H-03) ; les autres sont réservées à l'interface.
+La liste des outils, par sorte (lecture, écriture, suppression ou remplacement), est dans `docs/api/guide-ia.md` §8 ; chaque paramètre y est décrit et chaque outil porte les annotations `readOnlyHint` / `destructiveHint` (D-146). Un jeton lecture ne voit que les outils de lecture. Les suppressions (`delete_*`, D-60, D-123) sont journalisées avec le contenu supprimé ; pas d'outil de réglages, `get_templates` lit les modèles de description (D-136). Les routes ouvertes aux jetons sont fixées par une seule liste (`apps/api/src/access.ts`, H-03).
 
 ## 10. Arborescence des pages et fil d'Ariane
 
@@ -336,7 +303,7 @@ Valeurs claires = maquettes validées (NF-07). Valeurs sombres = proposition à 
 
 **Recherche (F-01 à F-04)**
 
-- PostgreSQL plein texte, configuration `french`, poids : titre = A, groupes et domaines = B, description = C. Tolérance aux fautes : extension `pg_trgm` sur les titres.
+- Recherche en mémoire sur les éléments lus en base (volumes d'un seul utilisateur), sans accents ni casse ; classement dans `packages/domain/src/rules/search.ts`.
 - Classement : titre exact, puis début de titre, puis rang plein texte ; résultats groupés par type (Objectifs, Projets, Idées, Tâches, Inbox), 5 par type, popup au fil de la frappe (debounce 150 ms).
 
 **Sécurité**
@@ -344,27 +311,27 @@ Valeurs claires = maquettes validées (NF-07). Valeurs sombres = proposition à 
 - Un seul utilisateur : mot de passe haché (argon2id), cookie de session httpOnly, Secure, SameSite=Strict.
 - Jetons IA : générés dans Configuration › Accès, stockés hachés, révocables, portée lecture ou lecture-écriture.
 - Aucune exposition Internet : accès LAN ou VPN WireGuard (iPhone hors de la maison). Limitation de débit sur la connexion.
-- Secrets (mot de passe BDD, clé de session) en variables d'environnement injectées au déploiement, jamais dans le dépôt.
+- Secrets (clés d'IA par défaut, Telegram) en variables d'environnement injectées au déploiement, jamais dans le dépôt ; les clés saisies dans Configuration › IA restent en base, jamais exportées ni envoyées à une autre URL que la leur (D-145).
 
 **Journal (F-23)** : `audit_log` écrit dans la même transaction que la mutation. Rétention illimitée en v1.
 
-**Sauvegardes** : `pg_dump` quotidien de la base dédiée vers un stockage externe, rétention 30 jours ; test de restauration documenté dans le README.
+**Sauvegardes** : le worker fait chaque nuit une copie vérifiée de la base dans `<dossier de données>/backups` (7 gardées, D-135), que la sauvegarde externe du dossier récupère ; `pnpm db:backup <fichier>` à la main (D-134) ; une copie avant chaque import ou vidage (5 gardées, D-145).
 
 **Déploiement homelab**
 
-- 4 images Docker : `api`, `worker`, `mcp`, `web` (statique derrière un nginx léger). Un `docker-compose.yml` dans le dépôt « stacks », déployé par Portainer (mode Repository).
-- Base : nouvelle base + utilisateur dédiés sur la VM PostgreSQL 17 existante. Migrations Drizzle appliquées au démarrage de `api`.
-- NGINX Proxy Manager : un hôte interne (nom à choisir, ex. `memento.example.lan`), `/` → web, `/api` → api, `/mcp` → mcp.
-- Healthchecks sur chaque conteneur ; logs JSON sur la sortie standard (Graylog possible via le pilote de logs Docker).
+- Une image Docker (`morphe777/memento:<version>`, dépendances de production seules, D-147), trois conteneurs : API + front, worker, MCP. `install/docker-compose.yml` est un exemple ; la production a son propre compose.
+- Base : fichier SQLite dans le dossier de données (bind). Migrations Drizzle appliquées au démarrage de l'API ; migrations de données une seule fois (D-141).
+- NGINX Proxy Manager : un hôte interne (`memento.example.lan`), `/` et `/api` → conteneur API (qui sert aussi le front), `/mcp` → MCP.
+- Healthchecks (`/api/v1/health` lit la base, D-145) ; logs JSON sur la sortie standard (Graylog possible via le pilote de logs Docker).
 - Fuseau : Europe/Paris pour le worker.
 
 ## 13. Plan de développement et critères d'acceptation
 
-8 lots, dans l'ordre. Chaque lot se termine par ses tests verts et une démo ; **Claude Code s'arrête à la fin de chaque lot pour validation.**
+8 lots, livrés (v1.0 le 08/11/2026). La suite se fait par lots de corrections ou de fonctions, mêmes règles : tests verts et démo, puis **Claude Code s'arrête à la fin de chaque lot pour validation.**
 
 | Lot | Contenu | Critères d'acceptation |
 | --- | --- | --- |
-| L0 Socle | Monorepo, lint, tests, Docker Compose de dev, schéma + migrations, connexion, `audit_log`, réglages, seed des 8 domaines | Connexion OK ; migrations rejouables à vide ; 8 domaines dans l'ordre |
+| L0 Socle | Monorepo, lint, tests, schéma + migrations, connexion, `audit_log`, réglages, seed des 8 domaines | Connexion OK ; migrations rejouables à vide ; 8 domaines dans l'ordre |
 | L1 API référentiel | CRUD de toutes les entités, promotion, dépendances, réordonnancement, OpenAPI | RB-01 à RB-08 et RB-11 à RB-15 testés ; promouvoir une idée sans tâche renvoie 422 avec la liste des manques |
 | L2 Front référentiel | AppShell, fil d'Ariane, Projets (arbo, liste, kanban), Projet, Tâche (panneau), Objectifs, Objectif (chemin), Idées, Inbox, Domaines, recherche Cmd+K, thèmes, drag & drop | Toutes les actions de l'API faisables à la main (F-26) ; réordonner change la disponibilité (RB-06) ; contraste et thèmes OK |
 | L3 Planification | Moteur §6, endpoint « page prête », page Planifier | Même données = même proposition ; tâches suivantes révélées ; alertes en direct ; dépassement non bloquant ; conforme à planifier-la-semaine.dc.html |
@@ -386,15 +353,15 @@ Valeurs claires = maquettes validées (NF-07). Valeurs sombres = proposition à 
 | Projet | Résultat attendu en 1 phrase · Critère de succès (oui / non) · Contexte en 2 lignes · Ressources |
 | Tâche | Quoi faire, concrètement · Où / avec quoi (lien) |
 
-**À trancher avant de lancer le dev** (L0 à L2 peuvent démarrer avec les valeurs proposées)
+**Décisions** (état au 08/11/2026)
 
-- [ ] Stack §3 validée (TypeScript, Fastify, Drizzle, React, pg-boss)
-- [ ] Nom d'hôte interne (ex. memento.example.lan)
+- [x] Stack : D-01, D-02 (SQLite, TypeScript)
+- [x] Nom d'hôte interne : `memento.example.lan`
+- [x] Canal des rapports et alertes (Specs Q-16) : D-77 (Telegram ou push), D-117 (cloche)
+- [x] Kanban (Specs Q-11) : D-19, D-33
 - [ ] Couleurs du thème sombre §11 à valider à l'écran
-- [ ] Délai de purge des idées : 12 mois ?
-- [ ] Canal des rapports et alertes : dans l'outil seulement, ou aussi mail / notification / autre agent (Specs Q-16)
-- [ ] Calendrier : lecture de l'agenda en v2 ou jamais (Specs Q-07)
-- [ ] « Interactions entre objectifs » de la vue d'ensemble : prérequis, conflit de temps ou contribution (Specs Q-09)
-- [ ] Kanban : colonnes globales Cette semaine / En cours / En attente / Fait (Specs Q-11)
-- [ ] Import des données de l'ancien outil existantes : oui (script en L7) ou départ à zéro
-- [ ] Rattachement des groupes « Bien-être » (Santé) et « Travaux » (Maison) confirmé
+- [ ] Délai de purge des idées : 12 mois (valeur appliquée tant que non tranché)
+- [ ] Lecture de l'agenda (Specs Q-07) : v2 ou jamais
+- [ ] « Interactions entre objectifs » de la vue d'ensemble (Specs Q-09)
+- [ ] Import des données de l'ancien outil, ou départ à zéro
+- [ ] Rattachement des groupes « Bien-être » (Santé) et « Travaux » (Maison)

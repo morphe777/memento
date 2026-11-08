@@ -37,11 +37,21 @@ services:
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       MEMENTO_AI_API_KEY: ${MEMENTO_AI_API_KEY:-}
+      MEMENTO_TELEGRAM_BOT_TOKEN: ${MEMENTO_TELEGRAM_BOT_TOKEN:-}
 
   memento-worker:
     <<: *memento
     container_name: memento-worker
     volumes: *data
+    environment:
+      <<: *env
+      # Bilan du soir (D-77) : mêmes clés de repli que l'API, si rien n'est saisi dans Configuration.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      MEMENTO_AI_API_KEY: ${MEMENTO_AI_API_KEY:-}
+      MEMENTO_TELEGRAM_BOT_TOKEN: ${MEMENTO_TELEGRAM_BOT_TOKEN:-}
     command: ["node_modules/.bin/tsx", "apps/worker/src/index.ts"]
     healthcheck:
       disable: true

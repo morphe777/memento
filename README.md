@@ -2,7 +2,7 @@
 
 Outil personnel de pilotage : objectifs, projets, charge mentale. Voir `CLAUDE.md` et `docs/`.
 
-## Architecture (v0.1)
+## Architecture
 
 | Dossier | Rôle |
 | --- | --- |
@@ -10,14 +10,14 @@ Outil personnel de pilotage : objectifs, projets, charge mentale. Voir `CLAUDE.m
 | `packages/db` | Schéma Drizzle (SQLite), migrations, client |
 | `apps/api` | API REST Fastify `/api/v1` (OpenAPI : `/api/v1/openapi.json`), sert aussi le front buildé |
 | `apps/web` | Front React + Vite + TanStack Router / Query + Tailwind (aucune règle métier) |
-| `apps/worker` | Jobs planifiés (lundi 07:00, 1er du mois, 1er jour du trimestre), heure de Paris |
-| `apps/mcp` | Serveur MCP (Streamable HTTP), chaque outil = un appel API |
+| `apps/worker` | Jobs planifiés, heure de Paris : proposition du lundi, rapports figés, bilan du soir, sauvegarde de la nuit ; appelle `packages/domain` directement |
+| `apps/mcp` | Serveur MCP (Streamable HTTP), chaque outil = un appel API avec le jeton de l'appelant |
 
 Ports : API + front **4500**, Vite dev 4501, MCP 4502.
 
 ## Prérequis
 
-Node.js 24 LTS et pnpm 12. Sur la machine de dev, ils sont installés dans `~/.local/opt/node` (ajouté au `PATH` dans `~/.bashrc`).
+Node.js 24 LTS et pnpm 12 (`corepack enable` ou `npm install -g pnpm@12`).
 
 ## Démarrer
 
@@ -62,9 +62,9 @@ pnpm check        # lint (Biome) + typage + tests (Vitest)
 pnpm test:dates   # la suite à d'autres dates (01/01/2027, 30/11/2026 23:30 UTC) et dans un ordre aléatoire
 ```
 
-La CI GitHub (`.github/workflows/ci.yml`) bloque sur un échec de lint, de typage, de test, de `pnpm audit` (niveau
-high) ou du scan de l'image (Trivy), et vérifie que l'image ne contient ni maquettes, ni dossier de conception, ni
-données.
+La CI GitHub (`.github/workflows/ci.yml`) bloque sur un échec de lint, de typage, de test ou de `pnpm audit` (niveau
+high), et vérifie que l'image ne contient ni maquettes, ni dossier de conception, ni données, ni outils de test. Le
+scan de l'image (Trivy) avertit sans bloquer (D-136).
 
 ## Déploiement Docker (production)
 
@@ -113,7 +113,9 @@ commande :
 MEMENTO_DATA_DIR=/srv/memento docker compose -f install/docker-compose.yml up -d
 ```
 
-Les ports 4500 et 4502 doivent être libres (arrêter les services de dev sur la même machine). Derrière NGINX Proxy
+Les ports 4500 et 4502 sont publiés sur `MEMENTO_BIND_IP` (l'adresse du serveur sur le réseau local ; 127.0.0.1 par
+défaut) et doivent être libres (arrêter les services de dev sur la même machine). Le conteneur MCP n'a pas accès au
+dossier de données : il ne fait que relayer vers l'API. Derrière NGINX Proxy
 Manager en HTTPS, passer `MEMENTO_COOKIE_SECURE: "true"`. Mise à jour : nouvelle image puis « Pull and redeploy »
 (les migrations s'appliquent au démarrage) : faire d'abord une sauvegarde avec `backup-cli.ts` (voir Sauvegarde).
 

@@ -11,10 +11,10 @@
     "./version": "./src/version.ts"
   },
   "scripts": {
-    "seed": "tsx src/cli/seed.ts",
-    "demo": "tsx src/cli/demo.ts",
-    "demo-map": "tsx src/cli/demo-map.ts",
-    "check-data": "tsx src/cli/check-data.ts"
+    "seed": "tsx --env-file-if-exists=../../.env src/cli/seed.ts",
+    "demo": "tsx --env-file-if-exists=../../.env src/cli/demo.ts",
+    "demo-map": "tsx --env-file-if-exists=../../.env src/cli/demo-map.ts",
+    "check-data": "tsx --env-file-if-exists=../../.env src/cli/check-data.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0",
