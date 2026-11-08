@@ -147,6 +147,9 @@ export async function buildApp(opts: AppOptions) {
       return reply.code(422).send({ code: err.code, message: err.message, details: err.details });
     if (err instanceof D.NotFoundError)
       return reply.code(404).send({ code: 'NOT_FOUND', message: `${err.entity} introuvable` });
+    // M-16: a unique name already taken (domain, group…) is a conflict, not a server error.
+    if ((err as { code?: string }).code === 'SQLITE_CONSTRAINT_UNIQUE')
+      return reply.code(409).send({ code: 'ALREADY_EXISTS', message: 'Ce nom existe déjà.' });
     // C-06: an impossible or malformed date has its own code, whatever the field.
     if (hasZodFastifySchemaValidationErrors(err) && err.validation.some((v) => v.message === D.DATE_MESSAGE))
       return reply.code(422).send({ code: 'INVALID_DATE', message: D.DATE_MESSAGE, details: err.validation });
@@ -517,6 +520,9 @@ export async function buildApp(opts: AppOptions) {
       r.post('/projects', { schema: { ...tag('Projets'), body: D.projectCreate } }, async (req) =>
         D.createProject(ctx(req), req.body),
       );
+      r.post('/projects/batch', { schema: { ...tag('Projets'), body: D.projectBatchCreate } }, async (req) =>
+        D.createProjects(ctx(req), req.body.projects),
+      );
       r.patch(
         '/projects/:id',
         { schema: { ...tag('Projets'), params: D.idParam, body: D.projectPatch } },
@@ -827,6 +833,10 @@ export async function buildApp(opts: AppOptions) {
         async (req) => D.listNotifications(ctx(req), req.query.limit),
       );
       r.get('/notifications/:id', { schema: { ...tag('Réglages'), params: D.idParam } }, async (req) =>
+        D.getNotification(ctx(req), req.params.id),
+      );
+      // M-16: opening a notice marks it read with a POST (a GET never writes).
+      r.post('/notifications/:id/read', { schema: { ...tag('Réglages'), params: D.idParam } }, async (req) =>
         D.readNotification(ctx(req), req.params.id),
       );
       r.post('/notifications/read-all', { schema: tag('Réglages') }, async (req) =>

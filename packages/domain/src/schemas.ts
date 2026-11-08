@@ -106,13 +106,31 @@ export const objectivePlaceBody = z.object({
 export const monthKey = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/);
 /** D-42: choose (month) or drop (null) a project for a month: Planifier › Mois. */
 export const projectMonthBody = z.object({ month: monthKey.nullable() });
+export const duration = z.union([z.literal(5), z.literal(15), z.literal(30), z.literal(60), z.literal(120)]);
+const taskFields = {
+  title,
+  description: text.optional(),
+  durationMin: z.number().int().nullable().optional(), // RB-03 checked in domain for a readable message
+  isFree: z.boolean().optional(),
+  isExperience: z.boolean().optional(),
+  dueDate: date.nullable().optional(),
+  recurrenceRule: z.string().max(500).nullable().optional(),
+  domainId: uuid.nullable().optional(),
+  /** D-61: time actually spent, in minutes (null = as estimated). */
+  actualMin: z.number().int().min(1).max(6000).nullable().optional(),
+};
 /** RB-01 + decision D-04: an idea needs a title and at least one group. */
 export const projectCreate = z.object({
   ...projectFields,
   groupIds: z.array(uuid).min(1, 'Au moins un groupe'),
   /** DM-101: explicit prerequisites; absent = follows the last project of the objective (unless isFree). */
   dependsOn: z.array(uuid).max(50).optional(),
+  /** H-11: tasks created with the project, and promotion to « prêt », in the same transaction. */
+  tasks: z.array(z.object(taskFields)).max(100).optional(),
+  promote: z.boolean().optional(),
 });
+/** H-11: several projects at once (AI path), all or none. */
+export const projectBatchCreate = z.object({ projects: z.array(projectCreate).min(1).max(20) });
 /** API-02: replaces the prerequisites of a project. */
 export const projectDependenciesBody = z.object({ dependsOn: z.array(uuid).max(50) });
 export const projectPatch = z.object({ ...projectFields, status: projectStatus }).partial();
@@ -171,19 +189,6 @@ export const projectListQuery = z.object({
   objectiveId: uuid.optional(),
 });
 
-export const duration = z.union([z.literal(5), z.literal(15), z.literal(30), z.literal(60), z.literal(120)]);
-const taskFields = {
-  title,
-  description: text.optional(),
-  durationMin: z.number().int().nullable().optional(), // RB-03 checked in domain for a readable message
-  isFree: z.boolean().optional(),
-  isExperience: z.boolean().optional(),
-  dueDate: date.nullable().optional(),
-  recurrenceRule: z.string().max(500).nullable().optional(),
-  domainId: uuid.nullable().optional(),
-  /** D-61: time actually spent, in minutes (null = as estimated). */
-  actualMin: z.number().int().min(1).max(6000).nullable().optional(),
-};
 /** D-54: an experience idea for the reserve (an Inbox task flagged as experience). */
 export const experienceIdea = z.object({
   title,
@@ -195,6 +200,8 @@ export const taskCreate = z.object({
   ...taskFields,
   projectId: uuid.nullable().optional(),
   position: z.number().int().optional(),
+  /** H-11: also adds the new task to this week's plan, in the same transaction. */
+  isoWeek: isoWeek.optional(),
 });
 export const taskBatchCreate = z.object({
   projectId: uuid.nullable().optional(),
@@ -208,6 +215,9 @@ export const taskReorderBody = z.object({ projectId: uuid.nullable(), ids: z.arr
 export const taskListQuery = z.object({
   projectId: z.string().optional(), // uuid or "inbox"
   status: z.string().optional(),
+  // M-18: optional pages (same order every time); without them, the whole list as before.
+  limit: z.coerce.number().int().min(1).max(500).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
 });
 export const boardQuery = z.object({ projectId: uuid.optional() });
 export const weekToggleBody = z.object({ inWeek: z.boolean() });
@@ -242,10 +252,19 @@ export const reportGenerateBody = z.object({
 
 export const capQuery = z.object({ month: monthKey.optional() });
 
+/** M-17: a query-string boolean is « true » or « false » (z.coerce.boolean() made « false » true). */
+export const queryBoolean = z.enum(['true', 'false']).transform((v) => v === 'true');
+
 export const changesQuery = z.object({
-  since: z.string().optional(), // ISO timestamp, or "last-visit", "24h", "7d"
+  // M-16: an ISO timestamp, or "all", "last-visit", "24h", "7d"; anything else is refused (422), not ignored.
+  since: z
+    .string()
+    .refine((v) => ['all', 'last-visit', '24h', '7d'].includes(v) || !Number.isNaN(Date.parse(v)), {
+      message: 'since : date ISO, « all », « last-visit », « 24h » ou « 7d »',
+    })
+    .optional(),
   actor: z.enum(['all', 'me', 'ai']).optional(),
-  includeReviewed: z.coerce.boolean().optional(),
+  includeReviewed: queryBoolean.optional(),
 });
 export const markReviewedBody = z.object({ ids: z.array(uuid).optional(), all: z.boolean().optional() });
 

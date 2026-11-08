@@ -35,9 +35,16 @@ export function listNotifications(ctx: Ctx, limit = 50) {
 }
 
 /** GET /notifications/{id}: the whole notice; reading it marks it read. */
-export function readNotification(ctx: Ctx, id: string) {
+/** M-16: GET /notifications/{id} only reads. */
+export function getNotification(ctx: Ctx, id: string) {
   const row = ctx.db.select().from(notification).where(eq(notification.id, id)).get();
   if (!row) throw new NotFoundError('notification', id);
+  return row;
+}
+
+/** POST /notifications/{id}/read (D-119: read = opened), from the interface. */
+export function readNotification(ctx: Ctx, id: string) {
+  const row = getNotification(ctx, id);
   if (row.readAt) return row;
   const readAt = ctxNowIso(ctx);
   ctx.db.update(notification).set({ readAt }).where(eq(notification.id, id)).run();

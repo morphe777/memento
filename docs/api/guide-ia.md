@@ -36,7 +36,13 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'ut
 
 Erreurs : `{ "code": "…", "message": "…", "details": … }`.
 400 `VALIDATION_ERROR` (forme de la requête) · 401 `UNAUTHENTICATED` · 403 `READ_ONLY_TOKEN` / `USER_ONLY` ·
-404 `NOT_FOUND` · **422 = règle métier** (le `message` est en français et peut être montré tel quel) · 429.
+404 `NOT_FOUND` · 409 conflit (`PLAN_APPLY_CONFLICT`, `ALREADY_EXISTS` : nom déjà pris) · **422 = règle métier** (le
+`message` est en français et peut être montré tel quel) · 429. Un succès répond 200 avec du JSON ; un `GET` n'écrit
+jamais. `GET /tasks` accepte `limit` (1 à 500) et `offset` pour lire par pages. `/api/v1` ne fait que s'enrichir
+(routes, champs, paramètres facultatifs) : rien n'y est retiré ni ne change de sens.
+Une création en plusieurs étapes se fait en **un appel** (tout ou rien, H-11) : `POST /tasks { …, isoWeek }` crée la
+tâche et l'ajoute à la fin de la semaine ; `POST /projects { …, tasks, promote: true }` crée le projet, ses tâches et
+le promeut ; `POST /projects/batch { projects: [...] }` crée plusieurs projets dans l'ordre (chemin d'un objectif).
 
 ## 3. Le modèle
 
@@ -139,9 +145,10 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 1. **Capturer une idée de projet** : `GET /domains` + `GET /groups` → `POST /projects { title, groupIds,
    description }`. Écris une vraie description en suivant le modèle de l'utilisateur (`GET /templates`, outil MCP
    `get_templates`) : sans elle, le projet reste sans description (aucun modèle n'est copié, D-119).
-2. **Découper un projet** : `POST /tasks/batch { projectId, tasks: [{ title, durationMin }] }` (ordre = ordre
-   d'exécution), puis `POST /projects/{id}/promote`. Vérifie `gaps` et complète (`PATCH /projects/{id}`
-   `{ successCriterion }`).
+2. **Découper un projet** : nouveau projet, `POST /projects { …, tasks: [{ title, durationMin }], promote: true }`
+   (outil MCP `create_project`) ; projet existant, `POST /tasks/batch { projectId, tasks }` puis
+   `POST /projects/{id}/promote`. Ordre des tâches = ordre d'exécution. Vérifie `gaps` et complète
+   (`PATCH /projects/{id}` `{ successCriterion }`).
 3. **Préparer le lundi** : `GET /week-plans/{semaine}` → explique les alertes → propose une sélection par
    `PUT …/items`. L'utilisateur garde la main : il peut tout modifier.
 4. **Revue du mois** : `GET /month-plans/{mois}` → signale surcharge, objectifs non couverts, projets reconduits

@@ -27,7 +27,7 @@ export function resolveSince(ctx: Ctx, since: string | undefined, userId?: strin
     const u = userId ? ctx.db.select().from(appUser).where(eq(appUser.id, userId)).get() : undefined;
     return u?.lastSeenAt ?? undefined;
   }
-  return since;
+  return new Date(since).toISOString(); // M-16: compared with the stored ISO UTC timestamps
 }
 
 export function listChanges(

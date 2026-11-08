@@ -27,6 +27,7 @@ import {
 } from './dependencies.ts';
 import { closeMissedRecurringProjects, renewProject } from './recurrence.ts';
 import { refreshObjectiveProgress } from './referential.ts';
+import { createTasks } from './tasks.ts';
 
 const { project, projectGroup, group, domain, task, objective } = schema;
 
@@ -243,7 +244,7 @@ function nextPositionInObjective(ctx: Ctx, objectiveId: string | null | undefine
 
 export function createProject(ctx: Ctx, input: ProjectCreate) {
   return tx(ctx, () => {
-    const { groupIds, primaryDomainId: requested, dependsOn, ...fields } = input;
+    const { groupIds, primaryDomainId: requested, dependsOn, tasks, promote, ...fields } = input;
     const { primaryDomainId } = resolveProjectDomains(groupDomainsOf(ctx, groupIds), requested); // RB-04
     if (fields.objectiveId)
       assertFound(
@@ -272,6 +273,8 @@ export function createProject(ctx: Ctx, input: ProjectCreate) {
       dependsOn ??
       (fields.objectiveId && !fields.isFree ? defaultDependsOn(ctx, fields.objectiveId, id) : []);
     if (wanted.length) setProjectDependencies(ctx, id, wanted);
+    if (tasks?.length) createTasks(ctx, id, tasks); // H-11: project, tasks and promotion together, or nothing
+    if (promote) promoteProject(ctx, id);
     return getProject(ctx, id);
   });
 }
@@ -353,6 +356,11 @@ export function setProjectGroups(ctx: Ctx, id: string, groupIds: string[], prima
 /** RB-02 checklist for the project page (« Pour devenir actif »). */
 export const getProjectReadiness = (ctx: Ctx, id: string) =>
   readiness(promotionInput(ctx, getProjectRow(ctx, id)));
+
+/** H-11: several projects in one transaction (AI path): each goes at the end of the path, all or none. */
+export function createProjects(ctx: Ctx, inputs: ProjectCreate[]) {
+  return tx(ctx, () => inputs.map((p) => createProject(ctx, p)));
+}
 
 /** D-42: « Promouvoir » = idée → prêt (backlog). Never blocked: a prêt project with RB-02 gaps is « à compléter ». */
 export function promoteProject(ctx: Ctx, id: string) {

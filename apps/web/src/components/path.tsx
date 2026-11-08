@@ -204,17 +204,18 @@ function PathAiPanel({
     ask([...messages, { role: 'user', text }]);
   };
   const checked = projects.filter((p) => p.checked);
-  // One POST per project, in order: each goes at the end of the path (RB-01, same rules as by hand).
+  // H-11: one call, all or none; in order, each goes at the end of the path (RB-01, same rules as by hand).
   const add = useAction(
     async () => {
-      for (const p of checked)
-        await post('/projects', {
+      await post('/projects/batch', {
+        projects: checked.map((p) => ({
           title: p.title.trim(),
           groupIds: [groupId],
           objectiveId,
           successCriterion: p.successCriterion.trim() || undefined,
           description: p.description || undefined,
-        });
+        })),
+      });
     },
     {
       toast: `${checked.length} projet${checked.length > 1 ? 's' : ''} ajouté${checked.length > 1 ? 's' : ''} au chemin.`,

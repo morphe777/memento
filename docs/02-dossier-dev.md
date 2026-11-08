@@ -202,7 +202,9 @@ Ordre d'affichage du rapport hebdo (maquette `rapport-hebdo.dc.html`) : en-tête
 
 ## 8. API REST
 
-Préfixe `/api/v1`, JSON, contrat OpenAPI généré depuis les schémas Zod et servi sur `/api/v1/openapi.json`. Auth : cookie de session (front) ou `Authorization: Bearer <jeton>` (IA). Pagination par curseur ; filtres en query string.
+Préfixe `/api/v1`, JSON, contrat OpenAPI généré depuis les schémas Zod et servi sur `/api/v1/openapi.json`. Auth : cookie de session (front) ou `Authorization: Bearer <jeton>` (IA). Filtres en query string ; `GET /tasks` accepte `limit` (1 à 500) et `offset` (pages dans un ordre stable), sans eux la liste entière.
+
+**Conventions (M-16, M-18, D-144)** : succès = 200 avec un corps JSON (pas de 201 ni de 204) ; 400 `VALIDATION_ERROR` (requête mal formée), 401, 403 (`USER_ONLY`, `READ_ONLY_TOKEN`), 404 `NOT_FOUND`, 409 (conflit : `PLAN_APPLY_CONFLICT`, `ALREADY_EXISTS`), 422 (règle métier : code propre), 429, 500 `INTERNAL`. Un `GET` n'écrit jamais. **Compatibilité de `/api/v1`** : seuls des ajouts (route, champ de réponse, paramètre facultatif, code d'erreur) ; un retrait ou un changement de sens passe par `/api/v2`, l'ancienne version restant servie le temps de migrer les clients (web, MCP, scripts).
 
 | Ressource | Endpoints | Notes |
 | --- | --- | --- |

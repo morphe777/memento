@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { get, post } from '../lib/api.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { Project, Task } from '../lib/types.ts';
-import { addToWeekPlan, NaturalBar, useNaturalTask } from './natural.tsx';
+import { NaturalBar, useNaturalTask } from './natural.tsx';
 import { DurationOptions } from './tasks.tsx';
 import { Panel, Tabs } from './ui.tsx';
 
@@ -61,16 +61,16 @@ export function CaptureSheet({
   const add = useAction(
     async () => {
       const p = await nat.parseNow();
-      const t = await post<Task>('/tasks', {
+      await post<Task>('/tasks', {
         title: p.title || title.trim(),
         projectId: (pickProject && projectId) || null,
         durationMin: p.durationMin ?? (duration ? Number(duration) : null),
         domainId: (!projectId && (p.domainId ?? domainId)) || null,
         dueDate: p.dueDate,
         recurrenceRule: inbox ? p.recurrenceRule : null,
+        // H-11: created and added to the week in one call
+        isoWeek: (target === 'week' && isoWeek ? isoWeek : p.isoWeek) || undefined,
       });
-      const week = target === 'week' && isoWeek ? isoWeek : p.isoWeek;
-      if (week) await addToWeekPlan(week, t.id);
     },
     {
       toast:

@@ -404,6 +404,16 @@ export function proposeWeek(ctx: Ctx, isoWeek: string) {
   });
 }
 
+/** H-11: adds one task at the end of a week's selection, keeping the others (one transaction, no lost write). */
+export function addTaskToWeek(ctx: Ctx, isoWeek: string, taskId: string) {
+  return tx(ctx, () => {
+    const plan = getPlanRow(ctx, isoWeek);
+    const items = plan ? planItems(ctx, plan.id).map((i) => ({ taskId: i.taskId, kind: i.kind })) : [];
+    if (items.some((i) => i.taskId === taskId)) return;
+    setWeekItems(ctx, isoWeek, [...items, { taskId, kind: 'week' }]);
+  });
+}
+
 /** PUT /week-plans/{week}/items: full selection. Validates RB-06 availability for newly chosen tasks. */
 export function setWeekItems(
   ctx: Ctx,

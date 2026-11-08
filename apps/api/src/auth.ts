@@ -2,7 +2,7 @@
 // Passwords hashed with argon2id; session ids and tokens stored as SHA-256 hashes only (dossier de dev §12).
 import { createHash, randomBytes } from 'node:crypto';
 import { and, type Db, eq, ne, schema } from '@memento/db';
-import { type Actor, DomainError, newId } from '@memento/domain';
+import { type Actor, DomainError, NotFoundError, newId } from '@memento/domain';
 import { hash, verify } from '@node-rs/argon2';
 
 export const SESSION_COOKIE = 'memento_session';
@@ -185,6 +185,9 @@ export const listTokens = (db: Db) =>
     .all();
 
 export function revokeToken(db: Db, id: string) {
+  // M-16: an unknown token is a 404, not a silent success.
+  if (!db.select().from(schema.apiToken).where(eq(schema.apiToken.id, id)).get())
+    throw new NotFoundError('token', id);
   db.update(schema.apiToken)
     .set({ revokedAt: new Date().toISOString() })
     .where(eq(schema.apiToken.id, id))

@@ -149,7 +149,7 @@ function OpenNotification({ id, onClose }: { id: string; onClose: () => void }) 
   const qc = useQueryClient();
   const q = useQuery({
     queryKey: ['notification', id],
-    queryFn: () => get<NotificationRow>(`/notifications/${id}`),
+    queryFn: () => post<NotificationRow>(`/notifications/${id}/read`), // opened = read (D-119)
   });
   const read = !!q.data;
   useEffect(() => {

@@ -10,6 +10,7 @@ import type { TaskCreate, TaskPatch } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
 import { addDays, currentWeek, parisDate } from '../time.ts';
 import { taskDependencies } from './dependencies.ts';
+import { addTaskToWeek } from './planning.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 import { listDomains } from './referential.ts';
 import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
@@ -72,7 +73,10 @@ function currentChosen(ctx: Ctx): Set<string> {
 }
 
 /** Tasks with RB-06 availability (`locked` = waiting for a previous task or prerequisite). */
-export function listTasks(ctx: Ctx, f: { projectId?: string | 'inbox'; status?: string } = {}) {
+export function listTasks(
+  ctx: Ctx,
+  f: { projectId?: string | 'inbox'; status?: string; limit?: number; offset?: number } = {},
+) {
   const statuses = f.status?.split(',').filter(Boolean) as TaskRow['status'][] | undefined;
   const rows = ctx.db
     .select()
@@ -87,7 +91,9 @@ export function listTasks(ctx: Ctx, f: { projectId?: string | 'inbox'; status?: 
         statuses?.length ? inArray(task.status, statuses) : undefined,
       ),
     )
-    .orderBy(asc(task.position), asc(task.createdAt))
+    .orderBy(asc(task.position), asc(task.createdAt), asc(task.id))
+    .limit(f.limit ?? -1) // SQLite: -1 = no limit
+    .offset(f.offset ?? 0)
     .all();
   const deps = taskDependencies(ctx);
   const chosen = currentChosen(ctx);
@@ -119,7 +125,7 @@ export function createTask(ctx: Ctx, input: TaskCreate) {
     if (projectId) getProjectRow(ctx, projectId);
     checkTaskFields(ctx, input, projectId);
     const id = newId();
-    const { position, ...fields } = input;
+    const { position, isoWeek, ...fields } = input;
     ctx.db
       .insert(task)
       .values({
@@ -136,6 +142,7 @@ export function createTask(ctx: Ctx, input: TaskCreate) {
     touchProject(ctx, projectId);
     const after = getTaskRow(ctx, id);
     audit(ctx, 'task', id, 'create', null, after);
+    if (isoWeek) addTaskToWeek(ctx, isoWeek, id); // H-11: created and planned together, or not at all
     return getTask(ctx, id);
   });
 }

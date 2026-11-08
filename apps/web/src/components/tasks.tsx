@@ -24,7 +24,7 @@ import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail, TaskDuration } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
-import { addToWeekPlan, NaturalBar, useNaturalTask } from './natural.tsx';
+import { NaturalBar, useNaturalTask } from './natural.tsx';
 import {
   ConfirmDialog,
   Duration,
@@ -357,14 +357,14 @@ export function QuickAdd({
   const add = useAction(
     async (t: string) => {
       const p = await nat.parseNow();
-      const created = await post<Task>('/tasks', {
+      await post<Task>('/tasks', {
         title: p.title || t,
         projectId,
         durationMin: p.durationMin ?? (duration ? Number(duration) : null),
         dueDate: p.dueDate ?? (dueDate || null),
         ...(inbox ? { recurrenceRule: p.recurrenceRule ?? (rule || null), domainId: p.domainId } : {}),
+        isoWeek: p.isoWeek || undefined, // H-11: one call
       });
-      if (p.isoWeek) await addToWeekPlan(p.isoWeek, created.id);
     },
     {
       onSuccess: () => {

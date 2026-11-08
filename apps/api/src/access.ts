@@ -43,6 +43,7 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'POST /api/v1/plan/preview': 'read',
   'GET /api/v1/projects': 'read',
   'POST /api/v1/projects': 'write',
+  'POST /api/v1/projects/batch': 'write',
   'DELETE /api/v1/projects/:id': 'write',
   'GET /api/v1/projects/:id': 'read',
   'PATCH /api/v1/projects/:id': 'write',

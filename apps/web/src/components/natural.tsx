@@ -2,7 +2,7 @@
 // recognised is shown as chips under the field, a chip's × gives its words back to the title.
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { get, post, put } from '../lib/api.ts';
+import { post } from '../lib/api.ts';
 import type { NaturalKind, ParsedTask } from '../lib/types.ts';
 import { InfoTip } from './ui.tsx';
 
@@ -13,12 +13,6 @@ function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
-}
-
-/** Adds a task at the end of a week plan (created as a draft when the week has none). */
-export async function addToWeekPlan(isoWeek: string, taskId: string) {
-  const plan = await get<{ items: { taskId: string; kind: string }[] }>(`/week-plans/${isoWeek}`);
-  await put(`/week-plans/${isoWeek}/items`, { items: [...plan.items, { taskId, kind: 'week' }] });
 }
 
 /** `inbox`: recurrence, #domain and « cette semaine » are read too (DM-41: not for a project task). */

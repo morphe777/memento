@@ -208,15 +208,8 @@ export function buildServer(call: Call) {
         )
         .min(1),
     },
-    async ({ tasks, ...body }) => {
-      const project = (await call('POST', '/projects', body)) as { id: string };
-      await call('POST', '/tasks/batch', { projectId: project.id, tasks });
-      try {
-        return await call('POST', p`/projects/${project.id}/promote`);
-      } catch (e) {
-        return { project, promoted: false, error: e instanceof ApiFailure ? e.data : String(e) };
-      }
-    },
+    // H-11: project, tasks and promotion in one call (all or none).
+    (body) => call('POST', '/projects', { ...body, promote: true }),
   );
   tool(
     'update_project',
