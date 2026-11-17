@@ -218,6 +218,7 @@ export async function describeWithAi(ctx: Ctx, raw: AiDescribeInput, llm: Llm) {
     userContext: settings['ai.instructions'].trim() || null,
   };
   const { text, model } = await llm({
+    task: 'describe',
     system: `${settings['ai.prompt.describe']}\n\nRéponds uniquement par un objet JSON {"text": string} : text est la description en Markdown.\n\n${DATA_RULE}`,
     user: `Rédige la description de ce ${LABEL[input.kind]}.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,

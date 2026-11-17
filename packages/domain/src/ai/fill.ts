@@ -86,6 +86,7 @@ export async function fillWithAi(ctx: Ctx, raw: AiFillInput, llm: Llm) {
     userContext: settings['ai.instructions'].trim() || null,
   };
   const { text, model } = await llm({
+    task: 'fill',
     system: `${settings['ai.prompt.fill']}\n\nRéponds uniquement par un objet JSON {"titles": string[], "fields": {${wanted.map((k) => `"${k}": string`).join(', ')}}, "comment": string}.\n\n${DATA_RULE}`,
     user: `${
       input.only === 'title'

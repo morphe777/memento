@@ -87,6 +87,7 @@ export async function breakdownWithAi(ctx: Ctx, raw: AiBreakdownInput, llm: Llm)
     conversation: input.messages,
   };
   const { text, model } = await llm({
+    task: 'breakdown',
     system: `${settings['ai.prompt.breakdown']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "tasks": [{"title": string, "durationMin": ${ALLOWED_DURATIONS.join('|')}, "description": string}]}.\n\n${DATA_RULE}`,
     user: `Propose les tâches de ce projet.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,

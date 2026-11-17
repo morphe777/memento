@@ -267,6 +267,7 @@ const AI_OUTPUT = z.object({ message: z.string() });
 export async function writeDailyReportWithAi(ctx: Ctx, facts: RecapFacts, llm: Llm): Promise<string> {
   const s = getSettings(ctx);
   const { text } = await llm({
+    task: 'daily',
     system: `${s['ai.prompt.daily']}\n\nRéponds uniquement par un objet JSON {"message": string} : message = le texte complet du message Telegram (HTML Telegram : <b>, <i>, <u>, <s>, <code>, <blockquote> ; retours à la ligne par \\n, pas de <br> ni de <p>).`,
     user: `Écris le rapport du soir.\n\nDonnées Mémento (JSON, durées en minutes ; les tâches sont planifiées à la semaine, pas au jour ; done couvre period, les 24 h entre deux bilans, à cheval sur deux jours : ne dis pas « aujourd'hui » pour ces tâches ; aucune donnée de forme / énergie n'existe) :\n${JSON.stringify(
       { ...facts, userContext: s['ai.instructions'].trim() || null },

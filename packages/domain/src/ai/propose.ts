@@ -186,6 +186,7 @@ async function ask<S extends AiScope>(ctx: Ctx, llm: Llm, scope: S, data: unknow
   const schema = z.toJSONSchema(OUTPUT[scope]) as Record<string, unknown>;
   const prompts = getSettings(ctx);
   const { text, model } = await llm({
+    task: `propose-${scope}`,
     system: `${prompts['ai.prompt.system']}\n\n${FORMAT_RULE}\n\n${DATA_RULE}`,
     user: `${prompts[`ai.prompt.${scope}`]}\n\nSchéma de la réponse : ${FORMAT[scope]}\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema,

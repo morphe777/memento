@@ -64,6 +64,7 @@ export async function pathWithAi(ctx: Ctx, raw: AiPathInput, llm: Llm) {
     conversation: input.messages,
   };
   const { text, model } = await llm({
+    task: 'path',
     system: `${settings['ai.prompt.path']}\n\nRéponds uniquement par un objet JSON {"message": string, "questions": string[], "projects": [{"title": string, "successCriterion": string, "description": string}]}.\n\n${DATA_RULE}`,
     user: `Propose le chemin (les projets dans l'ordre) de cet objectif.\n\nDonnées (JSON) :\n${dataBlock(data)}`,
     schema: z.toJSONSchema(OUTPUT) as Record<string, unknown>,

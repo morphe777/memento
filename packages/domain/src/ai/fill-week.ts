@@ -62,6 +62,7 @@ export async function fillWeekWithAi(ctx: Ctx, isoWeek: string, llm: Llm): Promi
     throw new DomainError('BUDGET_FULL', 'Le budget de la semaine est déjà rempli : rien à compléter.');
   const s = getSettings(ctx);
   const { text, model } = await llm({
+    task: 'fill-week',
     system: `${s['ai.prompt.system']}\n\n${FORMAT_RULE}\n\n${DATA_RULE}`,
     user: `${s['ai.prompt.fill_week']}\n\nSchéma de la réponse : ${FORMAT}\n\nDonnées (JSON) :\n${dataBlock({
       ...data,

@@ -15,10 +15,80 @@ type RealProvider = Exclude<AiProvider, 'none'>;
 
 /** A single completion that must answer with one JSON object matching `schema`. */
 export type Llm = (req: {
+  /** D-156: which feature calls (logged with the timing), e.g. « fill-week ». */
+  task?: string;
   system: string;
   user: string;
   schema: Record<string, unknown>;
 }) => Promise<{ text: string; model: string }>;
+
+/**
+ * D-156: one line per AI call, to find where the time goes (reasoning tokens, retry without structured output,
+ * slow host). Sizes and counts only: never the prompt nor the answer.
+ */
+export interface AiCallLog {
+  msg: 'ai call';
+  task: string;
+  provider: RealProvider;
+  model: string;
+  /** OpenRouter: the host that actually served the request. */
+  servedBy: string | null;
+  ok: boolean;
+  ms: number;
+  /** 2 when the server refused structured output and the call was made again in plain mode. */
+  calls: number;
+  promptChars: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  /** Thinking tokens, included in completionTokens (null when the provider does not say). */
+  reasoningTokens: number | null;
+}
+export type AiLog = (line: AiCallLog) => void;
+/** Same JSON lines as the API (pino) and the worker, on stdout. */
+const stdoutLog: AiLog = (line) => console.log(JSON.stringify({ level: 30, time: Date.now(), ...line }));
+
+interface Usage {
+  servedBy: string | null;
+  calls: number;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  reasoningTokens: number | null;
+}
+const NO_USAGE: Usage = {
+  servedBy: null,
+  calls: 1,
+  promptTokens: null,
+  completionTokens: null,
+  reasoningTokens: null,
+};
+type RawLlm = (req: Parameters<Llm>[0], usage: Usage) => Promise<{ text: string; model: string }>;
+
+/** D-156: times a call and logs it, failed or not. */
+function timed(r: Conn, raw: RawLlm, log: AiLog): Llm {
+  return async (req) => {
+    const usage: Usage = { ...NO_USAGE };
+    const start = performance.now();
+    let ok = false;
+    let model = r.model;
+    try {
+      const out = await raw(req, usage);
+      ok = true;
+      model = out.model;
+      return out;
+    } finally {
+      log({
+        msg: 'ai call',
+        task: req.task ?? 'other',
+        provider: r.provider,
+        model,
+        ok,
+        ms: Math.round(performance.now() - start),
+        promptChars: req.system.length + req.user.length,
+        ...usage,
+      });
+    }
+  };
+}
 
 interface Preset {
   label: string;
@@ -189,7 +259,7 @@ function providerError(message: string): never {
   throw new DomainError('AI_PROVIDER_ERROR', `L'IA n'a pas pu répondre : ${message}`);
 }
 
-export function makeLlm(s: Settings, env: Env, storedKey = ''): Llm {
+export function makeLlm(s: Settings, env: Env, storedKey = '', log: AiLog = stdoutLog): Llm {
   const r = resolve(s, env, storedKey);
   const status = aiStatus(s, env, storedKey);
   if (!r || !status.configured)
@@ -197,13 +267,13 @@ export function makeLlm(s: Settings, env: Env, storedKey = ''): Llm {
       'AI_NOT_CONFIGURED',
       `IA non configurée (Configuration › IA). ${status.reason ?? ''}`.trim(),
     );
-  return r.provider === 'anthropic' ? anthropicLlm(r) : openAiCompatibleLlm(r);
+  return timed(r, r.provider === 'anthropic' ? anthropicLlm(r) : openAiCompatibleLlm(r), log);
 }
 
-function anthropicLlm(r: Conn): Llm {
+function anthropicLlm(r: Conn): RawLlm {
   const client = new Anthropic({ apiKey: r.key, baseURL: r.baseUrl, timeout: TIMEOUT_MS, maxRetries: 1 });
   const fallback = FALLBACK_MODELS.has(r.model);
-  return async ({ system, user, schema }) => {
+  return async ({ system, user, schema }, usage) => {
     try {
       const res = await client.beta.messages.create({
         model: r.model,
@@ -213,6 +283,8 @@ function anthropicLlm(r: Conn): Llm {
         output_config: { effort: 'medium', format: { type: 'json_schema', schema } },
         ...(fallback ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
       });
+      usage.promptTokens = res.usage.input_tokens;
+      usage.completionTokens = res.usage.output_tokens; // thinking included, not counted apart
       if (res.stop_reason === 'refusal') providerError('le modèle a refusé la demande.');
       if (res.stop_reason === 'max_tokens') providerError('réponse tronquée (trop longue).');
       const text = res.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('');
@@ -243,6 +315,13 @@ function headers(r: Pick<Conn, 'provider' | 'key'>) {
 
 type OpenAiJson = {
   model?: string;
+  /** OpenRouter: the host that served the request. */
+  provider?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
   choices?: { message?: { content?: string | null }; finish_reason?: string; error?: { message?: string } }[];
   error?: { message?: string } | string;
   data?: unknown;
@@ -275,14 +354,14 @@ function httpError(r: Pick<Conn, 'preset'>, status: number, json: OpenAiJson): n
   providerError(`${label} ${status} ${typeof err === 'string' ? err : (err?.message ?? '')}`.trim());
 }
 
-function openAiCompatibleLlm(r: Conn): Llm {
+function openAiCompatibleLlm(r: Conn): RawLlm {
   const call = (body: Record<string, unknown>) =>
     getJson(`${r.baseUrl}/chat/completions`, {
       method: 'POST',
       headers: headers(r),
       body: JSON.stringify(body),
     });
-  return async ({ system, user, schema }) => {
+  return async ({ system, user, schema }, usage) => {
     const base = {
       model: r.model,
       messages: [
@@ -300,7 +379,15 @@ function openAiCompatibleLlm(r: Conn): Llm {
       },
     });
     // Not every model/server supports structured outputs: retry once in plain mode (the prompt asks for JSON).
-    if (out.status === 400 || out.status === 422) out = await call(base);
+    if (out.status === 400 || out.status === 422) {
+      usage.calls = 2;
+      out = await call(base);
+    }
+    const u = out.json?.usage;
+    usage.servedBy = typeof out.json?.provider === 'string' ? out.json.provider : null;
+    usage.promptTokens = u?.prompt_tokens ?? null;
+    usage.completionTokens = u?.completion_tokens ?? null;
+    usage.reasoningTokens = u?.completion_tokens_details?.reasoning_tokens ?? null;
     const choice = out.json?.choices?.[0];
     if (out.status >= 300 || !choice) httpError(r, out.status, out.json);
     if (choice.error?.message) providerError(`${r.preset.label} : ${choice.error.message}`);
