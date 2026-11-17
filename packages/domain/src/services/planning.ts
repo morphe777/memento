@@ -26,6 +26,7 @@ import {
   isoWeekOf,
   isValidIsoWeek,
   monthOf,
+  monthOfWeek,
   parisDate,
   parisDayStartIso,
   shiftWeek,
@@ -33,7 +34,7 @@ import {
   weekSunday,
 } from '../time.ts';
 import { taskDependencies } from './dependencies.ts';
-import { doneBetween } from './done.ts';
+import { doneBetween, experiencesInMonth } from './done.ts';
 import { serializeProjects } from './projects.ts';
 import { getOrCreatePlan, getPlanRow } from './unplanned.ts';
 
@@ -55,13 +56,12 @@ const planItems = (ctx: Ctx, planId: string) =>
     .all();
 export const planItemsOf = planItems;
 
-/** Minutes done per domain (domains served, DM-84) and experiences done, in [from, to). */
+/** Minutes done per domain (domains served, DM-84), in [from, to). */
 function doneStats(ctx: Ctx, from: string, to: string) {
   const rows = ctx.db
     .select({
       id: task.id,
       durationMin: task.durationMin,
-      isExperience: task.isExperience,
       projectId: task.projectId,
       domainId: task.domainId,
     })
@@ -88,7 +88,7 @@ function doneStats(ctx: Ctx, from: string, to: string) {
         : [];
     for (const d of doms) minutes[d] = (minutes[d] ?? 0) + (r.durationMin ?? 0);
   }
-  return { minutes, experiences: rows.filter((r) => r.isExperience).length };
+  return { minutes };
 }
 
 /** F2 / M-10 (D-137): what was done in a week (Monday to Sunday), see `doneBetween`. */
@@ -189,7 +189,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     doneAt: t.doneAt,
     recurring: !!t.recurrenceRule,
   }));
-  const expWindow = s['experience.window_weeks'];
+  const expMonth = monthOfWeek(isoWeek); // R-02 (D-154)
   return {
     isoWeek,
     today: parisDate(ctxNow(ctx)),
@@ -198,8 +198,8 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     considerAlsoCount: s['engine.consider_also_count'],
     budgetMin: budgetMin ?? s['budget.weekly_min'],
     experienceTarget: s['experience.target'],
-    experienceWindowWeeks: expWindow,
-    experiencesDone: doneStats(ctx, addDays(monday, -7 * expWindow), monday).experiences,
+    experienceMonth: expMonth,
+    experiencesDone: experiencesInMonth(ctx, expMonth),
     guardDomainMinutes: doneStats(ctx, addDays(monday, -7 * s['guards.window_weeks']), monday).minutes,
     domains: domains.map((d) => ({ id: d.id, name: d.name, priorityRank: d.priorityRank, weight: d.weight })),
     projects,
@@ -235,7 +235,7 @@ export function getPlanningPage(ctx: Ctx, isoWeek: string) {
         }
       : null,
     experienceTarget: input.experienceTarget,
-    experienceWindowWeeks: input.experienceWindowWeeks,
+    experienceMonth: input.experienceMonth,
     experiencesDone: input.experiencesDone,
     items: items.map((i) => ({ taskId: i.taskId, kind: i.kind as Selection, source: i.source })),
     ...page,
@@ -628,8 +628,8 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
     ),
   };
   const monday = weekMonday(isoWeek);
-  const window = s['experience.window_weeks'];
-  const experiences = doneStats(ctx, addDays(monday, -7 * (window - 1)), addDays(monday, 7)).experiences;
+  const expMonth = monthOfWeek(isoWeek); // R-02 (D-154)
+  const experiences = experiencesInMonth(ctx, expMonth);
 
   const mixMap = new Map<string | null, number>(done.mix.map((m) => [m.domainId, m.minutes]));
   const domainMix = [
@@ -674,7 +674,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
     budget: { budgetMin, doneMin, plannedMin, usedMin, ...budgetStatus(usedMin, budgetMin) },
     doneMin,
     drift,
-    experiences: { done: experiences, target: s['experience.target'], windowWeeks: window },
+    experiences: { done: experiences, target: s['experience.target'], month: expMonth },
     monthProjects,
     domainMix,
   };

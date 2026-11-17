@@ -72,7 +72,7 @@ const facts = (tasks: RecapTask[], over: Partial<RecapFacts> = {}): RecapFacts =
   week: { plannedTasks: 0, doneTasks: 0, remainingTasks: 0, doneMin: 0, budgetMin: 0, daysLeftAfterToday: 4 },
   focus: [],
   projects: { active: 0, month: 0, monthLimit: 3 },
-  experiences: { done: 0, target: 2, windowWeeks: 4 },
+  experiences: { done: 0, target: 2, month: '2026-11' },
   ...over,
 });
 

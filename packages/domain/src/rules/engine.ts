@@ -86,8 +86,9 @@ export interface EngineInput {
   considerAlsoCount: number;
   budgetMin: number;
   experienceTarget: number;
-  experienceWindowWeeks: number;
-  /** Experiences done over the window ending before this week (R-02). */
+  /** R-02 (D-154): the target is per calendar month; the month of the week (its Thursday's, D-142). */
+  experienceMonth: string;
+  /** Experiences done in that month. */
   experiencesDone: number;
   /** Minutes done per domain id over guards.window_weeks (CH-05). */
   guardDomainMinutes: Record<string, number>;
@@ -278,7 +279,7 @@ function scoreTask(P: Prepared, t: EngineTask): ScoredTask {
         ? `En retard depuis le ${frShort(t.dueDate)}`
         : `Deadline ${frDay(t.dueDate)} ${frShort(t.dueDate)}`;
   } else if (t.isExperience && input.experiencesDone < input.experienceTarget) {
-    why = `Expériences : ${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines`;
+    why = `Expériences : ${input.experiencesDone} / ${input.experienceTarget} en ${frMonth(input.experienceMonth)}`;
   } else if (waiting.length) {
     why = `Attend « ${waiting[0].title} » : termine-le d'abord`; // API-15
   } else if (awaited.length) {
@@ -723,7 +724,7 @@ export function summarize(
     alerts.push({
       level: reached ? 'info' : 'warn',
       code: 'NO_EXPERIENCE',
-      text: `Aucune expérience prévue (${input.experiencesDone} / ${input.experienceTarget} sur ${input.experienceWindowWeeks} semaines${reached ? ', cible atteinte' : ''}).`,
+      text: `Aucune expérience prévue (${input.experiencesDone} / ${input.experienceTarget} en ${frMonth(input.experienceMonth)}${reached ? ', cible atteinte' : ''}).`,
     });
   }
   const avoided = weekTasks.filter((t) => t.postponeCount >= 3);

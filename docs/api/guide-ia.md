@@ -27,7 +27,7 @@ refuse avec un code lisible. Ne contourne jamais une règle, explique-la à l'ut
 | Sujet | Format |
 | --- | --- |
 | Dates | `AAAA-MM-JJ`, heure de Paris, un jour qui existe (sinon 422 `INVALID_DATE`) |
-| Horodatages | ISO 8601 UTC (`doneAt`, `createdAt`…) |
+| Horodatages | ISO 8601 UTC en lecture (`doneAt`, `createdAt`…) ; en écriture, `doneAt` = `AAAA-MM-JJTHH:MM`, heure de Paris |
 | Semaine | ISO `AAAA-Www` (lundi → dimanche), ex. `2026-W45` |
 | Mois | `AAAA-MM` · Trimestre : `AAAA-Qn`, ex. `2026-Q4` |
 | Durée d'une tâche | minutes : **5, 15, 30, 60 ou 120** (2 h max, RB-03) ; `null` = inconnue (idées) |
@@ -92,13 +92,18 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 ### Tâches
 
 - `GET /tasks?projectId=<id|inbox>` : `locked` = attend une tâche précédente ou un prérequis ; `inPlan` = dans le
-  plan de la semaine en cours.
+  plan de la semaine en cours ; `plannedWeek` = première semaine, en cours ou à venir, dont le plan contient la tâche
+  (`null` sinon, D-151).
 - Cocher : `POST /tasks/{id}/complete` (une tâche Inbox récurrente crée sa prochaine occurrence) ; décocher :
   `/uncomplete`. Annuler sans supprimer : `PATCH { status: "cancelled" }`.
+- Date de fin d'une tâche faite (D-152) : `PATCH /tasks/{id} { doneAt: "AAAA-MM-JJTHH:MM" }` (heure de Paris, jamais
+  dans l'avenir). Comme si elle avait été cochée à ce moment : la trace « hors planification » suit la semaine ; les
+  rapports déjà figés ne changent pas.
 - Temps réellement passé : `actualMin` (minutes) sur une tâche faite, via `PATCH /tasks/{id}` ou
   `POST /tasks/{id}/complete { actualMin }`. Il remplace l'estimation dans le « fait » et les rapports
   (bloc `estimation` : ratio estimé / réel, dépassements).
-- `isExperience: true` = une **expérience** (hors budget, objectif de vivre plus d'expériences).
+- `isExperience: true` = une **expérience** (hors budget, objectif de vivre plus d'expériences). La cible
+  (`experience.target`) se compte par **mois civil** ; une semaine compte pour le mois de son jeudi (D-154).
 - Une tâche sans projet sans durée est permise (Inbox) ; dans un projet du mois, chaque tâche doit avoir une durée.
 
 ## 4. Planification (le cœur)
@@ -139,7 +144,10 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   projets (≤ 120 caractères). Écris le pourquoi, pas le quoi.
 - **Suites de tâches** (RB-06, D-101) : dans un projet séquentiel, une tâche `isFree` n'attend rien et **démarre une
   nouvelle suite** : les tâches non libres placées dessous la suivent, pas celles du dessus.
-- Expériences : `GET /experiences` (cible, souvenirs, prévues, réserve) ; `POST /experiences` ajoute une envie.
+- Expériences : `GET /experiences` (cible du mois, souvenirs, prévues, réserve) ; `POST /experiences` ajoute une
+  envie ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
+  expérience **déjà vécue** (D-153) : faite à `doneAt` (maintenant si absent), dans le projet donné (durée alors
+  obligatoire) ou dans le domaine (Famille si absent, aucun si `null`).
 
 ## 5. Recettes
 
@@ -184,6 +192,7 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 | `INVALID_DURATION` | durée 5, 15, 30, 60 ou 120 min |
 | `TASK_LOCKED` | la tâche attend la précédente ou un prérequis |
 | `TASK_NOT_TODO` / `TASK_CANCELLED` | tâche déjà faite / annulée |
+| `TASK_NOT_DONE` / `DONE_IN_FUTURE` | `doneAt` sur une tâche pas faite / dans l'avenir (D-152) |
 | `PROJECT_NOT_ACTIVE` | tâche d'un projet ni prêt ni du mois |
 | `DEPENDENCY_CYCLE` | la dépendance créerait une boucle |
 | `DEPENDENCY_SELF` / `DEPENDENCY_NOT_FOUND` | un projet ne dépend pas de lui-même / prérequis introuvable |
@@ -218,8 +227,9 @@ l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
   `get_cap`, `get_week_plan`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`.
 - **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
   en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `add_experience_idea`,
-  `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`, `update_meta_objective`,
-  `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`, `update_task`, `complete_task`,
-  `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`, `add_vacation`, `add_resource`.
+  `log_experience`, `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`,
+  `update_meta_objective`, `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`,
+  `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
+  `add_vacation`, `add_resource`.
 - **Suppression ou remplacement** : `set_project_dependencies`, `remove_project_dependency`, `apply_plan_changes`,
   `set_week_plan_items`, `remove_vacation`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`.

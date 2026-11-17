@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { AiProposeButton } from '../components/ai.tsx';
+import { AiFillWeekButton, AiProposeButton } from '../components/ai.tsx';
 import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { openTask } from '../components/tasks.tsx';
@@ -153,6 +153,11 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
                 </button>
               )}
               <AiProposeButton scope="week" period={w} weekItems={page.items} />
+              <AiFillWeekButton
+                isoWeek={w}
+                remainingMin={page.budget.budgetMin - page.budget.usedMin}
+                weekItems={page.items}
+              />
             </>
           }
         />

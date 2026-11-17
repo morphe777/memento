@@ -2,8 +2,8 @@
 import { Link } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { fmtMin } from '../lib/format.ts';
-import { useDomainLookup } from '../lib/hooks.ts';
+import { fmtDateShort, fmtMin, isoWeekMonday } from '../lib/format.ts';
+import { useDomainLookup, useMe } from '../lib/hooks.ts';
 
 export function DomainDot({ color, size = 8 }: { color: string; size?: number }) {
   return <span className="dot" style={{ background: color, width: size, height: size }} aria-hidden />;
@@ -53,6 +53,21 @@ export function TaskCheck({
 
 export const ExperienceBadge = () => <span className="badge-experience">Expérience</span>;
 export const BonusBadge = () => <span className="badge-bonus">Bonus</span>;
+/** D-151: the task is in the plan of this week or of a week ahead (the first one). */
+export function PlannedBadge({ week }: { week: string | null | undefined }) {
+  const me = useMe();
+  if (!week) return null;
+  const current = week === me.data?.currentWeek;
+  const monday = fmtDateShort(isoWeekMonday(week));
+  return (
+    <span
+      className="badge-planned"
+      title={current ? 'Dans le plan de cette semaine' : `Dans le plan de la semaine du ${monday}`}
+    >
+      {current ? 'Cette semaine' : `Sem. du ${monday}`}
+    </span>
+  );
+}
 export const Duration = ({ min, small }: { min: number | null; small?: boolean }) => (
   <span className="chip-duration flex-none" style={small ? { fontSize: 12, padding: '3px 8px' } : undefined}>
     {min === null ? '?' : fmtMin(min)}

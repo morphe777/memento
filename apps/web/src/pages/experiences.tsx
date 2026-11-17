@@ -1,16 +1,28 @@
 // Expériences (D-54): the goal of living more experiences, made visible. Everything is computed by the API
-// (GET /experiences); the page only adds ideas to the reserve and opens tasks.
+// (GET /experiences); the page adds ideas to the reserve, records a lived experience (D-153) and opens tasks.
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { Markdown } from '../components/markdown.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
-import { Duration, Empty, ErrorBox, InfoTip, Loading, PageHeader, Section } from '../components/ui.tsx';
+import {
+  Duration,
+  Empty,
+  ErrorBox,
+  Field,
+  InfoTip,
+  Loading,
+  PageHeader,
+  Panel,
+  PlannedBadge,
+  SearchSelect,
+  Section,
+} from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
-import { fmtDate } from '../lib/format.ts';
+import { fmtDate, parisLocal, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup } from '../lib/hooks.ts';
-import type { ExperiencesPage as Data, TaskDuration } from '../lib/types.ts';
+import type { ExperiencesPage as Data, Project, TaskDuration } from '../lib/types.ts';
 
 type Item = Data['lived'][number];
 
@@ -23,6 +35,7 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
   const navigate = useNavigate();
   const q = useQuery({ queryKey: ['experiences'], queryFn: () => get<Data>('/experiences') });
   const open = (id: string) => navigate({ to: '/experiences', search: { tache: id } });
+  const [living, setLiving] = useState(false);
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
   const d = q.data;
@@ -36,19 +49,27 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
     <div className="flex flex-col gap-6">
       <div>
         <Breadcrumb items={[{ label: 'Expériences' }]} />
-        <PageHeader eyebrow="Vivre plus d'expériences · souvenirs et envies" title="Expériences" />
+        <PageHeader
+          eyebrow="Vivre plus d'expériences · souvenirs et envies"
+          title="Expériences"
+          actions={
+            <button type="button" className="btn btn-primary" onClick={() => setLiving(true)}>
+              J'ai vécu une expérience
+            </button>
+          }
+        />
       </div>
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
         <section className="card flex flex-col gap-1.5" style={{ padding: '18px 20px' }}>
           <span className="label-caps flex items-center gap-1.5">
-            Cible
+            Cible du mois
             <InfoTip>
-              Expériences vécues sur les {d.windowWeeks} dernières semaines (depuis le {fmtDate(d.windowFrom)}
-              ), comparées à la cible. Réglable dans Configuration › Seuils.
+              Expériences vécues en {monthLong(d.month)}, comparées à la cible par mois. Réglable dans
+              Configuration › Seuils.
             </InfoTip>
           </span>
           <span className="mono" style={{ fontSize: 34 }}>
-            {d.doneInWindow}
+            {d.doneThisMonth}
             <span style={{ fontSize: 18, color: 'var(--text-faint)' }}> / {d.target}</span>
           </span>
           <span
@@ -56,8 +77,8 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
             style={{ color: d.onTrack ? 'var(--ok)' : 'var(--late-text)' }}
           >
             {d.onTrack
-              ? 'Cible atteinte sur la période'
-              : `Encore ${d.target - d.doneInWindow} pour tenir la cible`}
+              ? 'Cible du mois atteinte'
+              : `Encore ${d.target - d.doneThisMonth} ce mois-ci pour tenir la cible`}
           </span>
         </section>
         <section className="card flex flex-col gap-1.5" style={{ padding: '18px 20px' }}>
@@ -103,7 +124,7 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
         <div className="flex flex-col gap-6 min-w-0" style={{ flex: '1 1 420px' }}>
           <Section
             title="Prévues"
-            info="Expériences dans le plan de la semaine ou avec une date. Pour en prévoir une : donne-lui une deadline ou choisis-la dans Planifier."
+            info="Expériences dans le plan de cette semaine ou d'une semaine à venir, ou avec une date. Pour en prévoir une : donne-lui une deadline ou choisis-la dans Planifier."
           >
             {d.planned.length === 0 && <Empty>Rien de prévu pour l'instant.</Empty>}
             {d.planned.map((t) => (
@@ -111,7 +132,8 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
                 key={t.id}
                 t={t}
                 onOpen={open}
-                meta={t.inPlan ? 'Cette semaine' : t.dueDate ? `le ${fmtDate(t.dueDate)}` : ''}
+                badge={<PlannedBadge week={t.plannedWeek} />}
+                meta={t.dueDate ? `le ${fmtDate(t.dueDate)}` : ''}
               />
             ))}
           </Section>
@@ -144,11 +166,22 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
         </Section>
       </div>
       <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/experiences', search: {} })} />
+      {living && <LivedPanel onClose={() => setLiving(false)} />}
     </div>
   );
 }
 
-function Row({ t, onOpen, meta }: { t: Item; onOpen: (id: string) => void; meta?: string }) {
+function Row({
+  t,
+  onOpen,
+  meta,
+  badge,
+}: {
+  t: Item;
+  onOpen: (id: string) => void;
+  meta?: string;
+  badge?: ReactNode;
+}) {
   const dl = useDomainLookup();
   return (
     <div className="row-line flex items-center gap-3" style={{ minHeight: 40 }}>
@@ -170,6 +203,7 @@ function Row({ t, onOpen, meta }: { t: Item; onOpen: (id: string) => void; meta?
           {t.projectTitle}
         </Link>
       )}
+      {badge}
       {meta && (
         <span className="text-[12px] flex-none" style={{ color: 'var(--text-muted)' }}>
           {meta}
@@ -261,5 +295,122 @@ function AddIdea() {
         Ajouter
       </button>
     </form>
+  );
+}
+
+/**
+ * D-153: « J'ai vécu une expérience »: recorded already done, now by default (Paris time). In a project (it then
+ * takes the project's domain, and needs a duration like any task of a month project) or in a domain, Famille by
+ * default.
+ */
+function LivedPanel({ onClose }: { onClose: () => void }) {
+  const dl = useDomainLookup();
+  const family = dl.domains.find((d) => d.name === 'Famille')?.id ?? '';
+  const [f, setF] = useState({
+    title: '',
+    description: '',
+    doneAt: parisLocal(),
+    domainId: family,
+    projectId: '',
+    durationMin: null as TaskDuration | null,
+  });
+  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
+  const projects = useQuery({
+    queryKey: ['projects', 'experience'],
+    queryFn: () => get<Project[]>('/projects?status=ready,active,paused,done'),
+  });
+  const save = useAction(
+    () =>
+      post('/experiences/lived', {
+        title: f.title.trim(),
+        description: f.description,
+        doneAt: f.doneAt,
+        durationMin: f.durationMin,
+        ...(f.projectId ? { projectId: f.projectId } : { domainId: f.domainId || null }),
+      }),
+    { onSuccess: onClose, toast: 'Souvenir ajouté.' },
+  );
+  return (
+    <Panel open onClose={onClose} title="J'ai vécu une expérience">
+      <form
+        className="flex flex-col gap-4"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (f.title.trim()) save.mutate(undefined);
+        }}
+      >
+        <Field label="Quoi">
+          <input
+            value={f.title}
+            onChange={(e) => set('title', e.target.value)}
+            placeholder="ex. Pique-nique au bord du lac"
+            autoFocus
+          />
+        </Field>
+        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+          <Field label="Quand" info="Heure de Paris. Maintenant par défaut ; jamais dans l'avenir.">
+            <input
+              type="datetime-local"
+              value={f.doneAt}
+              max={parisLocal()}
+              onChange={(e) => set('doneAt', e.target.value)}
+            />
+          </Field>
+          <Field
+            label="Durée"
+            info="Facultative : une expérience ne compte pas dans le budget. Obligatoire dans un projet du mois, comme toute tâche."
+          >
+            <select
+              value={f.durationMin ?? ''}
+              onChange={(e) =>
+                set('durationMin', e.target.value ? (Number(e.target.value) as TaskDuration) : null)
+              }
+            >
+              <option value="">Sans durée</option>
+              <DurationOptions />
+            </select>
+          </Field>
+        </div>
+        <Field
+          label="Projet"
+          info="Facultatif. L'expérience compte dans les rapports du mois, avec ou sans projet."
+        >
+          <SearchSelect
+            value={f.projectId}
+            onChange={(v) => set('projectId', v)}
+            ariaLabel="Projet"
+            emptyLabel="Aucun projet"
+            options={(projects.data ?? []).map((p) => ({
+              value: p.id,
+              label: p.title,
+              hint: STATUS_LABEL[p.status],
+            }))}
+          />
+        </Field>
+        {!f.projectId && (
+          <Field label="Domaine">
+            <select value={f.domainId} onChange={(e) => set('domainId', e.target.value)}>
+              <option value="">Aucun</option>
+              {dl.domains.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
+        <Field label="Ce que j'en retiens" info="Facultatif : la note du souvenir (Markdown).">
+          <textarea rows={4} value={f.description} onChange={(e) => set('description', e.target.value)} />
+        </Field>
+        <div className="flex gap-2 justify-end">
+          <button type="button" className="btn" onClick={onClose}>
+            Annuler
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={!f.title.trim() || save.isPending}>
+            Ajouter aux souvenirs
+          </button>
+        </div>
+      </form>
+    </Panel>
   );
 }

@@ -1,7 +1,7 @@
 // F2 / M-10 (D-137): the one definition of « Fait » for a period, shared by the planning pages and « Ma semaine ».
 import { and, eq, gte, inArray, lt, schema } from '@memento/db';
 import type { Ctx } from '../context.ts';
-import { addDays, parisDayStartIso } from '../time.ts';
+import { addDays, monthEnd, monthStart, parisDayStartIso } from '../time.ts';
 import { serializeProjects } from './projects.ts';
 
 const { project, task } = schema;
@@ -46,3 +46,10 @@ export function doneBetween(ctx: Ctx, first: string, last: string) {
     mix: [...mix].map(([domainId, minutes]) => ({ domainId, minutes })),
   };
 }
+
+/**
+ * R-02 (D-154): the experience target is per calendar month (Paris). Experiences done in `month`; a week counts for
+ * the month of its Thursday (`monthOfWeek`, D-142).
+ */
+export const experiencesInMonth = (ctx: Ctx, month: string): number =>
+  doneBetween(ctx, monthStart(month), monthEnd(month)).experiences;

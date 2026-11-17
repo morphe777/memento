@@ -365,6 +365,13 @@ export async function buildApp(opts: AppOptions) {
         const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
         return D.fillWithAi(c, req.body, llm);
       });
+      // D-155: « Compléter le budget » of a week: 1 to 3 tasks to add, with their reason (nothing saved).
+      r.post('/ai/fill-week', { schema: { ...tag('IA'), body: D.aiFillWeekBody } }, async (req) => {
+        const c = ctx(req);
+        const s = D.getSettings(c);
+        const llm = opts.llm ?? D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+        return D.fillWeekWithAi(c, req.body.isoWeek, llm);
+      });
       // D-68: « Rédiger avec l'IA »: a description proposal, returned to the editor (nothing saved).
       r.post('/ai/describe', { schema: { ...tag('IA'), body: D.aiDescribeBody } }, async (req) => {
         const c = ctx(req);
@@ -610,6 +617,12 @@ export async function buildApp(opts: AppOptions) {
       r.get('/experiences', { schema: tag('Expériences') }, async (req) => D.getExperiencesPage(ctx(req)));
       r.post('/experiences', { schema: { ...tag('Expériences'), body: D.experienceIdea } }, async (req) =>
         D.addExperienceIdea(ctx(req), req.body),
+      );
+      // D-153: « J'ai vécu une expérience »: created already done (Famille by default, or in a project).
+      r.post(
+        '/experiences/lived',
+        { schema: { ...tag('Expériences'), body: D.experienceLived } },
+        async (req) => D.logExperience(ctx(req), req.body),
       );
       r.get('/tasks/board', { schema: { ...tag('Tâches'), querystring: D.boardQuery } }, async (req) =>
         D.listBoardTasks(ctx(req), req.query),

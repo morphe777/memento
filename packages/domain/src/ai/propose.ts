@@ -92,11 +92,15 @@ function common(ctx: Ctx) {
   };
 }
 
-function weekData(ctx: Ctx, isoWeek: string) {
+/**
+ * Week data sent to the AI: the tasks the screen shows. D-155: « Compléter le budget » also sends the folded Inbox
+ * tasks (`withFolded`), where the small tasks that fill a gap usually are.
+ */
+export function weekData(ctx: Ctx, isoWeek: string, withFolded = false) {
   const page = getPlanningPage(ctx, isoWeek);
   const tasks = page.groups.flatMap((g) =>
     g.cards.flatMap((c) =>
-      c.tasks.map((t) => ({
+      [...c.tasks, ...(withFolded ? c.hiddenTasks : [])].map((t) => ({
         ...t,
         bin: g.key,
         projectTitle: c.projectId ? c.title : null,

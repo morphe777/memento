@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, isNull, schema, sql } from '@memento/db';
+import { and, asc, eq, gte, inArray, isNull, schema, sql } from '@memento/db';
 // Tasks and Inbox. RB-03, RB-06, RB-07, RB-11, RB-15.
 import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
@@ -8,7 +8,7 @@ import { checkRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
-import { addDays, currentWeek, parisDate } from '../time.ts';
+import { addDays, currentWeek, parisDate, parisInstant } from '../time.ts';
 import { taskDependencies } from './dependencies.ts';
 import { addTaskToWeek } from './planning.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
@@ -54,22 +54,21 @@ function checkTaskFields(
     assertFound(ctx.db.select().from(domain).where(eq(domain.id, f.domainId)).get(), 'domain', f.domainId);
 }
 
-/** Tasks of the current week plan count as "chosen" for RB-06 display. */
-function currentChosen(ctx: Ctx): Set<string> {
-  const plan = ctx.db
-    .select()
-    .from(weekPlan)
-    .where(eq(weekPlan.isoWeek, currentWeek(ctxNow(ctx))))
-    .get();
-  if (!plan) return new Set();
-  return new Set(
-    ctx.db
-      .select({ t: weekPlanItem.taskId })
-      .from(weekPlanItem)
-      .where(eq(weekPlanItem.weekPlanId, plan.id))
-      .all()
-      .map((r) => r.t),
-  );
+/**
+ * D-151: for each task in a plan of the current week or a week ahead, the first such week (« Cette semaine »,
+ * « Sem. du … » on every task list). A past week no longer counts.
+ */
+function plannedWeeks(ctx: Ctx): Map<string, string> {
+  const rows = ctx.db
+    .select({ taskId: weekPlanItem.taskId, week: weekPlan.isoWeek })
+    .from(weekPlanItem)
+    .innerJoin(weekPlan, eq(weekPlan.id, weekPlanItem.weekPlanId))
+    .where(gte(weekPlan.isoWeek, currentWeek(ctxNow(ctx))))
+    .orderBy(asc(weekPlan.isoWeek))
+    .all();
+  const out = new Map<string, string>();
+  for (const r of rows) if (!out.has(r.taskId)) out.set(r.taskId, r.week);
+  return out;
 }
 
 /** Tasks with RB-06 availability (`locked` = waiting for a previous task or prerequisite). */
@@ -96,7 +95,10 @@ export function listTasks(
     .offset(f.offset ?? 0)
     .all();
   const deps = taskDependencies(ctx);
-  const chosen = currentChosen(ctx);
+  const planned = plannedWeeks(ctx);
+  const week = currentWeek(ctxNow(ctx));
+  // Tasks of the current week plan count as "chosen" for RB-06 display.
+  const chosen = new Set([...planned].filter(([, w]) => w === week).map(([id]) => id));
   const projectIds = [...new Set(rows.map((r) => r.projectId).filter((x): x is string => !!x))];
   const projects = projectIds.length
     ? ctx.db.select().from(project).where(inArray(project.id, projectIds)).all()
@@ -109,6 +111,7 @@ export function listTasks(
   return rows.map((t) => ({
     ...t,
     inPlan: chosen.has(t.id),
+    plannedWeek: planned.get(t.id) ?? null, // D-151
     locked: t.status === 'todo' && !!t.projectId && !available.has(t.id),
     dependsOn: deps.filter((d) => d.taskId === t.id).map((d) => d.dependsOnTaskId),
   }));
@@ -118,6 +121,14 @@ export const getTask = (ctx: Ctx, id: string) => {
   const row = getTaskRow(ctx, id);
   return listTasks(ctx, { projectId: row.projectId ?? 'inbox' }).find((t) => t.id === id)!;
 };
+
+/** D-152: a Paris wall-clock time « YYYY-MM-DDTHH:mm » as an instant; a task cannot be done ahead of now. */
+export function doneInstant(ctx: Ctx, at: string): string {
+  const instant = parisInstant(at.slice(0, 10), at.slice(11, 16));
+  if (instant.getTime() > ctxNow(ctx).getTime())
+    throw new DomainError('DONE_IN_FUTURE', 'Une tâche ne peut pas être faite dans l’avenir.');
+  return instant.toISOString();
+}
 
 export function createTask(ctx: Ctx, input: TaskCreate) {
   return tx(ctx, () => {
@@ -156,10 +167,21 @@ export function updateTask(ctx: Ctx, id: string, patch: TaskPatch) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
     checkTaskFields(ctx, patch, before.projectId);
-    const set: Partial<typeof task.$inferInsert> = { ...patch, updatedAt: ctxNowIso(ctx) };
+    const { doneAt, ...fields } = patch;
+    const set: Partial<typeof task.$inferInsert> = { ...fields, updatedAt: ctxNowIso(ctx) };
     if (before.projectId) set.domainId = null;
+    if (doneAt !== undefined) {
+      if (before.status !== 'done' || patch.status)
+        throw new DomainError('TASK_NOT_DONE', 'Cette tâche n’est pas faite : coche-la d’abord.');
+      set.doneAt = doneInstant(ctx, doneAt);
+    }
     if (patch.status === 'todo' && before.status === 'done') set.doneAt = null;
     ctx.db.update(task).set(set).where(eq(task.id, id)).run();
+    if (doneAt !== undefined) {
+      // D-152: as if checked at that time: the « hors planification » trace follows the done week (D-99).
+      untraceUnplanned(ctx, id);
+      traceUnplanned(ctx, id, parisDate(new Date(set.doneAt!)));
+    }
     if (before.projectId) assertActiveInvariant(ctx, before.projectId);
     touchProject(ctx, before.projectId);
     audit(ctx, 'task', id, patch.status === 'cancelled' ? 'cancel' : 'update', before, getTaskRow(ctx, id));
@@ -168,7 +190,11 @@ export function updateTask(ctx: Ctx, id: string, patch: TaskPatch) {
 }
 
 /** Check a task (G-03: 1 click). RB-11: a recurring Inbox task spawns its next occurrence. */
-export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | null } = {}) {
+export function completeTask(
+  ctx: Ctx,
+  id: string,
+  opts: { actualMin?: number | null /** D-153: Paris time, now when absent. */; doneAt?: string } = {},
+) {
   return tx(ctx, () => {
     const before = getTaskRow(ctx, id);
     if (before.status === 'done') return { task: getTask(ctx, id), next: null };
@@ -178,7 +204,7 @@ export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | 
       .update(task)
       .set({
         status: 'done',
-        doneAt: ctxNowIso(ctx),
+        doneAt: opts.doneAt ? doneInstant(ctx, opts.doneAt) : ctxNowIso(ctx),
         updatedAt: ctxNowIso(ctx),
         ...(opts.actualMin !== undefined ? { actualMin: opts.actualMin } : {}), // D-61
       })
@@ -186,10 +212,10 @@ export function completeTask(ctx: Ctx, id: string, opts: { actualMin?: number | 
       .run();
     touchProject(ctx, before.projectId);
     audit(ctx, 'task', id, 'complete', before, getTaskRow(ctx, id));
-    traceUnplanned(ctx, id); // D-99
+    traceUnplanned(ctx, id, parisDate(new Date(getTaskRow(ctx, id).doneAt!))); // D-99
     let next = null;
     if (!before.projectId && before.recurrenceRule) {
-      const ref = before.dueDate ?? parisDate(ctxNow(ctx));
+      const ref = before.dueDate ?? parisDate(new Date(getTaskRow(ctx, id).doneAt!));
       const nextDue = nextOccurrence(before.recurrenceRule, ref);
       // M-02 (RB-11): checked, unchecked, checked again: the next occurrence already exists, it is reused.
       const existing = nextDue

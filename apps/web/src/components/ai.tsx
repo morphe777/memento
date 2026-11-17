@@ -6,7 +6,7 @@ import { Link } from '@tanstack/react-router';
 import { useState } from 'react';
 import { ApiError, get, post, put } from '../lib/api.ts';
 import { fmtMin } from '../lib/format.ts';
-import { toast } from '../lib/hooks.ts';
+import { toast, useDomainLookup } from '../lib/hooks.ts';
 import type { AiStatus } from '../lib/types.ts';
 import { AiDots, Panel } from './ui.tsx';
 
@@ -279,5 +279,226 @@ function ProposalPanel({
         </button>
       </div>
     </Panel>
+  );
+}
+
+// D-155: « Compléter le budget ». The AI keeps the selection as it is and proposes 1 to 3 tasks for the time left;
+// each one reads in Z: a coloured tag (the angle), the title in bold and its duration on the right, then the reason in
+// italics with its key words in bold. Checked tasks are added as « Semaine » through the usual endpoint.
+type FillAngle = 'month' | 'balance' | 'deadline' | 'experience' | 'momentum';
+interface FillItem {
+  id: string;
+  title: string;
+  durationMin: number | null;
+  isExperience: boolean;
+  projectTitle: string | null;
+  domainId: string | null;
+  angle: FillAngle;
+  reason: string;
+  key: string | null;
+}
+interface FillProposal {
+  isoWeek: string;
+  remainingMin: number;
+  summary: string;
+  model: string;
+  items: FillItem[];
+}
+const ANGLE_LABEL: Record<FillAngle, string> = {
+  month: 'Mois',
+  balance: 'Équilibre',
+  deadline: 'Échéance',
+  experience: 'Expérience',
+  momentum: 'Élan',
+};
+const ANGLE_COLOR: Record<Exclude<FillAngle, 'balance'>, string> = {
+  month: 'var(--primary)',
+  deadline: 'var(--status-red)',
+  experience: 'var(--experience)',
+  momentum: 'var(--text-muted)',
+};
+
+/** Shown when at least 15 minutes of the budget are left (the button stays out of the way otherwise). */
+export function AiFillWeekButton({
+  isoWeek,
+  remainingMin,
+  weekItems,
+}: {
+  isoWeek: string;
+  remainingMin: number;
+  weekItems: { taskId: string; kind: 'week' | 'bonus' }[];
+}) {
+  const status = useQuery({ queryKey: ['ai-status'], queryFn: () => get<AiStatus>('/ai/status') });
+  const [busy, setBusy] = useState(false);
+  const [proposal, setProposal] = useState<FillProposal | null>(null);
+  if (remainingMin < 15 || !status.data?.configured) return null;
+  const run = async () => {
+    setBusy(true);
+    try {
+      setProposal(await post<FillProposal>('/ai/fill-week', { isoWeek }));
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : "L'IA n'a pas pu répondre.", 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className="btn"
+        disabled={busy}
+        title={`Proposer de quoi remplir les ${fmtMin(remainingMin)} qui restent, sans toucher à ta sélection`}
+        onClick={run}
+        style={{ minHeight: 44, padding: '0 18px' }}
+      >
+        {busy ? <AiDots /> : <StarIcon />}
+        {busy ? "L'IA réfléchit…" : 'Compléter le budget'}
+      </button>
+      {proposal && <FillPanel proposal={proposal} weekItems={weekItems} onClose={() => setProposal(null)} />}
+    </>
+  );
+}
+
+function FillPanel({
+  proposal,
+  weekItems,
+  onClose,
+}: {
+  proposal: FillProposal;
+  weekItems: { taskId: string; kind: 'week' | 'bonus' }[];
+  onClose: () => void;
+}) {
+  const qc = useQueryClient();
+  const dl = useDomainLookup();
+  const [checked, setChecked] = useState<Set<string>>(() => new Set(proposal.items.map((i) => i.id)));
+  const [busy, setBusy] = useState(false);
+  const toggle = (id: string) =>
+    setChecked((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  const picked = proposal.items.filter((i) => checked.has(i.id));
+  const takenMin = picked.reduce((n, i) => n + (i.isExperience ? 0 : (i.durationMin ?? 0)), 0);
+  const apply = async () => {
+    setBusy(true);
+    try {
+      await put(`/week-plans/${proposal.isoWeek}/items`, {
+        items: [...weekItems, ...picked.map((i) => ({ taskId: i.id, kind: 'week' as const }))],
+      });
+      await qc.invalidateQueries();
+      toast(picked.length > 1 ? 'Tâches ajoutées à la semaine.' : 'Tâche ajoutée à la semaine.');
+      onClose();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'Ajout impossible', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel open onClose={onClose} title="Compléter le budget" hint={`Modèle : ${proposal.model}`}>
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <p className="m-0 text-[15px] flex-1 min-w-0" style={{ minWidth: 200 }}>
+          {proposal.summary}
+        </p>
+        <span className="text-[13px] flex-none" style={{ color: 'var(--text-muted)' }}>
+          reste <b className="mono">{fmtMin(proposal.remainingMin)}</b>
+        </span>
+      </div>
+      {proposal.items.length === 0 && (
+        <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+          L'IA n'a rien trouvé qui tienne dans le temps qui reste.
+        </p>
+      )}
+      <ul className="m-0 p-0 list-none flex flex-col gap-2">
+        {proposal.items.map((i) => {
+          const color = i.angle === 'balance' ? dl.color(i.domainId) : ANGLE_COLOR[i.angle];
+          return (
+            <li key={i.id}>
+              <label
+                className="flex gap-3 items-start rounded-lg p-3 cursor-pointer"
+                style={{ border: '1px solid var(--border)', background: 'var(--surface)' }}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={checked.has(i.id)}
+                  onChange={() => toggle(i.id)}
+                />
+                <span className="flex-1 min-w-0 flex flex-col gap-1">
+                  <span className="flex items-baseline gap-2">
+                    <span
+                      className="flex-none text-[11px] font-bold uppercase"
+                      style={{
+                        letterSpacing: '0.05em',
+                        color: i.angle === 'experience' ? 'var(--experience-text)' : color,
+                        background:
+                          i.angle === 'experience'
+                            ? 'var(--experience)'
+                            : `color-mix(in srgb, ${color} 14%, transparent)`,
+                        border: `1px solid color-mix(in srgb, ${color} 45%, transparent)`,
+                        borderRadius: 999,
+                        padding: '1px 8px',
+                      }}
+                    >
+                      {ANGLE_LABEL[i.angle]}
+                    </span>
+                    <b className="flex-1 min-w-0 text-[15px]">
+                      {i.title}
+                      {i.projectTitle && (
+                        <span className="font-normal text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                          {' '}
+                          · {i.projectTitle}
+                        </span>
+                      )}
+                    </b>
+                    <span className="mono text-[13px] flex-none" style={{ color: 'var(--text-muted)' }}>
+                      {i.durationMin ? fmtMin(i.durationMin) : '?'}
+                      {i.isExperience ? ' · hors budget' : ''}
+                    </span>
+                  </span>
+                  <em className="text-[14px]" style={{ color: 'var(--text-2)' }}>
+                    <Emphasis text={i.reason} keyWords={i.key} />
+                  </em>
+                </span>
+              </label>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="flex flex-wrap gap-2 justify-end items-center">
+        <span className="text-[13px] mr-auto" style={{ color: 'var(--text-muted)' }}>
+          Sélection{' '}
+          <b
+            className="mono"
+            style={{ color: takenMin > proposal.remainingMin ? 'var(--status-red)' : 'var(--text)' }}
+          >
+            {fmtMin(takenMin)}
+          </b>{' '}
+          / {fmtMin(proposal.remainingMin)}
+        </span>
+        <button type="button" className="btn" onClick={onClose}>
+          Ignorer
+        </button>
+        <button type="button" className="btn btn-primary" disabled={busy || !picked.length} onClick={apply}>
+          Ajouter à la semaine{picked.length ? ` (${picked.length})` : ''}
+        </button>
+      </div>
+    </Panel>
+  );
+}
+
+/** The reason with its key words in bold (the first occurrence). */
+function Emphasis({ text, keyWords }: { text: string; keyWords: string | null }) {
+  const at = keyWords ? text.indexOf(keyWords) : -1;
+  if (!keyWords || at < 0) return <>{text}</>;
+  return (
+    <>
+      {text.slice(0, at)}
+      <b style={{ fontStyle: 'normal', color: 'var(--text)' }}>{keyWords}</b>
+      {text.slice(at + keyWords.length)}
+    </>
   );
 }

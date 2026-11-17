@@ -84,7 +84,7 @@ export function minutesByDomain(tasks: DoneTask[]): Record<string, number> {
 }
 
 export interface GlobalInput {
-  experiencesWindow: number;
+  experiencesMonth: number;
   experienceTarget: number;
   healthMin: number;
   familyMin: number;
@@ -94,7 +94,7 @@ export interface GlobalInput {
 
 /** R-01: red if 0 experience AND 0 h Santé; green if all good; orange otherwise. */
 export function globalIndicator(i: GlobalInput): { light: Light; title: string; sentence: string } {
-  if (i.experiencesWindow === 0 && i.healthMin === 0) {
+  if (i.experiencesMonth === 0 && i.healthMin === 0) {
     return {
       light: 'red',
       title: 'Semaine à revoir',
@@ -107,12 +107,12 @@ export function globalIndicator(i: GlobalInput): { light: Light; title: string; 
     i.focus === 'Cap tenu' ? 'cap tenu' : `focus ${i.focus.toLowerCase()}`,
   );
   (i.rhythm === 'OK' ? good : bad).push(i.rhythm === 'OK' ? 'rythme OK' : `rythme ${i.rhythm.toLowerCase()}`);
-  if (i.experiencesWindow >= i.experienceTarget) good.push('expériences au rendez-vous');
+  if (i.experiencesMonth >= i.experienceTarget) good.push('expériences au rendez-vous');
   else
     bad.push(
-      i.experiencesWindow === 0
+      i.experiencesMonth === 0
         ? 'aucune expérience sur la période'
-        : `${i.experiencesWindow} / ${i.experienceTarget} expériences`,
+        : `${i.experiencesMonth} / ${i.experienceTarget} expériences`,
     );
   if (i.healthMin > 0) good.push('santé présente');
   else bad.push('rien pour la santé');

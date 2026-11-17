@@ -34,6 +34,7 @@ import {
   weekMonday,
   weekSunday,
 } from '../time.ts';
+import { experiencesInMonth } from './done.ts';
 import { paceCalendar } from './planning.ts';
 import { serializeProjects } from './projects.ts';
 
@@ -212,10 +213,8 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   const family = domains.find((d) => d.name === 'Famille');
   const byDomain = minutesByDomain(done);
 
-  const window = s['experience.window_weeks'];
-  const expWindow = doneTasksBetween(ctx, addDays(monday, -7 * (window - 1)), nextMonday).filter(
-    (t) => t.isExperience,
-  ).length;
+  const expMonth = monthOfWeek(isoWeek); // R-02 (D-154): the month of the week, its Thursday's (D-142)
+  const expDone = experiencesInMonth(ctx, expMonth);
   const prevReport = existing(ctx, 'week', shiftWeek(isoWeek, -1));
   const prevPayload = prevReport?.payload as
     | { tasksDone?: { count: number }; objectives?: { id: string; progressPct: number }[] }
@@ -226,7 +225,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
   const focus = focusOf(done);
   const rhythm = rhythmOf(doneMin, budgetMin, s['report.rhythm_low_pct'], s['report.rhythm_high_pct']);
   const global = globalIndicator({
-    experiencesWindow: expWindow,
+    experiencesMonth: expDone,
     experienceTarget: s['experience.target'],
     healthMin: health ? (byDomain[health.id] ?? 0) : 0,
     familyMin: family ? (byDomain[family.id] ?? 0) : 0,
@@ -340,9 +339,9 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
     successes,
     tasksDone: { count: done.length, bonus: done.filter((t) => t.isBonus).length, previousWeek: prevCount },
     experiences: {
-      done: expWindow,
+      done: expDone,
       target: s['experience.target'],
-      windowWeeks: window,
+      month: expMonth,
       titles: done.filter((t) => t.isExperience).map((t) => t.title),
     },
     focus,
@@ -456,6 +455,7 @@ function buildMonthPayload(ctx: Ctx, month: string) {
       tasksDone: done.length,
       doneMin: workMin,
       experiences: done.filter((t) => t.isExperience).length,
+      experienceTarget: getSettings(ctx)['experience.target'], // R-02 (D-154)
     },
     drift: driftOf(ctx, from, to, workMin), // D-99
     weeks,

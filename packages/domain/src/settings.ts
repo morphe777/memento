@@ -16,7 +16,6 @@ export const vacationSchema = z
 export const settingsSchema = z.object({
   'budget.weekly_min': z.number().int().min(0).max(10_080),
   'experience.target': z.number().int().min(0).max(50),
-  'experience.window_weeks': z.number().int().min(1).max(26),
   'experience.badge_color': z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   'ideas.purge_after_months': z.number().int().min(1).max(120),
   'engine.weights': z.object({
@@ -54,6 +53,7 @@ export const settingsSchema = z.object({
   'ai.instructions': z.string().max(4000),
   'ai.prompt.system': z.string().trim().min(1).max(8000),
   'ai.prompt.week': z.string().trim().min(1).max(8000),
+  'ai.prompt.fill_week': z.string().trim().min(1).max(8000),
   'ai.prompt.month': z.string().trim().min(1).max(8000),
   'ai.prompt.quarter': z.string().trim().min(1).max(8000),
   'ai.prompt.describe': z.string().trim().min(1).max(8000),
@@ -79,8 +79,7 @@ export type SettingKey = keyof Settings;
 
 export const DEFAULT_SETTINGS: Settings = {
   'budget.weekly_min': 360, // CH-11
-  'experience.target': 2, // R-02
-  'experience.window_weeks': 4,
+  'experience.target': 2, // R-02, per calendar month (D-154)
   'experience.badge_color': '#D9AE3C', // V-14
   'ideas.purge_after_months': 12, // DM-87
   'engine.weights': { value: 1, urgency: 1, delay: 1, continuity: 1, age: 1 },
@@ -114,6 +113,7 @@ export const DEFAULT_SETTINGS: Settings = {
   'ai.instructions': '',
   'ai.prompt.system': DEFAULT_AI_PROMPTS.system, // editable without a new image (Configuration › IA)
   'ai.prompt.week': DEFAULT_AI_PROMPTS.week,
+  'ai.prompt.fill_week': DEFAULT_AI_PROMPTS.fill_week, // D-155: « Compléter le budget »
   'ai.prompt.month': DEFAULT_AI_PROMPTS.month,
   'ai.prompt.quarter': DEFAULT_AI_PROMPTS.quarter,
   'ai.prompt.describe': DEFAULT_AI_PROMPTS.describe, // D-68: « Rédiger avec l'IA »

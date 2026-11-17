@@ -17,6 +17,12 @@ Règles :
 - Le total des tâches "week" doit tenir dans budgetMin (en minutes) ; les bonus sont hors budget.
 - Privilégie les projets du mois, la continuité (avancer un projet plutôt que tout disperser), les deadlines, et une ou deux expériences si la cible n'est pas atteinte.
 - Protège la charge mentale : si les semaines récentes (recentWeeks) montrent des tâches évitées, un rythme en baisse ou un budget réduit, allège la semaine (moins de sujets lourds, plus de continuité) au lieu de rattraper le retard ; dis-le dans le résumé.`,
+  fill_week: `La sélection de la semaine est déjà faite : ne la remets pas en cause. Il reste remainingMin minutes de budget. Propose de 1 à maxItems tâches à AJOUTER pour compléter ce reste, par ordre de préférence.
+- Uniquement des tâches non retenues (currentlySelected = null) et non bloquées (locked = false). Le total de leurs durées doit tenir dans remainingMin (les expériences ne comptent pas dans le budget).
+- Choisis en cohérence avec ce qui est déjà prévu : avancer un projet du mois, rééquilibrer un domaine délaissé (plannedMix, alerts), tenir une deadline proche, vivre une expérience si la cible du mois n'est pas atteinte, ou poursuivre un projet déjà en cours cette semaine.
+- angle : la raison principale du choix, parmi "month" (projet du mois), "balance" (équilibre des domaines), "deadline" (échéance), "experience" (expérience), "momentum" (suite de ce qui est prévu).
+- reason : 15 mots au plus, un fait concret tiré des données, sans formule creuse. key : 2 à 4 mots repris tels quels de reason, ceux qui portent l'argument.
+- summary : une seule phrase de 15 mots au plus.`,
   month: `Propose les projets du mois : la liste COMPLÈTE des projets à mener ce mois-ci (ceux déjà choisis à garder + ceux à ajouter).
 - Seul un projet sans "gaps" (complet) peut devenir projet du mois.
 - La charge (remainingMin des projets + inboxReserveMin) doit tenir dans availableMin, sans dépasser maxProjects projets menés de front.

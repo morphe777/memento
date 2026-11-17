@@ -398,7 +398,7 @@ describe('weekly indicators R-01 / R-04 / R-05', () => {
   });
   it('global light', () => {
     const g = {
-      experiencesWindow: 2,
+      experiencesMonth: 2,
       experienceTarget: 2,
       healthMin: 60,
       familyMin: 60,
@@ -406,8 +406,8 @@ describe('weekly indicators R-01 / R-04 / R-05', () => {
       focus: 'Cap tenu' as const,
     };
     expect(globalIndicator(g).light).toBe('green');
-    expect(globalIndicator({ ...g, experiencesWindow: 0 }).light).toBe('orange');
-    expect(globalIndicator({ ...g, experiencesWindow: 0, healthMin: 0 }).light).toBe('red');
+    expect(globalIndicator({ ...g, experiencesMonth: 0 }).light).toBe('orange');
+    expect(globalIndicator({ ...g, experiencesMonth: 0, healthMin: 0 }).light).toBe('red');
   });
 });
 

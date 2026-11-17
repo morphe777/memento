@@ -35,6 +35,35 @@ export function fmtDateTime(iso: string) {
   }).format(new Date(iso));
 }
 export const weekNumber = (isoWeek: string) => Number(isoWeek.slice(6));
+/** « novembre » for 2026-11. */
+export const fmtMonthName = (m: string) =>
+  new Date(`${m}-15T12:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', timeZone: 'UTC' });
+
+/** D-152: an instant as Paris wall-clock time « AAAA-MM-JJTHH:MM » (the value of an <input type="datetime-local">). */
+export function parisLocal(at: string | Date = new Date()): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat('fr-FR', {
+      timeZone: 'Europe/Paris',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(new Date(at))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+
+/** Monday (AAAA-MM-JJ) of an ISO week (display only). */
+export function isoWeekMonday(isoWeek: string): string {
+  const [y, w] = [Number(isoWeek.slice(0, 4)), Number(isoWeek.slice(6))];
+  const jan4 = Date.UTC(y, 0, 4);
+  const dow = new Date(jan4).getUTCDay() || 7;
+  return new Date(jan4 - (dow - 1) * 86_400_000 + (w - 1) * 7 * 86_400_000).toISOString().slice(0, 10);
+}
 
 /** ISO week arithmetic for navigation links (display only). */
 export function shiftIsoWeek(isoWeek: string, n: number): string {

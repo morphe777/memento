@@ -326,6 +326,16 @@ input[type="checkbox"] {
   border-radius: 999px;
   padding: 2px 8px;
 }
+.badge-planned {
+  /* D-151: discreet, the green of the week rows */
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ok);
+  background: var(--row-week);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
 .badge-bonus {
   font-size: 11px;
   font-weight: 600;

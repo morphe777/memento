@@ -26,7 +26,7 @@ import {
 } from '../components/ui.tsx';
 import { UnplannedPanel } from '../components/unplanned.tsx';
 import { get, post } from '../lib/api.ts';
-import { fmtDateShort, fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
+import { fmtDateShort, fmtMin, fmtMonthName, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import type { Execution } from '../lib/types.ts';
 
@@ -205,7 +205,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           minWidth={0}
           foot={
             <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              {ex.experiences.windowWeeks} dernières semaines
+              cible de {fmtMonthName(ex.experiences.month)}
             </div>
           }
         >

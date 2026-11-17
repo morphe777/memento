@@ -20,7 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { useQuery } from '@tanstack/react-query';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { del, get, patch, post, put } from '../lib/api.ts';
-import { fmtDateShort, fmtMin, parseDuration, STATUS_LABEL } from '../lib/format.ts';
+import { fmtDateShort, fmtMin, parisLocal, parseDuration, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups } from '../lib/hooks.ts';
 import type { Project, Resource, Task, TaskDetail, TaskDuration } from '../lib/types.ts';
 import { DescriptionBlock } from './markdown.tsx';
@@ -31,6 +31,7 @@ import {
   ExperienceBadge,
   Field,
   Panel,
+  PlannedBadge,
   SAVE_HINT,
   SearchSelect,
   TaskCheck,
@@ -271,6 +272,7 @@ export function TaskList({
                       {t.title}
                     </span>
                     {t.isExperience && <ExperienceBadge />}
+                    {t.status === 'todo' && <PlannedBadge week={t.plannedWeek} />}
                     {t.locked && (
                       <span style={{ color: 'var(--text-faint)' }}>
                         <LockIcon />
@@ -293,7 +295,6 @@ export function TaskList({
                       <span style={{ color: 'var(--late-text)' }}>Deadline {fmtDateShort(t.dueDate)}</span>
                     )}
                     {t.recurrenceRule && <span>Récurrente</span>}
-                    {t.inPlan && <span>Dans le plan de la semaine</span>}
                     {t.postponeCount > 0 && <span>Reportée {t.postponeCount} fois</span>}
                     {t.locked && <span>Après la tâche précédente</span>}
                   </span>
@@ -540,7 +541,9 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     recurrenceRule: t.recurrenceRule ?? '',
     domainId: t.domainId ?? '',
     actual: t.actualMin ? fmtMin(t.actualMin).replace(/\s/g, '') : '',
+    doneAt: t.doneAt ? parisLocal(t.doneAt) : '',
   });
+  const doneAtBefore = t.doneAt ? parisLocal(t.doneAt) : '';
   const inbox = !t.projectId;
   const actualMin = f.actual.trim() ? parseDuration(f.actual) : null;
   const body = () => ({
@@ -551,6 +554,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     dueDate: f.dueDate || null,
     ...(inbox ? { recurrenceRule: f.recurrenceRule || null, domainId: f.domainId || null } : {}),
     ...(t.status === 'done' ? { actualMin } : {}), // D-61
+    ...(t.status === 'done' && f.doneAt && f.doneAt !== doneAtBefore ? { doneAt: f.doneAt } : {}), // D-152
   });
   const initial = useRef(JSON.stringify(body()));
   const save = useAction((b: ReturnType<typeof body>) => patch(`/tasks/${t.id}`, b), {
@@ -599,7 +603,8 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
     <Panel open onClose={close} onCancel={onClose} title={t.title} hint={SAVE_HINT}>
       <div className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
         {STATUS_LABEL[t.status]} · créée par {t.createdBy === 'me' ? 'moi' : t.createdBy}{' '}
-        {t.locked && '· verrouillée (attend la tâche précédente)'}
+        {t.locked && '· verrouillée (attend la tâche précédente)'}{' '}
+        {t.status === 'todo' && <PlannedBadge week={t.plannedWeek} />}
       </div>
       <Field label="Titre">
         <input value={f.title} onChange={(e) => set('title', e.target.value)} />
@@ -619,6 +624,19 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
           <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
         </Field>
       </div>
+      {t.status === 'done' && (
+        <Field
+          label="Faite le"
+          info="Pour une tâche cochée après coup : comme si tu l'avais cochée à ce moment-là (heure de Paris). Les rapports déjà figés ne changent pas."
+        >
+          <input
+            type="datetime-local"
+            value={f.doneAt}
+            max={parisLocal()}
+            onChange={(e) => set('doneAt', e.target.value)}
+          />
+        </Field>
+      )}
       {t.status === 'done' && (
         <Field
           label="Temps réellement passé"

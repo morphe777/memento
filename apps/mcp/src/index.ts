@@ -107,6 +107,8 @@ const PARAMS: Record<string, string> = {
   dependsOn: 'Identifiants (uuid) des projets prérequis.',
   dependsOnId: 'Identifiant (uuid) du projet prérequis.',
   description: "Description en Markdown, rédigée selon le modèle de l'utilisateur (get_templates).",
+  doneAt:
+    'Date et heure de fin AAAA-MM-JJTHH:MM (heure de Paris), jamais dans l’avenir ; tâche faite seulement (D-152).',
   domainId: "Identifiant (uuid) d'un domaine (voir get_context).",
   domainIds: 'Domaines à garder (uuid) ; vide ou absent = tous.',
   dueDate: "Date due AAAA-MM-JJ, ou null pour l'effacer.",
@@ -363,7 +365,7 @@ export function buildServer(call: Call, canWrite = true) {
   );
   tool(
     'get_experiences',
-    'Expériences (objectif de vivre plus d’expériences) : cible sur la fenêtre glissante, souvenirs (faites), prévues, réserve.',
+    'Expériences (objectif de vivre plus d’expériences) : cible du mois civil (D-154), souvenirs (faites), prévues, réserve.',
     {},
     () => call('GET', '/experiences'),
   );
@@ -372,6 +374,12 @@ export function buildServer(call: Call, canWrite = true) {
     'Ajoute une idée d’expérience à la réserve (tâche Inbox marquée Expérience, sans date).',
     S.experienceIdea.shape,
     (a) => call('POST', '/experiences', a),
+  );
+  tool(
+    'log_experience',
+    'Trace une expérience déjà vécue (D-153) : créée faite, à doneAt (AAAA-MM-JJTHH:MM, heure de Paris ; maintenant si absent, jamais dans l’avenir). Dans un projet (projectId ; durée alors obligatoire) ou dans un domaine (domainId ; Famille si absent, aucun si null).',
+    S.experienceLived.shape,
+    (a) => call('POST', '/experiences/lived', a),
   );
   tool(
     'set_objective_quarter',

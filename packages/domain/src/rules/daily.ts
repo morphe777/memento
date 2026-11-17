@@ -74,7 +74,7 @@ export interface RecapFacts {
   /** D-78: what matters in the coming days (this week; next week on Sunday). Filled when nothing was done. */
   focus: FocusItem[];
   projects: { active: number; month: number; monthLimit: number };
-  experiences: { done: number; target: number; windowWeeks: number };
+  experiences: { done: number; target: number; month: string }; // R-02 (D-154)
 }
 
 export interface Kpi {

@@ -271,7 +271,6 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
     seuils: [
       'guards.window_weeks',
       'experience.target',
-      'experience.window_weeks',
       'experience.badge_color',
       'report.rhythm_low_pct',
       'report.rhythm_high_pct',
@@ -289,6 +288,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.instructions',
       'ai.prompt.system',
       'ai.prompt.week',
+      'ai.prompt.fill_week',
       'ai.prompt.month',
       'ai.prompt.quarter',
       'ai.prompt.describe',
@@ -477,16 +477,10 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
             {num('guards.window_weeks')}
           </Field>
           <Field
-            label="Expériences : cible"
-            info="Nombre de tâches « Expérience » (badge doré) à faire sur la fenêtre ci-dessous. En dessous, alerte dans Planifier et indicateur orange ou rouge dans les rapports."
+            label="Expériences : cible par mois"
+            info="Nombre de tâches « Expérience » (badge doré) à vivre chaque mois civil. Une semaine compte pour le mois de son jeudi. En dessous, alerte dans Planifier et indicateur orange ou rouge dans les rapports."
           >
             {num('experience.target')}
-          </Field>
-          <Field
-            label="Expériences : fenêtre (semaines)"
-            info="Période glissante sur laquelle la cible est comptée."
-          >
-            {num('experience.window_weeks')}
           </Field>
           <Field
             label="Couleur du badge Expérience"
@@ -1101,6 +1095,11 @@ const AI_PROMPTS = [
     'Le rôle et les règles générales, envoyés à chaque proposition.',
   ],
   ['ai.prompt.week', 'Prompt Semaine', 'Comment choisir les tâches de la semaine.'],
+  [
+    'ai.prompt.fill_week',
+    'Prompt Compléter le budget',
+    '« Compléter le budget » dans Planifier › Semaine : 1 à 3 tâches à ajouter dans le temps qui reste, sans toucher à la sélection ; une étiquette, une raison courte et ses mots clés.',
+  ],
   ['ai.prompt.month', 'Prompt Mois', 'Comment choisir les projets du mois.'],
   ['ai.prompt.quarter', 'Prompt Trimestre', 'Comment choisir les objectifs du trimestre.'],
   [

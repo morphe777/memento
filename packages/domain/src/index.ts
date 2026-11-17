@@ -1,6 +1,7 @@
 export * from './ai/breakdown.ts';
 export * from './ai/describe.ts';
 export * from './ai/fill.ts';
+export * from './ai/fill-week.ts';
 export * from './ai/path.ts';
 export * from './ai/prompts.ts';
 export * from './ai/propose.ts';

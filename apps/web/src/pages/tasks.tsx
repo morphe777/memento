@@ -16,6 +16,7 @@ import {
   InfoTip,
   Loading,
   PageHeader,
+  PlannedBadge,
   SearchSelect,
   Tabs,
   useTableSort,
@@ -285,6 +286,7 @@ function BoardCard({
             <span>Inbox</span>
           ))}
         {t.isExperience && <ExperienceBadge />}
+        {t.bucket !== 'week' && t.status === 'todo' && <PlannedBadge week={t.plannedWeek} />}
         {t.locked && <LockIcon />}
         {t.dueDate && <span style={{ color: 'var(--late-text)' }}>Deadline {fmtDateShort(t.dueDate)}</span>}
         {t.postponeCount > 0 && <span>Reportée {t.postponeCount}×</span>}
@@ -347,6 +349,7 @@ export function TaskTable({
                     {t.title}
                   </button>
                   {t.isExperience && <ExperienceBadge />}
+                  {t.bucket !== 'week' && t.status === 'todo' && <PlannedBadge week={t.plannedWeek} />}
                   {t.locked && (
                     <span style={{ color: 'var(--text-faint)' }}>
                       <LockIcon />

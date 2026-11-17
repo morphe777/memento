@@ -781,8 +781,8 @@ describe('D-53 importance d’un projet', () => {
 });
 
 describe('D-54 Expériences', () => {
-  it('target over the window, memories, planned and reserve', () => {
-    const ctx = makeCtx(); // Friday 23 Oct 2026, W43; window 4 weeks from Monday 28 Sep
+  it('target per month (D-154), memories, planned and reserve', () => {
+    const ctx = makeCtx(); // Friday 23 Oct 2026, W43
     const old = createTask(ctx, { title: 'Tennis', durationMin: 120, isExperience: true });
     ctx.setNow('2026-09-10T08:00:00.000Z');
     completeTask(ctx, old.id);
@@ -793,7 +793,7 @@ describe('D-54 Expériences', () => {
     const idea = addExperienceIdea(ctx, { title: 'Plongée' });
     expect(idea.isExperience).toBe(true);
     const page = getExperiencesPage(ctx);
-    expect(page.doneInWindow).toBe(1);
+    expect(page.doneThisMonth).toBe(1);
     expect(page.lived.map((t) => t.title)).toEqual(['Concert', 'Tennis']);
     expect(page.planned.map((t) => t.title)).toEqual(['Parapente']);
     expect(page.reserve.map((t) => t.title)).toEqual(['Plongée']);

@@ -17,7 +17,7 @@ import {
   Tabs,
 } from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
-import { fmtDateTime, fmtMin, shiftIsoWeek, weekNumber } from '../lib/format.ts';
+import { fmtDateTime, fmtMin, fmtMonthName, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { toast, useAction, useMe, useResolvedTheme } from '../lib/hooks.ts';
 import type { Report, ReportRow, WeekPayload } from '../lib/types.ts';
 
@@ -340,12 +340,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
         >
           {p.tasksDone.count}
         </Tile>
-        <Tile
-          label="Expériences"
-          dot={expOk ? LIGHT.green : LIGHT.orange}
-          big
-          foot={`sur les ${p.experiences.windowWeeks} dernières semaines`}
-        >
+        <Tile label="Expériences" dot={expOk ? LIGHT.green : LIGHT.orange} big foot={expFoot(p.experiences)}>
           {p.experiences.done}{' '}
           <span style={{ fontSize: 18, color: 'var(--text-faint)' }}>/ {p.experiences.target}</span>
         </Tile>
@@ -505,6 +500,10 @@ function MonthReport({ r }: { r: Report }) {
         </Tile>
         <Tile label="Expériences" big foot="vécues ce mois-ci">
           {p.totals.experiences}
+          {/* D-154: the monthly target, absent from reports frozen before v1.2 */}
+          {'experienceTarget' in p.totals && (
+            <span style={{ fontSize: 18, color: 'var(--text-faint)' }}> / {p.totals.experienceTarget}</span>
+          )}
         </Tile>
         <Tile label="Semaines en dépassement" big foot="au-delà de 110 % du budget">
           {p.weeksOverBudget}
@@ -681,4 +680,9 @@ function QuarterReport({ r }: { r: Report }) {
       </Section>
     </>
   );
+}
+
+/** D-154: the month of the target; a report frozen before v1.2 kept its sliding window. */
+function expFoot(e: { month?: string; windowWeeks?: number }) {
+  return e.month ? `cible de ${fmtMonthName(e.month)}` : `sur les ${e.windowWeeks} dernières semaines`;
 }

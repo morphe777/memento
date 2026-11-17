@@ -14,6 +14,7 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'GET /api/v1/domains': 'read',
   'GET /api/v1/experiences': 'read',
   'POST /api/v1/experiences': 'write',
+  'POST /api/v1/experiences/lived': 'write', // D-153
   'GET /api/v1/groups': 'read',
   'GET /api/v1/guide': 'read',
   'GET /api/v1/ideas': 'read',

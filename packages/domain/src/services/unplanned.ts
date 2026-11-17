@@ -24,9 +24,12 @@ export function getOrCreatePlan(ctx: Ctx, isoWeek: string) {
   return row;
 }
 
-/** Called right after a task is checked (inside its transaction). Returns true when traced as unplanned. */
-export function traceUnplanned(ctx: Ctx, taskId: string): boolean {
-  const week = isoWeekOf(parisDate(ctxNow(ctx)));
+/**
+ * Called right after a task is checked (inside its transaction), with the Paris day it was done (D-152: today by
+ * default). Returns true when traced as unplanned.
+ */
+export function traceUnplanned(ctx: Ctx, taskId: string, day = parisDate(ctxNow(ctx))): boolean {
+  const week = isoWeekOf(day);
   const planIds = [week, shiftWeek(week, -1)]
     .map((w) => getPlanRow(ctx, w)?.id)
     .filter((x): x is string => !!x);

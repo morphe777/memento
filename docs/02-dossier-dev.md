@@ -107,7 +107,7 @@ Versions : prendre les dernières versions stables au moment du dev ; ne pas fig
 | Clé | Défaut | Source |
 | --- | --- | --- |
 | budget.weekly_min | 360 | CH-11 |
-| experience.target / window_weeks | 2 / 4 | R-02 |
+| experience.target | 2 par mois civil | R-02, D-154 |
 | experience.badge_color | #D9AE3C | V-14 |
 | ideas.purge_after_months | 12 | DM-87 (à valider) |
 | engine.weights | value, urgency, delay, continuity, age = 1 | §6 |
@@ -187,7 +187,7 @@ Générés par le worker, stockés en `report.payload` (JSON) et **jamais recalc
 | R-01 | Indicateur global | Rouge si 0 expérience ET 0 h Santé ; vert si R-02 ≥ cible au prorata, Santé et Famille > 0 h, R-05 = OK, R-04 = Cap tenu ; sinon orange. Seuils réglables | Pastille 3 couleurs + titre + 1 phrase |
 | — | Mes réussites | v1 : projets terminés avec succès + objectifs dont l'avancement a progressé. v2 : synthèse IA (tâches regroupées en résultats, seul ce qui compte, pas de quota) | Juste sous l'indicateur global ; 1 phrase + domaine + nb de tâches |
 | R-08 | Tâches terminées | Nb de tâches faites (dont bonus) + valeur semaine précédente | Nombre brut, sans couleur, hors indicateur global |
-| R-02 | Expériences | Nb de tâches is_experience faites sur `experience.window_weeks` | « x / cible » |
+| R-02 | Expériences | Nb de tâches is_experience faites dans le mois civil (une semaine : le mois de son jeudi, D-154) | « x / cible » |
 | R-04 | Focus | Heures faites hors expériences : objectifs actifs ≥ 50 % → Cap tenu ; Inbox ≥ 50 % → Semaine Inbox (neutre) ; hors objectif ≥ 50 % → Dispersé ; sinon Mixte | Palier en texte, jamais de % |
 | R-05 | Rythme | heures faites ÷ budget : < 80 % Sous-productif ; 80 à 110 % OK ; > 110 % Surproductif | Palier en texte |
 | R-07 | Évitement | Tâches avec postpone_count ≥ 3 | Nombre + titres |

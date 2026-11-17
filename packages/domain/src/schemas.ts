@@ -8,6 +8,14 @@ export const DATE_MESSAGE = 'Date invalide (AAAA-MM-JJ, jour existant).';
 /** C-06: a real calendar day, YYYY-MM-DD (the format alone let 2026-10-45 through). */
 export const isoDate = z.string().refine(isValidDate, DATE_MESSAGE);
 const date = isoDate;
+/** D-152: a Paris wall-clock time « YYYY-MM-DDTHH:mm », on a real day (D-126). */
+export const parisDateTime = z
+  .string()
+  .regex(
+    /^\d{4}-\d{2}-\d{2}T([01]\d|2[0-3]):[0-5]\d$/,
+    'Date et heure attendues (AAAA-MM-JJTHH:MM, heure de Paris).',
+  )
+  .refine((v) => isValidDate(v.slice(0, 10)), DATE_MESSAGE);
 const color = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 const title = z.string().trim().min(1, 'Titre obligatoire').max(200);
 const text = z.string().max(20_000);
@@ -196,6 +204,18 @@ export const experienceIdea = z.object({
   durationMin: taskFields.durationMin,
   domainId: taskFields.domainId,
 });
+/**
+ * D-153: an experience lived, recorded done. doneAt = Paris time (now when absent). Without a project, its domain
+ * (Famille when absent; null = none).
+ */
+export const experienceLived = z.object({
+  title,
+  description: text.optional(),
+  durationMin: taskFields.durationMin,
+  domainId: taskFields.domainId,
+  projectId: uuid.nullable().optional(),
+  doneAt: parisDateTime.optional(),
+});
 export const taskCreate = z.object({
   ...taskFields,
   projectId: uuid.nullable().optional(),
@@ -207,7 +227,14 @@ export const taskBatchCreate = z.object({
   projectId: uuid.nullable().optional(),
   tasks: z.array(z.object(taskFields)).min(1).max(100),
 });
-export const taskPatch = z.object({ ...taskFields, status: z.enum(['todo', 'cancelled']) }).partial();
+export const taskPatch = z
+  .object({
+    ...taskFields,
+    status: z.enum(['todo', 'cancelled']),
+    /** D-152: when a done task was done (Paris time); never ahead of now. */
+    doneAt: parisDateTime,
+  })
+  .partial();
 /** D-61: checking a task can carry the time actually spent. */
 export const taskCompleteBody = z.object({ actualMin: taskFields.actualMin }).optional();
 export const taskMoveBody = z.object({ projectId: uuid.nullable(), position: z.number().int().optional() });
@@ -269,6 +296,7 @@ export const changesQuery = z.object({
 export const markReviewedBody = z.object({ ids: z.array(uuid).optional(), all: z.boolean().optional() });
 
 export type ExperienceIdea = z.infer<typeof experienceIdea>;
+export type ExperienceLived = z.infer<typeof experienceLived>;
 export type DomainCreate = z.infer<typeof domainCreate>;
 export type DomainPatch = z.infer<typeof domainPatch>;
 export type GroupCreate = z.infer<typeof groupCreate>;
