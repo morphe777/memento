@@ -3,6 +3,28 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.2.0 — 2026-11
+
+Demandes de Mehdi : repères de planification, expériences, aide de l'IA pour remplir la semaine.
+
+### Fonctionnalités
+
+- **Tâche planifiée** : une pastille discrète « Cette semaine » ou « Sem. du … » sur chaque tâche prévue dans le plan
+  de cette semaine ou d'une semaine à venir (Inbox, projets, objectifs, Tâches, Expériences, fiche) (D-151).
+- **« Faite le »** : la date et l'heure de fin d'une tâche faite se corrigent dans sa fiche, comme si elle avait été
+  cochée à ce moment-là ; jamais dans l'avenir (D-152).
+- **« J'ai vécu une expérience »** : un souvenir s'ajoute directement, déjà fait, Famille par défaut ou dans un
+  projet ; la réserve propose aussi Famille par défaut (D-153).
+- **Cible d'expériences par mois civil**, partout (une semaine compte pour le mois de son jeudi) ; le réglage de
+  fenêtre glissante disparaît ; le rapport mensuel affiche « faites / cible » (D-154).
+- **« Compléter le budget »** (Planifier › Semaine) : l'IA propose 1 à 3 tâches qui tiennent dans le temps restant,
+  sans toucher à la sélection, chacune avec une étiquette, une raison courte et ses mots clés en gras (D-155).
+
+### API, MCP et IA
+
+- `plannedWeek` sur les tâches ; `PATCH /tasks/{id} { doneAt }` ; `POST /experiences/lived` et outil MCP
+  `log_experience` ; `POST /ai/fill-week` (interface seulement) ; prompt « Compléter le budget » modifiable.
+
 ## 1.1.0 — 2026-11
 
 Demandes de Mehdi (budget, répartition, graphe des projets) et lot 2 de l'audit v1.0.
