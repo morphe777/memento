@@ -16,6 +16,10 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - **Revivre** : journal par mois, carte (un point par lieu, rayon de vie), fiche avec galerie plein écran et
   parcours des photos, « Il y a un an » sur Ma semaine, bilan **« Vivre »** dans le rapport trimestriel et la page
   Expériences (D-166, D-167).
+- **Un seul menu « Expériences »** : onglets **Vécues** (journal, carte), **À vivre** (prévues, envies, réserve)
+  et **Bilan** (D-170).
+- Lieux plus fiables : Photon prend le relais quand Overpass ne répond pas, l'écran de vérification recherche autour
+  des photos dès leur arrivée, la recherche par nom donne d'abord les lieux proches (D-169).
 - **Envies** : listes typées, « + Envie », un lien partagé ou collé est lu (titre, image, dates, lieu, tarif),
   « Que faire ? », « Planifier » vers le plan de la semaine (D-164, D-165).
 - API : `/captures`, `/souvenirs`, `/photos`, `/places`, `/persons`, `/wishes`, `/wish-lists`, `/map`, `/living` ;

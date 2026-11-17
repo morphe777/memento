@@ -33,6 +33,7 @@ import {
   processPhoto,
   purgeData,
   runDataMigrations,
+  savePlace,
   saveSouvenir,
   searchPlaces,
   setCover,
@@ -203,6 +204,65 @@ describe('places (EX-13)', () => {
     stubNetwork((url) => (url.includes('overpass') ? new Response('{"elements":[]}') : undefined), osmRoutes);
     const r = await placesNearby(ctx, 45, 4);
     expect(r.candidates.map((c) => c.category)).toEqual(['address', 'city']);
+  });
+  it('D-169: Overpass silent, Photon gives the places around the point (no warning)', async () => {
+    const ctx = souvenirCtx();
+    const calls = stubNetwork(
+      (url) => (url.includes('overpass') ? new Response('busy', { status: 504 }) : undefined),
+      osmRoutes,
+    );
+    const r = await placesNearby(ctx, LUCETTE.lat, LUCETTE.lng);
+    expect(r.providerError).toBeNull();
+    expect(r.candidates[0]).toMatchObject({ name: 'Chez Lucette', category: 'restaurant' });
+    expect(calls.some((u) => u.includes('/reverse?lat=46.5'))).toBe(true);
+  });
+  it('D-169: by name, the answers near the photo come before those far away', async () => {
+    const ctx = souvenirCtx();
+    const far = {
+      geometry: { coordinates: [144.93, -37.76] },
+      properties: {
+        osm_type: 'N',
+        osm_id: 9,
+        osm_key: 'amenity',
+        osm_value: 'restaurant',
+        name: 'Chez Lucette',
+      },
+    };
+    const calls = stubNetwork((url) =>
+      url.includes('photon')
+        ? new Response(
+            JSON.stringify({
+              features: [
+                far,
+                {
+                  geometry: { coordinates: [3.00012, 46.50008] },
+                  properties: {
+                    osm_type: 'N',
+                    osm_id: 1,
+                    osm_key: 'amenity',
+                    osm_value: 'restaurant',
+                    name: 'Chez Lucette',
+                    city: 'Valbourg',
+                  },
+                },
+              ],
+            }),
+          )
+        : undefined,
+    );
+    const r = await searchPlaces(ctx, 'Chez Lucette', LUCETTE);
+    expect(r.candidates.map((c) => c.city)).toEqual(['Valbourg', '']);
+    expect(calls[0]).toContain('location_bias_scale');
+  });
+  it('D-169: the check screen searches around the photos, even after a far place was chosen', async () => {
+    const ctx = souvenirCtx();
+    stubNetwork(osmRoutes);
+    const files = await photosOf([{ at: '2026-11-15T12:40:00', ...LUCETTE }]);
+    const res = await createCapture(ctx, { photos: [] }, files, 'app');
+    const far = savePlace(ctx, { name: 'Ailleurs', lat: -37.76, lng: 144.93, provider: 'manual' });
+    updateSouvenir(ctx, res.id, { placeId: far.id });
+    const sugg = await getSuggestions(ctx, res.id);
+    expect(sugg.point).toMatchObject({ lat: expect.closeTo(46.5, 3), lng: expect.closeTo(3, 3) });
   });
   it('off in Configuration: no request at all', async () => {
     const ctx = souvenirCtx();

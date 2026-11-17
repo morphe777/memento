@@ -117,7 +117,7 @@ export const clearPlacesCache = () => {
   lastCall.clear();
 };
 
-async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+async function getJson<T>(url: string, init?: RequestInit, timeoutMs = 10_000): Promise<T> {
   const key = `${init?.method ?? 'GET'} ${url} ${init?.body ?? ''}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < CACHE_MS) return hit.value as T;
@@ -141,7 +141,7 @@ async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
         accept: 'application/json',
         ...(init?.headers ?? {}),
       },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw unavailable();
     const value = (await res.json()) as T;
@@ -198,11 +198,16 @@ async function overpassAround(ctx: Ctx, lat: number, lng: number, radius: number
   const s = getSettings(ctx);
   const around = `(around:${radius},${lat},${lng})`;
   const q = `[out:json][timeout:8];(${TAG_KEYS.map((k) => `nwr${around}["name"]["${k}"];`).join('')});out center tags 40;`;
-  const json = await getJson<{ elements?: OverpassElement[] }>(s['places.overpass_url'], {
-    method: 'POST',
-    body: new URLSearchParams({ data: q }).toString(),
-    headers: { 'content-type': 'application/x-www-form-urlencoded' },
-  });
+  // The public Overpass is often slow: 6 s, then Photon answers instead (D-169).
+  const json = await getJson<{ elements?: OverpassElement[] }>(
+    s['places.overpass_url'],
+    {
+      method: 'POST',
+      body: new URLSearchParams({ data: q }).toString(),
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    },
+    6_000,
+  );
   return (json.elements ?? []).map(fromOverpass).filter((p): p is PlaceInput => !!p);
 }
 
@@ -255,11 +260,25 @@ interface PhotonFeature {
 }
 async function photon(ctx: Ctx, q: string, near: { lat: number; lng: number } | null) {
   const s = getSettings(ctx);
-  const bias = near ? `&lat=${near.lat}&lon=${near.lng}` : '';
+  // D-169: a strong pull towards the photo (or the home): « BAM Albi » is not a place on the other side of the world.
+  const bias = near ? `&lat=${near.lat}&lon=${near.lng}&zoom=12&location_bias_scale=0.1` : '';
   const json = await getJson<{ features?: PhotonFeature[] }>(
-    `${s['places.photon_url']}/api/?q=${encodeURIComponent(q)}&limit=10&lang=fr${bias}`,
+    `${s['places.photon_url']}/api/?q=${encodeURIComponent(q)}&limit=15&lang=fr${bias}`,
   );
-  return (json.features ?? []).map((f): PlaceInput => {
+  return fromPhoton(json.features ?? []);
+}
+
+/** D-169: the places around a point when Overpass does not answer (Photon reverse, 150 m). */
+async function photonAround(ctx: Ctx, lat: number, lng: number) {
+  const s = getSettings(ctx);
+  const json = await getJson<{ features?: PhotonFeature[] }>(
+    `${s['places.photon_url']}/reverse?lat=${lat}&lon=${lng}&radius=0.15&limit=15&lang=fr`,
+  );
+  return fromPhoton(json.features ?? []).filter((p) => p.category !== 'address' && p.category !== 'city');
+}
+
+function fromPhoton(features: PhotonFeature[]): PlaceInput[] {
+  return features.map((f): PlaceInput => {
     const p = f.properties;
     const str = (k: string) => (p[k] === undefined ? '' : String(p[k]));
     const street = [str('housenumber'), str('street')].filter(Boolean).join(' ');
@@ -405,19 +424,24 @@ export async function placesNearby(ctx: Ctx, lat: number, lng: number, radius?: 
   let found: PlaceCandidate[] = [];
   let providerError: string | null = null;
   if (getSettings(ctx)['places.provider'] === 'osm') {
-    try {
-      for (const r of radius ? [radius] : [50, 150]) {
-        const named = await overpassAround(ctx, lat, lng, r);
-        found = named.map((p) => ({ ...p, distanceM: distanceM(at, p), memorized: false }));
-        if (found.length) break;
+    const near = (list: PlaceInput[]) =>
+      list.map((p) => ({ ...p, distanceM: distanceM(at, p), memorized: false }));
+    // D-169: named places from Overpass, or from Photon when Overpass does not answer; none: address, then town.
+    const named = async () => {
+      try {
+        for (const r of radius ? [radius] : [50, 150]) {
+          const list = await overpassAround(ctx, lat, lng, r);
+          if (list.length) return list;
+        }
+        return [];
+      } catch (e) {
+        if (!(e instanceof ProviderError)) throw e;
+        return photonAround(ctx, lat, lng);
       }
-      found.sort((a, b) => rank(a) - rank(b));
-      if (!found.length)
-        found = (await reverse(ctx, lat, lng)).map((p) => ({
-          ...p,
-          distanceM: distanceM(at, p),
-          memorized: false,
-        }));
+    };
+    try {
+      found = near(await named()).sort((a, b) => rank(a) - rank(b));
+      if (!found.length) found = near(await reverse(ctx, lat, lng));
     } catch (e) {
       if (!(e instanceof ProviderError)) throw e;
       providerError = e.code;
@@ -459,6 +483,12 @@ export async function searchPlaces(ctx: Ctx, q: string, near?: { lat: number; ln
         distanceM: center ? distanceM(center, p) : null,
         memorized: false,
       }));
+      // D-169: around the photo (or the home), the answers within 50 km come first, in the provider's order.
+      if (center)
+        found = [
+          ...found.filter((c) => c.distanceM! <= 50_000),
+          ...found.filter((c) => c.distanceM! > 50_000),
+        ];
     } catch (e) {
       if (!(e instanceof ProviderError)) throw e;
       providerError = e.code;
