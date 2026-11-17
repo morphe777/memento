@@ -4,7 +4,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { Breadcrumb, usePageFab } from '../components/shell.tsx';
+import { Breadcrumb } from '../components/shell.tsx';
 import { Avatar, Chip, PersonPicker, PlacePicker, usePersons } from '../components/souvenir-ui.tsx';
 import { DurationOptions } from '../components/tasks.tsx';
 import { ConfirmDialog, Empty, ErrorBox, Field, Loading, PageHeader, Panel } from '../components/ui.tsx';
@@ -150,7 +150,7 @@ function WishCard({ w }: { w: Wish }) {
 }
 
 /** « + Envie » (CE-33): a title and a list in two gestures; or a link (page, event, place) read by the server. */
-function NewWishPanel({ onClose, listId: initialList }: { onClose: () => void; listId: string }) {
+export function NewWishPanel({ onClose, listId: initialList }: { onClose: () => void; listId: string }) {
   const navigate = useNavigate();
   const lists = useWishLists();
   const [title, setTitle] = useState('');
@@ -253,12 +253,11 @@ const NO_FILTER: Filters = {
   q: '',
 };
 
-export function WishesPage() {
+/** The wishes of the « À vivre » tab of Expériences, with « Que faire ? » (EX-41). */
+export function WishesBoard({ adding, onAdding }: { adding: boolean; onAdding: (v: boolean) => void }) {
   const lists = useWishLists();
   const [f, setF] = useState<Filters>(NO_FILTER);
-  const [adding, setAdding] = useState(false);
   const [more, setMore] = useState(false);
-  usePageFab('Nouvelle envie', () => setAdding(true));
   const set = <K extends keyof Filters>(k: K, v: Filters[K]) => setF((x) => ({ ...x, [k]: v }));
   const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v) as [string, string][]).toString();
   const wishes = useQuery({
@@ -268,18 +267,6 @@ export function WishesPage() {
   const filtered = JSON.stringify({ ...f, listId: '' }) !== JSON.stringify(NO_FILTER);
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <Breadcrumb items={[{ label: 'Souvenirs', to: '/souvenirs' }, { label: 'Envies' }]} />
-        <PageHeader
-          eyebrow="Ne plus perdre une idée · que faire ?"
-          title="Envies"
-          actions={
-            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
-              + Envie
-            </button>
-          }
-        />
-      </div>
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Listes">
         <Chip on={!f.listId} onClick={() => set('listId', '')}>
           Toutes
@@ -376,7 +363,7 @@ export function WishesPage() {
           ))}
         </div>
       )}
-      {adding && <NewWishPanel onClose={() => setAdding(false)} listId={f.listId} />}
+      {adding && <NewWishPanel onClose={() => onAdding(false)} listId={f.listId} />}
     </div>
   );
 }
@@ -424,7 +411,7 @@ export function WishPage({ id }: { id: string }) {
     patch(`/wishes/${id}`, { status: q.data?.status === 'archived' ? 'wish' : 'archived' }),
   );
   const remove = useAction(() => del(`/wishes/${id}`), {
-    onSuccess: () => navigate({ to: '/envies' }),
+    onSuccess: () => navigate({ to: '/experiences', search: { onglet: 'a-vivre' } }),
     toast: 'Envie supprimée.',
   });
   if (q.isError) return <ErrorBox error={q.error} />;
@@ -435,7 +422,12 @@ export function WishPage({ id }: { id: string }) {
   return (
     <div className="flex flex-col gap-5 mx-auto w-full" style={{ maxWidth: 760 }}>
       <div>
-        <Breadcrumb items={[{ label: 'Envies', to: '/envies' }, { label: w.title }]} />
+        <Breadcrumb
+          items={[
+            { label: 'Expériences', to: '/experiences', search: { onglet: 'a-vivre' } },
+            { label: w.title },
+          ]}
+        />
         <PageHeader
           eyebrow={<StatusTag w={w} />}
           title={w.title}

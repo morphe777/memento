@@ -17,7 +17,7 @@ import { useMe } from './lib/hooks.ts';
 import { ConfigPage, LoginPage, ReviewPage } from './pages/admin.tsx';
 import { CalendarPageView, type CalendarView } from './pages/calendar.tsx';
 import { CapPage } from './pages/cap.tsx';
-import { ExperiencesPage } from './pages/experiences.tsx';
+import { ExperiencesPage, type ExperiencesTab } from './pages/experiences.tsx';
 import { NotificationsPage } from './pages/notifications.tsx';
 import {
   DomainPage,
@@ -29,10 +29,10 @@ import {
 import { PlanPage } from './pages/plan.tsx';
 import { IdeasPage, InboxPage, ProjectPage, ProjectsPage } from './pages/projects.tsx';
 import { ReportPage, ReportsPage } from './pages/reports.tsx';
-import { SouvenirPage, SouvenirsPage, type SouvenirsView, SouvenirVerifyPage } from './pages/souvenirs.tsx';
+import { SouvenirPage, type SouvenirsView, SouvenirVerifyPage } from './pages/souvenirs.tsx';
 import { TasksPage, type TaskView } from './pages/tasks.tsx';
 import { WeekPage } from './pages/week.tsx';
-import { WishesPage, WishPage } from './pages/wishes.tsx';
+import { WishPage } from './pages/wishes.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -172,15 +172,23 @@ const domainRoute = createRoute({
   },
 });
 const ideasRoute = route('/idees', IdeasPage);
+const TABS: ExperiencesTab[] = ['vecues', 'a-vivre', 'bilan'];
 const experiencesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/experiences',
-  validateSearch: (s: Record<string, unknown>): { tache?: string } => ({ tache: str(s.tache) }),
+  validateSearch: (
+    s: Record<string, unknown>,
+  ): { tache?: string; onglet?: ExperiencesTab; vue?: SouvenirsView } => ({
+    tache: str(s.tache),
+    onglet: TABS.includes(s.onglet as ExperiencesTab) ? (s.onglet as ExperiencesTab) : undefined,
+    vue: s.vue === 'carte' ? 'carte' : undefined,
+  }),
   component: function Experiences() {
-    return <ExperiencesPage tache={experiencesRoute.useSearch().tache} />;
+    const { tache, onglet, vue } = experiencesRoute.useSearch();
+    return <ExperiencesPage tache={tache} onglet={onglet} vue={vue} />;
   },
 });
-// memento-experiences: souvenirs (journal, map, sheet, check screen) and wishes.
+// D-170: souvenirs and wishes are tabs of Expériences; the old addresses lead there.
 const souvenirsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/souvenirs',
@@ -188,7 +196,7 @@ const souvenirsRoute = createRoute({
     vue: s.vue === 'carte' ? 'carte' : undefined,
   }),
   component: function Souvenirs() {
-    return <SouvenirsPage vue={souvenirsRoute.useSearch().vue} />;
+    return <Navigate to="/experiences" search={{ onglet: 'vecues', vue: souvenirsRoute.useSearch().vue }} />;
   },
 });
 const souvenirRoute = createRoute({
@@ -206,7 +214,7 @@ const souvenirVerifyRoute = createRoute({
     return <SouvenirVerifyPage key={id} id={id} />;
   },
 });
-const wishesRoute = route('/envies', WishesPage);
+const wishesRoute = route('/envies', () => <Navigate to="/experiences" search={{ onglet: 'a-vivre' }} />);
 const wishRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/envies/$id',

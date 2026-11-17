@@ -4,8 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
 import { LivingView } from '../components/living.tsx';
-import { Breadcrumb } from '../components/shell.tsx';
-import { SouvenirCard } from '../components/souvenir-ui.tsx';
+import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
 import {
   Duration,
@@ -19,13 +18,15 @@ import {
   PlannedBadge,
   SearchSelect,
   Section,
+  Tabs,
 } from '../components/ui.tsx';
 import { get, post } from '../lib/api.ts';
 import { fmtDate, parisLocal, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup } from '../lib/hooks.ts';
-import type { Living, Souvenir } from '../lib/souvenirs.ts';
+import type { Living } from '../lib/souvenirs.ts';
 import type { ExperiencesPage as Data, Project, TaskDuration } from '../lib/types.ts';
-import { CaptureSouvenirButton } from './souvenirs.tsx';
+import { SouvenirsJournal, type SouvenirsView, useCaptureSouvenir } from './souvenirs.tsx';
+import { NewWishPanel, WishesBoard } from './wishes.tsx';
 
 type Item = Data['lived'][number];
 
@@ -34,11 +35,33 @@ const monthShort = (m: string) =>
 const monthLong = (m: string) =>
   new Date(`${m}-15T12:00:00Z`).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
 
-export function ExperiencesPage({ tache }: { tache?: string }) {
+export type ExperiencesTab = 'vecues' | 'a-vivre' | 'bilan';
+
+/**
+ * One page for the experiences (user request 17/11/2026, D-170): the counters, then « Vécues » (the souvenirs:
+ * journal or map), « À vivre » (planned, wishes, reserve) and « Bilan » (« Vivre » for a year or a quarter).
+ */
+export function ExperiencesPage({
+  tache,
+  onglet = 'vecues',
+  vue = 'journal',
+}: {
+  tache?: string;
+  onglet?: ExperiencesTab;
+  vue?: SouvenirsView;
+}) {
   const navigate = useNavigate();
   const q = useQuery({ queryKey: ['experiences'], queryFn: () => get<Data>('/experiences') });
-  const open = (id: string) => navigate({ to: '/experiences', search: { tache: id } });
+  const go = (search: { onglet?: ExperiencesTab; vue?: SouvenirsView; tache?: string }) =>
+    navigate({ to: '/experiences', search: { onglet, ...(onglet === 'vecues' ? { vue } : {}), ...search } });
+  const open = (id: string) => go({ tache: id });
   const [living, setLiving] = useState(false);
+  const [addingWish, setAddingWish] = useState(false);
+  const capture = useCaptureSouvenir();
+  usePageFab(
+    onglet === 'a-vivre' ? 'Nouvelle envie' : 'Nouveau souvenir',
+    onglet === 'a-vivre' ? () => setAddingWish(true) : capture.pick,
+  );
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
   const d = q.data;
@@ -52,13 +75,25 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
           title="Expériences"
           actions={
             <>
-              <Link to="/envies" className="btn">
-                Envies
-              </Link>
-              <button type="button" className="btn" onClick={() => setLiving(true)}>
-                J'ai vécu une expérience
+              <button type="button" className="btn" onClick={() => setAddingWish(true)}>
+                + Envie
               </button>
-              <CaptureSouvenirButton />
+              <button
+                type="button"
+                className="btn"
+                onClick={() => setLiving(true)}
+                title="Une expérience vécue, sans photo"
+              >
+                Vécue sans photo
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={capture.pick}
+                disabled={capture.busy}
+              >
+                {capture.busy ? 'Préparation des photos…' : '+ Souvenir'}
+              </button>
             </>
           }
         />
@@ -126,8 +161,21 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
           </div>
         </section>
       </div>
-      <div className="flex flex-wrap gap-6 items-start">
-        <div className="flex flex-col gap-6 min-w-0" style={{ flex: '1 1 420px' }}>
+      <Tabs
+        value={onglet}
+        options={[
+          { value: 'vecues', label: `Vécues · ${d.thisYear} cette année` },
+          {
+            value: 'a-vivre',
+            label: `À vivre · ${d.planned.length} prévue${d.planned.length > 1 ? 's' : ''}`,
+          },
+          { value: 'bilan', label: 'Bilan' },
+        ]}
+        onChange={(v) => go({ onglet: v, vue: undefined })}
+      />
+      {onglet === 'vecues' && <SouvenirsJournal vue={vue} onVue={(v) => go({ vue: v })} />}
+      {onglet === 'a-vivre' && (
+        <div className="flex flex-col gap-6">
           <Section
             title="Prévues"
             info="Expériences dans le plan de cette semaine ou d'une semaine à venir, ou avec une date. Pour en prévoir une : donne-lui une deadline ou choisis-la dans Planifier."
@@ -143,9 +191,13 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
               />
             ))}
           </Section>
+          <div className="flex flex-col gap-3">
+            <h2 className="h2">Envies</h2>
+            <WishesBoard adding={addingWish} onAdding={setAddingWish} />
+          </div>
           <Section
             title="Réserve"
-            info="Les envies d'expériences, sans date. Le moteur peut en proposer quand la cible n'est pas tenue. Une idée ajoutée ici est une tâche Inbox marquée Expérience."
+            info="Les idées d'expériences gardées comme tâches Inbox marquées Expérience : le moteur peut en proposer dans le plan de la semaine quand la cible du mois n'est pas tenue."
           >
             <AddIdea />
             {d.reserve.map((t) => (
@@ -153,10 +205,10 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
             ))}
           </Section>
         </div>
-        <RecentSouvenirs />
-      </div>
-      <YearLiving />
-      <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/experiences', search: {} })} />
+      )}
+      {onglet === 'bilan' && <YearLiving />}
+      {onglet !== 'a-vivre' && addingWish && <NewWishPanel onClose={() => setAddingWish(false)} listId="" />}
+      <TaskDrawer taskId={tache ?? null} onClose={() => go({ tache: undefined })} />
       {living && <LivedPanel onClose={() => setLiving(false)} />}
     </div>
   );
@@ -202,32 +254,6 @@ function Row({
       )}
       <Duration min={t.durationMin} small />
     </div>
-  );
-}
-
-/** EX-50: the latest souvenirs, big cards; the journal and the map have them all. */
-function RecentSouvenirs() {
-  const q = useQuery({ queryKey: ['souvenirs', ''], queryFn: () => get<Souvenir[]>('/souvenirs') });
-  const list = (q.data ?? []).slice(0, 6);
-  return (
-    <Section
-      title="Souvenirs"
-      aside={
-        <Link to="/souvenirs" className="text-[13px]">
-          Journal et carte →
-        </Link>
-      }
-      info="Chaque expérience vécue a son souvenir : photos, lieu, personnes, une phrase. « + Souvenir » sur le téléphone, juste après."
-      className="min-w-0"
-    >
-      {q.isLoading && <Loading />}
-      {!q.isLoading && list.length === 0 && <Empty>Pas encore de souvenir : la première est à vivre.</Empty>}
-      <div className="souvenir-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
-        {list.map((s) => (
-          <SouvenirCard key={s.id} s={s} />
-        ))}
-      </div>
-    </Section>
   );
 }
 

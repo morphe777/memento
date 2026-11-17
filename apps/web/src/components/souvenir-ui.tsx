@@ -213,13 +213,13 @@ export function RatingPicker({
 
 export function RatingTag({ rating }: { rating: Rating | null }) {
   if (!rating) return null;
-  const icon = rating === 'again' ? '↻' : rating === 'good' ? '👍' : '·';
   return (
     <span
       className="text-[12px] rounded-full px-2 py-0.5"
       style={{ background: 'rgba(0,0,0,.45)', color: '#fff' }}
     >
-      {icon} {RATING_LABEL[rating]}
+      {rating === 'again' ? '↻ ' : ''}
+      {RATING_LABEL[rating]}
     </span>
   );
 }

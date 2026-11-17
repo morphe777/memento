@@ -13,8 +13,10 @@ test('a photo becomes a souvenir through the check screen', async ({ page }) => 
     .toBuffer();
   const phrase = unique('Goûter au bord du lac');
 
+  // D-170: /souvenirs leads to the « Vécues » tab of Expériences.
   await page.goto('/souvenirs');
-  await expect(page.getByRole('heading', { name: 'Souvenirs', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Expériences', level: 1 })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /^Vécues/ })).toHaveAttribute('aria-selected', 'true');
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '+ Souvenir' }).first().click();
   await (await chooser).setFiles({ name: 'photo.jpg', mimeType: 'image/jpeg', buffer: photo });
@@ -32,11 +34,11 @@ test('a photo becomes a souvenir through the check screen', async ({ page }) => 
   await expect(page.getByRole('button', { name: 'Voir les photos en grand' })).toBeVisible();
 
   // In the journal, then deleted.
-  await page.goto('/souvenirs');
+  await page.goto('/experiences');
   await expect(page.getByText(`« ${phrase} »`)).toBeVisible();
   await page.getByText(`« ${phrase} »`).click();
   await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Supprimer', exact: true }).click();
-  await expect(page).toHaveURL(/\/souvenirs$/);
+  await expect(page).toHaveURL(/onglet=vecues/);
   await expect(page.getByText(`« ${phrase} »`)).toHaveCount(0);
 });

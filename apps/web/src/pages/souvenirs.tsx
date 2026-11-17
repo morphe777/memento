@@ -4,7 +4,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { Breadcrumb, usePageFab } from '../components/shell.tsx';
+import { Breadcrumb } from '../components/shell.tsx';
 import { SouvenirLeaflet } from '../components/souvenir-map.tsx';
 import {
   Avatar,
@@ -330,7 +330,10 @@ function useUploads(id: string) {
   const sent = state?.sent ?? 0;
   const failed = state?.failed.length ?? 0;
   useEffect(() => {
-    if (sent || failed) qc.invalidateQueries({ queryKey: ['souvenir', id] });
+    if (!sent && !failed) return;
+    qc.invalidateQueries({ queryKey: ['souvenir', id] });
+    // D-169: the places are looked for again around the photos that just arrived.
+    qc.invalidateQueries({ queryKey: ['souvenir-suggestions', id] });
   }, [sent, failed, id, qc]);
   return state;
 }
@@ -460,7 +463,7 @@ export function SouvenirVerifyPage({ id }: { id: string }) {
     toast: 'Souvenir enregistré.',
   });
   const cancel = useAction(() => del(`/souvenirs/${id}`), {
-    onSuccess: () => navigate({ to: '/souvenirs' }),
+    onSuccess: () => navigate({ to: '/experiences', search: { onglet: 'vecues' } }),
     toast: 'Capture annulée.',
   });
   const attach = useAction((taskId: string) => post<Souvenir>(`/souvenirs/${id}/attach`, { taskId }), {
@@ -671,7 +674,7 @@ export function SouvenirPage({ id }: { id: string }) {
     toast: 'Souvenir modifié.',
   });
   const remove = useAction(() => del(`/souvenirs/${id}`), {
-    onSuccess: () => navigate({ to: '/souvenirs' }),
+    onSuccess: () => navigate({ to: '/experiences', search: { onglet: 'vecues' } }),
     toast: 'Souvenir supprimé.',
   });
   const move = useAction(({ photoId, position }: { photoId: string; position: number }) =>
@@ -731,7 +734,12 @@ export function SouvenirPage({ id }: { id: string }) {
       onDrop={drop}
     >
       <div>
-        <Breadcrumb items={[{ label: 'Souvenirs', to: '/souvenirs' }, { label: s.title }]} />
+        <Breadcrumb
+          items={[
+            { label: 'Expériences', to: '/experiences', search: { onglet: 'vecues' } },
+            { label: s.title },
+          ]}
+        />
         <PageHeader
           eyebrow={`${fmtSpan(s.startDate, s.endDate)}${s.days > 1 ? ` · ${s.days} jours` : ''}${s.place ? ` · ${s.place.name}` : ''}`}
           title={s.title}
@@ -1049,12 +1057,10 @@ const queryOf = (f: Filters) => {
   return s ? `?${s}` : '';
 };
 
-export function SouvenirsPage({ vue = 'journal' }: { vue?: SouvenirsView }) {
-  const navigate = useNavigate();
+/** The « Vécues » tab of Expériences: the journal by month, or the map (EX-50, EX-51). */
+export function SouvenirsJournal({ vue, onVue }: { vue: SouvenirsView; onVue: (v: SouvenirsView) => void }) {
   const dl = useDomainLookup();
   const persons = usePersons();
-  const capture = useCaptureSouvenir();
-  usePageFab('Nouveau souvenir', capture.pick);
   const [f, setF] = useState<Filters>(NO_FILTER);
   const [more, setMore] = useState(false);
   const [radius, setRadius] = useState(false);
@@ -1092,28 +1098,6 @@ export function SouvenirsPage({ vue = 'journal' }: { vue?: SouvenirsView }) {
   const filtered = JSON.stringify(f) !== JSON.stringify(NO_FILTER);
   return (
     <div className="flex flex-col gap-5">
-      <div>
-        <Breadcrumb items={[{ label: 'Souvenirs' }]} />
-        <PageHeader
-          eyebrow="Revivre · journal et carte"
-          title="Souvenirs"
-          actions={
-            <>
-              <Link to="/envies" className="btn">
-                Envies
-              </Link>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={capture.pick}
-                disabled={capture.busy}
-              >
-                {capture.busy ? 'Préparation des photos…' : '+ Souvenir'}
-              </button>
-            </>
-          }
-        />
-      </div>
       <div className="flex flex-wrap items-center gap-3 justify-between">
         <Tabs
           value={vue}
@@ -1121,7 +1105,7 @@ export function SouvenirsPage({ vue = 'journal' }: { vue?: SouvenirsView }) {
             { value: 'journal', label: 'Journal' },
             { value: 'carte', label: 'Carte' },
           ]}
-          onChange={(v) => navigate({ to: '/souvenirs', search: { vue: v } })}
+          onChange={onVue}
         />
         <span className="text-[13px] mono" style={{ color: 'var(--text-faint)' }}>
           {stats.n} souvenir{stats.n > 1 ? 's' : ''} · {stats.places} lieu{stats.places > 1 ? 'x' : ''} ·{' '}
