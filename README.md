@@ -70,7 +70,8 @@ scan de l'image (Trivy) avertit sans bloquer (D-136).
 
 Une image `morphe777/memento` (Docker Hub), trois conteneurs : `memento` (API + interface, port 4500),
 `memento-worker` (jobs planifiés) et `memento-mcp` (serveur MCP, port 4502). Données : bind du
-dossier `MEMENTO_DATA_DIR` de l'hôte (obligatoire) → `/data` (base `memento.db`).
+dossier `MEMENTO_DATA_DIR` de l'hôte (obligatoire) → `/data` (base `memento.db`, photos des souvenirs dans
+`photos/`, cache des tuiles de carte dans `cache/`).
 
 ### 1. Publier une version
 
@@ -185,6 +186,7 @@ docker exec memento node_modules/.bin/tsx packages/db/src/verify-cli.ts /data/ba
 
 La sauvegarde externe du dossier de données (bind) copie `memento.db` et `memento.db-wal` à des instants
 différents : elle n'est sûre que pour les fichiers de `backups/`. La placer après 03:30.
+Les photos (`photos/`) ne sont pas dans la base ni dans l'export JSON : elles se sauvegardent avec le dossier.
 
 ### Restaurer
 

@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path';
 import { buildApp } from '../apps/api/src/app.ts';
 import { setUserPassword } from '../apps/api/src/auth.ts';
 import { openDb, runMigrations } from '../packages/db/src/index.ts';
-import { runDataMigrations, seed } from '../packages/domain/src/index.ts';
+import { patchSettings, runDataMigrations, seed } from '../packages/domain/src/index.ts';
 import { E2E_LOGIN, E2E_PASSWORD, E2E_PORT } from './constants.ts';
 
 // A fixed folder, emptied at each start: a server stopped abruptly leaves nothing that piles up.
@@ -19,6 +19,8 @@ runMigrations(db);
 seed({ db, sqlite, actor: 'me' });
 runDataMigrations({ db, sqlite, actor: 'me' });
 await setUserPassword(db, E2E_LOGIN, E2E_PASSWORD);
+// Souvenirs: no request to the public OSM services from the tests (places typed or searched are local only).
+patchSettings({ db, sqlite, actor: 'me' }, { 'places.provider': 'none' });
 
 const app = await buildApp({
   db,
@@ -27,6 +29,8 @@ const app = await buildApp({
   logger: false,
   webDist: resolve(import.meta.dirname, '../apps/web/dist'),
   backupDir,
+  photosDir: join(root, 'photos'),
+  cacheDir: join(root, 'cache'),
   // The login is limited to 5 a minute per address: the tests send a different X-Forwarded-For each (helpers.ts).
   trustProxy: '127.0.0.1',
   llm: async () => ({ text: '{}', model: 'fake' }),

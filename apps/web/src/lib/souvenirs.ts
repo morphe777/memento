@@ -159,6 +159,11 @@ export interface UploadState {
 }
 const uploads = new Map<string, UploadState>();
 const listeners = new Set<() => void>();
+/** A new snapshot each time (useSyncExternalStore compares by reference), then the listeners. */
+const publish = (state: UploadState) => {
+  uploads.set(state.souvenirId, { ...state, failed: [...state.failed] });
+  emit();
+};
 const emit = () => {
   for (const l of listeners) l();
 };
@@ -185,8 +190,7 @@ export async function uploadPhoto(souvenirId: string, p: { blob: Blob; name: str
 /** Sends the photos one by one (2 tries each); `onEach` refreshes the check screen as they arrive. */
 export function queueUploads(souvenirId: string, photos: PreparedPhoto[], onEach?: () => void) {
   const state: UploadState = { souvenirId, total: photos.length, sent: 0, bytes: 0, failed: [], done: false };
-  uploads.set(souvenirId, state);
-  emit();
+  publish(state);
   (async () => {
     for (const p of photos) {
       let error: unknown = null;
@@ -206,11 +210,11 @@ export function queueUploads(souvenirId: string, photos: PreparedPhoto[], onEach
         state.bytes += p.blob.size;
       }
       URL.revokeObjectURL(p.preview);
-      emit();
+      publish(state);
       onEach?.();
     }
     state.done = true;
-    emit();
+    publish(state);
   })();
 }
 

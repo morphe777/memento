@@ -7,6 +7,21 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 - Chaque appel à l'IA est mesuré dans le journal (fonction, durée, tokens dont réflexion, relance, hôte), sans son
   contenu, pour trouver d'où vient la lenteur (D-156).
+- **Souvenirs** : chaque expérience vécue a son souvenir (photos, lieu, personnes, une phrase, une note), y compris
+  les anciennes (D-157). **« + Souvenir »** sur le téléphone ou **partage** depuis Photos par le Raccourci iPhone
+  ([guide](docs/raccourci-iphone.md)) : date, lieu et titre pré-remplis, écran de vérification, photos envoyées en
+  arrière-plan ; « Rattacher » à une expérience prévue, fusion avec un souvenir du même jour (D-158 à D-160).
+- **Lieux par leur nom** (OpenStreetMap, désactivable), mémorisés une fois ; **proches** en Configuration ; domaine
+  déduit des personnes (D-161 à D-163).
+- **Revivre** : journal par mois, carte (un point par lieu, rayon de vie), fiche avec galerie plein écran et
+  parcours des photos, « Il y a un an » sur Ma semaine, bilan **« Vivre »** dans le rapport trimestriel et la page
+  Expériences (D-166, D-167).
+- **Envies** : listes typées, « + Envie », un lien partagé ou collé est lu (titre, image, dates, lieu, tarif),
+  « Que faire ? », « Planifier » vers le plan de la semaine (D-164, D-165).
+- API : `/captures`, `/souvenirs`, `/photos`, `/places`, `/persons`, `/wishes`, `/wish-lists`, `/map`, `/living` ;
+  jeton **capture** (D-168). MCP : `list_souvenirs`, `get_souvenir`, `update_souvenir`, `search_places`,
+  `list_persons`, `list_wishes`, `create_wish`, `parse_wish_url`, `plan_wish`, `get_living_report`.
+- Données : les photos vont dans `photos/` du dossier de données (même bind, même sauvegarde) ; migration `0010`.
 
 ## 1.2.0 — 2026-11
 
