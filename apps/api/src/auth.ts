@@ -111,6 +111,8 @@ export interface Principal {
   login?: string;
   previousSeenAt?: string | null;
   canWrite: boolean;
+  /** D-168: a capture token reaches the capture routes only. */
+  captureOnly?: boolean;
 }
 
 export function sessionPrincipal(db: Db, raw: string | undefined): Principal | null {
@@ -148,12 +150,18 @@ export function tokenPrincipal(db: Db, raw: string | undefined): Principal | nul
     .set({ lastUsedAt: new Date().toISOString() })
     .where(eq(schema.apiToken.id, t.id))
     .run();
-  return { kind: 'token', actor: `ai:${t.name}`, canWrite: t.scopes === 'read_write' };
+  return {
+    kind: 'token',
+    actor: `ai:${t.name}`,
+    canWrite: t.scopes !== 'read',
+    captureOnly: t.scopes === 'capture',
+  };
 }
 
 // ---------- API tokens (Configuration › Accès) ----------
 
-export function createToken(db: Db, name: string, scopes: 'read' | 'read_write', createdBy = 'me') {
+export type TokenScope = 'read' | 'read_write' | 'capture';
+export function createToken(db: Db, name: string, scopes: TokenScope, createdBy = 'me') {
   if (!/^[a-z0-9][a-z0-9_-]{1,39}$/i.test(name)) {
     throw new DomainError(
       'INVALID_TOKEN_NAME',

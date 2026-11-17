@@ -13,6 +13,7 @@ import { taskDependencies } from './dependencies.ts';
 import { addTaskToWeek } from './planning.ts';
 import { assertActiveInvariant, getProjectRow } from './projects.ts';
 import { listDomains } from './referential.ts';
+import { ensureSouvenir } from './souvenir-core.ts';
 import { traceUnplanned, untraceUnplanned } from './unplanned.ts';
 
 const { task, taskDependency, project, weekPlan, weekPlanItem, domain } = schema;
@@ -184,6 +185,7 @@ export function updateTask(ctx: Ctx, id: string, patch: TaskPatch) {
     }
     if (before.projectId) assertActiveInvariant(ctx, before.projectId);
     touchProject(ctx, before.projectId);
+    ensureSouvenir(ctx, id); // D-157: done and now flagged experience (or done through the status)
     audit(ctx, 'task', id, patch.status === 'cancelled' ? 'cancel' : 'update', before, getTaskRow(ctx, id));
     return getTask(ctx, id);
   });
@@ -213,6 +215,7 @@ export function completeTask(
     touchProject(ctx, before.projectId);
     audit(ctx, 'task', id, 'complete', before, getTaskRow(ctx, id));
     traceUnplanned(ctx, id, parisDate(new Date(getTaskRow(ctx, id).doneAt!))); // D-99
+    ensureSouvenir(ctx, id); // D-157: a lived experience has its souvenir
     let next = null;
     if (!before.projectId && before.recurrenceRule) {
       const ref = before.dueDate ?? parisDate(new Date(getTaskRow(ctx, id).doneAt!));

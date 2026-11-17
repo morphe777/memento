@@ -4,8 +4,9 @@ import { audit, type Ctx, ctxNowIso, tx } from '../context.ts';
 import { migrateDependencies } from './dependencies.ts';
 import { fillMetaDomains } from './plan.ts';
 import { refreshObjectiveProgress } from './referential.ts';
+import { ensureSouvenir } from './souvenir-core.ts';
 
-const { project, setting } = schema;
+const { project, setting, task } = schema;
 
 /** Runs `fn` once per database; returns whether it ran now. */
 function once(ctx: Ctx, key: string, fn: () => void): boolean {
@@ -41,9 +42,24 @@ export function abandonFailedProjects(ctx: Ctx) {
   return rows.length;
 }
 
+/**
+ * D-157: every lived experience has its souvenir. The experiences lived before 1.3 get theirs (saved, empty: a
+ * place, people and photos can be added later).
+ */
+export function souvenirsForLivedExperiences(ctx: Ctx) {
+  const done = ctx.db
+    .select({ id: task.id })
+    .from(task)
+    .where(and(eq(task.isExperience, true), eq(task.status, 'done')))
+    .all();
+  for (const t of done) ensureSouvenir(ctx, t.id);
+  return done.length;
+}
+
 /** Called by the API at start (dossier §12, after the schema migrations and the seed). */
 export function runDataMigrations(ctx: Ctx) {
   migrateDependencies(ctx); // DM-109, once by its own flag
   once(ctx, 'migration.dm114_done', () => fillMetaDomains(ctx)); // M-12: once, as D-87 says
   once(ctx, 'migration.d140_done', () => abandonFailedProjects(ctx));
+  once(ctx, 'migration.d157_souvenirs', () => souvenirsForLivedExperiences(ctx));
 }

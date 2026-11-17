@@ -1,7 +1,7 @@
 import { accessSync, constants, existsSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { openDb, resolveDbFile, runMigrations } from '@memento/db';
-import { runDataMigrations, seed } from '@memento/domain';
+import { runDataMigrations, seed, sweepPhotoFiles } from '@memento/domain';
 import { buildApp } from './app.ts';
 
 // A data folder the process cannot write (typically a Docker bind created by root) is the usual cause of a
@@ -25,6 +25,10 @@ runMigrations(db); // migrations applied at startup (dossier §12)
 seed({ db, sqlite, actor: 'me' }); // idempotent
 // Data migrations, each once (DM-109, DM-114, D-140).
 runDataMigrations({ db, sqlite, actor: 'me' });
+// D-160: the souvenir photos beside the database (same bind, same backup), unless MEMENTO_PHOTOS_DIR says otherwise.
+const photosDir = process.env.MEMENTO_PHOTOS_DIR ?? `${dataDir}/photos`;
+const swept = sweepPhotoFiles({ db, sqlite, actor: 'me', photosDir });
+if (swept) console.log(`Mémento: ${swept} photo files without a photo removed`);
 const count = (t: string) => (sqlite.prepare(`select count(*) as n from ${t}`).get() as { n: number }).n;
 console.log(
   `Mémento: database ${dbFile} (${existed ? 'existing' : 'NEW, created now'}): ` +
@@ -36,6 +40,8 @@ const app = await buildApp({
   cookieSecure: process.env.MEMENTO_COOKIE_SECURE === 'true',
   logger: true,
   backupDir: dirname(resolveDbFile()),
+  photosDir,
+  cacheDir: `${dataDir}/cache`,
   trustProxy: process.env.MEMENTO_TRUST_PROXY,
 });
 const port = Number(process.env.MEMENTO_API_PORT ?? 4500);

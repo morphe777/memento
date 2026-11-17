@@ -23,6 +23,7 @@ const concrete = (route: string) => route.replace(/:([a-zA-Z]+)/g, (_m, k: strin
 let app: Awaited<ReturnType<typeof buildApp>>;
 let read: string;
 let write: string;
+let capture: string;
 let routes: string[];
 beforeAll(async () => {
   const { db, sqlite } = openDb(':memory:');
@@ -32,6 +33,7 @@ beforeAll(async () => {
   await app.ready();
   read = createToken(db, 'reader', 'read').token;
   write = createToken(db, 'writer', 'read_write').token;
+  capture = createToken(db, 'iphone', 'capture').token;
   routes = [...new Set(app.apiRoutes)].sort();
 });
 
@@ -69,7 +71,7 @@ describe('H-14 access matrix', () => {
       if (PUBLIC.includes(r)) continue;
       const { status, code } = await call(r, read);
       const access = TOKEN_ROUTES[r];
-      const expected = !access ? 'USER_ONLY' : access === 'write' ? 'READ_ONLY_TOKEN' : null;
+      const expected = !access ? 'USER_ONLY' : access !== 'read' ? 'READ_ONLY_TOKEN' : null;
       if (status >= 500 || (expected ? code !== expected : status === 401 || status === 403))
         wrong.push(`${r} → ${status} ${code ?? ''}`);
     }
@@ -86,6 +88,24 @@ describe('H-14 access matrix', () => {
         wrong.push(`${r} → ${status} ${code ?? ''}`);
     }
     expect(wrong).toEqual([]);
+  });
+
+  it('D-168: a capture token (iPhone Shortcut) reaches the capture routes only', async () => {
+    const wrong: string[] = [];
+    for (const r of routes) {
+      if (PUBLIC.includes(r)) continue;
+      const { status, code } = await call(r, capture);
+      const access = TOKEN_ROUTES[r];
+      const expected = !access ? 'USER_ONLY' : access !== 'capture' ? 'CAPTURE_ONLY' : null;
+      if (status >= 500 || (expected ? code !== expected : status === 401 || status === 403))
+        wrong.push(`${r} → ${status} ${code ?? ''}`);
+    }
+    expect(wrong).toEqual([]);
+    expect(
+      Object.entries(TOKEN_ROUTES)
+        .filter(([, a]) => a === 'capture')
+        .map(([r]) => r),
+    ).toEqual(['POST /api/v1/captures', 'POST /api/v1/captures/test', 'POST /api/v1/souvenirs/:id/photos']);
   });
 
   it('D-136: a read token reads the description templates, and nothing else of the settings', async () => {

@@ -5,6 +5,7 @@ import { eq, inArray, or, schema } from '@memento/db';
 import { audit, type Ctx, ctxNowIso, tx } from '../context.ts';
 import { getProjectRow } from './projects.ts';
 import { getMetaObjective, getObjective, refreshObjectiveProgress } from './referential.ts';
+import { removeSouvenirsOfTasks } from './souvenir-core.ts';
 import { getTaskRow, touchProject } from './tasks.ts';
 
 const {
@@ -21,6 +22,7 @@ const {
 
 function removeTaskRows(ctx: Ctx, ids: string[]) {
   if (!ids.length) return;
+  removeSouvenirsOfTasks(ctx, ids); // D-157: the souvenir goes with its task (files swept, D-160)
   ctx.db
     .delete(taskDependency)
     .where(or(inArray(taskDependency.taskId, ids), inArray(taskDependency.dependsOnTaskId, ids)))

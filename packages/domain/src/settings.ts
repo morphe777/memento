@@ -1,5 +1,5 @@
 // Settings (dossier de dev §4 "Réglages") with defaults and validation (V-14).
-import { schema } from '@memento/db';
+import { eq, schema } from '@memento/db';
 import { z } from 'zod';
 import { DEFAULT_AI_PROMPTS } from './ai/prompts.ts';
 import { audit, type Ctx, tx } from './context.ts';
@@ -72,6 +72,24 @@ export const settingsSchema = z.object({
   // User request 01/11/2026: a Telegram notice when a report is frozen, with a link if the address is known.
   'notify.reports': z.boolean(),
   'notify.app_url': z.union([z.literal(''), z.url({ protocol: /^https?$/ })]),
+  // D-161: places by name (OpenStreetMap, relayed by the server); off = places typed by hand only.
+  'places.provider': z.enum(['osm', 'none']),
+  // The home: centre of the searches, distances of « Que faire ? », life radius of the map.
+  'places.home': z
+    .object({
+      lat: z.number().min(-90).max(90),
+      lng: z.number().min(-180).max(180),
+      label: z.string().trim().max(200),
+    })
+    .nullable(),
+  'places.photon_url': z.url({ protocol: /^https?$/ }),
+  'places.overpass_url': z.url({ protocol: /^https?$/ }),
+  'places.nominatim_url': z.url({ protocol: /^https?$/ }),
+  // D-166: map tiles, fetched and cached by the server ({z}/{x}/{y}).
+  'map.tiles_url': z
+    .string()
+    .trim()
+    .regex(/^https?:\/\/.+\{z\}.+\{x\}.+\{y\}/, 'Adresse de tuiles avec {z}, {x} et {y}.'),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -126,6 +144,12 @@ export const DEFAULT_SETTINGS: Settings = {
   'notify.vacations': [],
   'notify.reports': true, // sent only once Telegram is set up
   'notify.app_url': '', // e.g. https://memento.example.lan: the notice then links to the report
+  'places.provider': 'osm', // D-161
+  'places.home': null,
+  'places.photon_url': 'https://photon.komoot.io',
+  'places.overpass_url': 'https://overpass-api.de/api/interpreter',
+  'places.nominatim_url': 'https://nominatim.openstreetmap.org',
+  'map.tiles_url': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', // D-166
 };
 
 export const settingsPatchSchema = settingsSchema.partial();
@@ -157,6 +181,11 @@ export function patchSettings(ctx: Ctx, patch: unknown): Settings {
   return tx(ctx, () => {
     const before = getSettings(ctx);
     for (const [key, value] of Object.entries(parsed.data)) {
+      // A setting back to null (places.home) has no row: its default is null.
+      if (value === null) {
+        ctx.db.delete(schema.setting).where(eq(schema.setting.key, key)).run();
+        continue;
+      }
       ctx.db
         .insert(schema.setting)
         .values({ key, value })

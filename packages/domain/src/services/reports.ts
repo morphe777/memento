@@ -35,6 +35,7 @@ import {
   weekSunday,
 } from '../time.ts';
 import { experiencesInMonth } from './done.ts';
+import { livingReport } from './living.ts';
 import { paceCalendar } from './planning.ts';
 import { serializeProjects } from './projects.ts';
 
@@ -515,6 +516,7 @@ function buildQuarterPayload(ctx: Ctx, quarter: string) {
       sharePct: total ? Math.round((h.minutes / total) * 100) : 0,
     })),
     experiencesJournal: done.filter((t) => t.isExperience).map((t) => t.title),
+    living: livingReport(ctx, from, quarterEnd(quarter)), // EX-60 / D-167: « Vivre »
     totals: { tasksDone: done.length, doneMin: workMin },
     drift: driftOf(ctx, from, to, workMin), // D-99
   };

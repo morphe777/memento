@@ -310,3 +310,4 @@ export type ProjectPatch = z.infer<typeof projectPatch>;
 export type TaskCreate = z.infer<typeof taskCreate>;
 export type TaskPatch = z.infer<typeof taskPatch>;
 export type ResourceCreate = z.infer<typeof resourceCreate>;
+export * from './schemas-souvenirs.ts';

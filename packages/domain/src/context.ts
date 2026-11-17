@@ -14,6 +14,8 @@ export interface Ctx {
   now?: () => Date;
   /** API-08: set while applying a plan draft, stamped on every audit row of that draft. */
   batchId?: string;
+  /** D-160: folder of the souvenir photos (MEMENTO_PHOTOS_DIR, `photos` beside the database by default). */
+  photosDir?: string;
 }
 
 export const newId = (): string => randomUUID();

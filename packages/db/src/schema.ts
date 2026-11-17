@@ -1,7 +1,16 @@
 // Mémento database schema (SQLite). Dossier de dev §4, adapted to SQLite (see docs/DECISIONS.md).
 // Every business table carries id (UUID text), created_at, updated_at, created_by ('me' | 'ai:<token>').
 import { sql } from 'drizzle-orm';
-import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+  check,
+  index,
+  integer,
+  primaryKey,
+  real,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from 'drizzle-orm/sqlite-core';
 
 const now = sql`(strftime('%Y-%m-%dT%H:%M:%fZ','now'))`;
 
@@ -297,7 +306,7 @@ export const apiToken = sqliteTable(
     ...base,
     name: text('name').notNull(),
     tokenHash: text('token_hash').notNull(),
-    scopes: text('scopes', { enum: ['read', 'read_write'] }).notNull(),
+    scopes: text('scopes', { enum: ['read', 'read_write', 'capture'] }).notNull(),
     lastUsedAt: text('last_used_at'),
     revokedAt: text('revoked_at'),
   },
@@ -352,4 +361,180 @@ export const jobRun = sqliteTable(
     error: text('error'),
   },
   (t) => [uniqueIndex('job_run_uq').on(t.job, t.periodKey)],
+);
+
+// ---------- Souvenirs and wishes (memento-experiences, EX-xx / EXA-xx, D-157 to D-170) ----------
+
+// EX-30: the people of the souvenirs, managed in Configuration. A name typed in « + quelqu'un d'autre » is created
+// `to_confirm` (CE-08) and offered again at the next capture.
+export const person = sqliteTable(
+  'person',
+  {
+    ...base,
+    name: text('name').notNull(),
+    nameKey: text('name_key').notNull(), // lower-cased name: case-insensitive uniqueness
+    group: text('group', { enum: ['family', 'friends', 'other'] })
+      .notNull()
+      .default('other'),
+    color: text('color').notNull().default('#7F77DD'),
+    birthDate: text('birth_date'),
+    active: integer('active', { mode: 'boolean' }).notNull().default(true),
+    toConfirm: integer('to_confirm', { mode: 'boolean' }).notNull().default(false),
+    alertAfterDays: integer('alert_after_days'), // QE-07: soft alert in the reports, off when null
+    position: integer('position').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('person_name_key_uq').on(t.nameKey),
+    check('person_group_check', sql`${t.group} in ('family', 'friends', 'other')`),
+    check('person_birth_date_check', sql`${t.birthDate} is null or date(${t.birthDate}) is ${t.birthDate}`),
+  ],
+);
+
+// EX-13: places remembered once, reused by souvenirs and wishes. One provider reference = one place.
+export const place = sqliteTable(
+  'place',
+  {
+    ...base,
+    name: text('name').notNull(),
+    category: text('category').notNull().default('other'),
+    lat: real('lat').notNull(),
+    lng: real('lng').notNull(),
+    address: text('address').notNull().default(''),
+    city: text('city').notNull().default(''),
+    provider: text('provider', { enum: ['osm', 'google', 'manual'] })
+      .notNull()
+      .default('manual'),
+    providerRef: text('provider_ref'),
+    website: text('website'),
+    phone: text('phone'),
+  },
+  (t) => [
+    uniqueIndex('place_provider_ref_uq').on(t.provider, t.providerRef),
+    check('place_provider_check', sql`${t.provider} in ('osm', 'google', 'manual')`),
+    check('place_lat_check', sql`${t.lat} between -90 and 90 and ${t.lng} between -180 and 180`),
+  ],
+);
+
+// EX-40: the typed lists of wishes (six by default, more in Configuration).
+export const wishList = sqliteTable('wish_list', {
+  ...base,
+  name: text('name').notNull(),
+  icon: text('icon').notNull().default('star'),
+  position: integer('position').notNull().default(0),
+});
+
+// EX-40: an experience one would like to live. `task_id`: the dated experience task of its last planning.
+export const wish = sqliteTable(
+  'wish',
+  {
+    ...base,
+    title: text('title').notNull(),
+    listId: text('list_id').references(() => wishList.id),
+    placeId: text('place_id').references(() => place.id),
+    url: text('url'),
+    hasImage: integer('has_image', { mode: 'boolean' }).notNull().default(false), // stored file, never remote
+    startDate: text('start_date'),
+    endDate: text('end_date'),
+    price: text('price'),
+    durationMin: integer('duration_min'),
+    dogAllowed: text('dog_allowed', { enum: ['yes', 'no', 'unknown'] })
+      .notNull()
+      .default('unknown'),
+    indoor: text('indoor', { enum: ['yes', 'no', 'mixed', 'unknown'] })
+      .notNull()
+      .default('unknown'),
+    season: text('season'),
+    personIds: text('person_ids', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+    tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
+    note: text('note').notNull().default(''),
+    status: text('status', { enum: ['wish', 'planned', 'lived', 'archived'] })
+      .notNull()
+      .default('wish'),
+    source: text('source', { enum: ['plus', 'share_url', 'share_place', 'ai'] })
+      .notNull()
+      .default('plus'),
+    sourceMeta: text('source_meta', { mode: 'json' }),
+    taskId: text('task_id').references(() => task.id),
+    clientCaptureId: text('client_capture_id'),
+  },
+  (t) => [
+    index('wish_list_idx').on(t.listId),
+    index('wish_task_idx').on(t.taskId),
+    uniqueIndex('wish_capture_uq').on(t.clientCaptureId),
+    check('wish_status_check', sql`${t.status} in ('wish', 'planned', 'lived', 'archived')`),
+    check('wish_source_check', sql`${t.source} in ('plus', 'share_url', 'share_place', 'ai')`),
+    check('wish_dog_check', sql`${t.dogAllowed} in ('yes', 'no', 'unknown')`),
+    check('wish_indoor_check', sql`${t.indoor} in ('yes', 'no', 'mixed', 'unknown')`),
+    check('wish_start_date_check', sql`${t.startDate} is null or date(${t.startDate}) is ${t.startDate}`),
+    check('wish_end_date_check', sql`${t.endDate} is null or date(${t.endDate}) is ${t.endDate}`),
+  ],
+);
+
+// EX-11: the souvenir of a lived experience task (1–1). Title, domain, project, start (done_at) stay on the task.
+export const souvenir = sqliteTable(
+  'souvenir',
+  {
+    ...base,
+    taskId: text('task_id')
+      .notNull()
+      .references(() => task.id),
+    endDate: text('end_date'), // a souvenir over several days ends that day (CE-04); null = one day
+    placeId: text('place_id').references(() => place.id),
+    phrase: text('phrase').notNull().default(''),
+    rating: text('rating', { enum: ['again', 'good', 'meh'] }),
+    coverPhotoId: text('cover_photo_id'),
+    wishId: text('wish_id').references(() => wish.id),
+    source: text('source', { enum: ['app', 'share', 'import'] })
+      .notNull()
+      .default('app'),
+    status: text('status', { enum: ['draft', 'saved'] })
+      .notNull()
+      .default('saved'),
+    clientCaptureId: text('client_capture_id'),
+  },
+  (t) => [
+    uniqueIndex('souvenir_task_uq').on(t.taskId),
+    uniqueIndex('souvenir_capture_uq').on(t.clientCaptureId),
+    index('souvenir_place_idx').on(t.placeId),
+    check('souvenir_rating_check', sql`${t.rating} is null or ${t.rating} in ('again', 'good', 'meh')`),
+    check('souvenir_source_check', sql`${t.source} in ('app', 'share', 'import')`),
+    check('souvenir_status_check', sql`${t.status} in ('draft', 'saved')`),
+    check('souvenir_end_date_check', sql`${t.endDate} is null or date(${t.endDate}) is ${t.endDate}`),
+  ],
+);
+
+export const souvenirPerson = sqliteTable(
+  'souvenir_person',
+  {
+    souvenirId: text('souvenir_id')
+      .notNull()
+      .references(() => souvenir.id),
+    personId: text('person_id')
+      .notNull()
+      .references(() => person.id),
+  },
+  (t) => [
+    primaryKey({ columns: [t.souvenirId, t.personId] }),
+    index('souvenir_person_person_idx').on(t.personId),
+  ],
+);
+
+// EX-20: a photo of a souvenir. The files (full 2560, medium 1280, thumb 480, WebP, no EXIF) live in the photos
+// folder; date and position read before compression are kept here only (CE-22).
+export const photo = sqliteTable(
+  'photo',
+  {
+    ...base,
+    souvenirId: text('souvenir_id')
+      .notNull()
+      .references(() => souvenir.id),
+    takenAt: text('taken_at'),
+    lat: real('lat'),
+    lng: real('lng'),
+    width: integer('width').notNull(),
+    height: integer('height').notNull(),
+    bytesFull: integer('bytes_full').notNull(),
+    position: integer('position').notNull().default(0),
+  },
+  (t) => [index('photo_souvenir_idx').on(t.souvenirId)],
 );

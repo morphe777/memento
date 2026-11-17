@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import fastifyCookie from '@fastify/cookie';
+import fastifyMultipart from '@fastify/multipart';
 import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
@@ -21,6 +22,7 @@ import { z } from 'zod';
 import { TOKEN_ROUTES, tokenAccess } from './access.ts';
 import * as A from './auth.ts';
 import { PUBLIC_ROUTES, withContract } from './openapi.ts';
+import { registerSouvenirRoutes } from './souvenir-routes.ts';
 
 const GUIDE_FILE = resolve(import.meta.dirname, '../../../docs/api/guide-ia.md');
 
@@ -53,6 +55,10 @@ export interface AppOptions {
   backupDir?: string;
   /** Replaces the configured AI provider (tests). */
   llm?: D.Llm;
+  /** D-160: folder of the souvenir photos; none: photos refused (PHOTOS_DISABLED). */
+  photosDir?: string;
+  /** D-166: cache of the map tiles; none: no tile proxy. */
+  cacheDir?: string;
   /**
    * H-01: addresses (IP or CIDR, comma separated) of the reverse proxy whose X-Forwarded-For is believed
    * (MEMENTO_TRUST_PROXY). None by default: the client address is the TCP peer, a header cannot change it.
@@ -100,6 +106,8 @@ export async function buildApp(opts: AppOptions) {
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   await app.register(fastifyCookie);
+  // D-160: photos sent as multipart (one file at most 40 MB, 60 files per capture).
+  await app.register(fastifyMultipart, { limits: { fileSize: D.PHOTO_MAX_BYTES, files: 60, fields: 20 } });
   await app.register(fastifyRateLimit, { global: false });
   await app.register(fastifySwagger, {
     openapi: {
@@ -151,7 +159,13 @@ export async function buildApp(opts: AppOptions) {
       return reply
         .code(403)
         .send({ code: 'USER_ONLY', message: 'Réservé à l’interface (utilisateur connecté).' });
-    if (access === 'write' && !req.principal.canWrite)
+    // D-168: a capture token (iPhone Shortcut) sends captures and photos, nothing else.
+    if (req.principal.captureOnly && access !== 'capture')
+      return reply.code(403).send({
+        code: 'CAPTURE_ONLY',
+        message: 'Jeton de capture : envoi de souvenirs et d’envies seulement.',
+      });
+    if (access !== 'read' && !req.principal.canWrite)
       return reply.code(403).send({ code: 'READ_ONLY_TOKEN', message: 'Jeton en lecture seule.' });
   });
   // H-03: the list names real routes only (a renamed route would otherwise silently close or stay open).
@@ -161,6 +175,16 @@ export async function buildApp(opts: AppOptions) {
   });
 
   app.setErrorHandler((err, req, reply) => {
+    // D-161: the place provider did not answer (never blocking for the user).
+    if (err instanceof D.ProviderError) return reply.code(503).send({ code: err.code, message: err.message });
+    // A body read by hand (multipart capture) and refused by its schema.
+    if (err instanceof z.ZodError)
+      return reply
+        .code(400)
+        .send({ code: 'VALIDATION_ERROR', message: 'Requête invalide', details: err.issues });
+    // @fastify/multipart: a file over the limit.
+    if ((err as { code?: string }).code === 'FST_REQ_FILE_TOO_LARGE')
+      return reply.code(413).send({ code: 'PHOTO_TOO_LARGE', message: 'Photo trop lourde (40 Mo au plus).' });
     if (err instanceof D.ConflictError)
       return reply.code(409).send({ code: err.code, message: err.message, details: err.details });
     if (err instanceof D.DomainError)
@@ -191,7 +215,13 @@ export async function buildApp(opts: AppOptions) {
     return reply.code(500).send({ code: 'INTERNAL', message: 'Erreur interne' });
   });
 
-  const ctx = (req: FastifyRequest): D.Ctx => ({ db, sqlite, actor: req.principal!.actor, now: opts.now });
+  const ctx = (req: FastifyRequest): D.Ctx => ({
+    db,
+    sqlite,
+    actor: req.principal!.actor,
+    now: opts.now,
+    photosDir: opts.photosDir,
+  });
   const today = () => D.parisDate(opts.now ? opts.now() : new Date());
 
   await app.register(
@@ -399,7 +429,7 @@ export async function buildApp(opts: AppOptions) {
         {
           schema: {
             ...tag('Accès'),
-            body: z.object({ name: z.string(), scopes: z.enum(['read', 'read_write']) }),
+            body: z.object({ name: z.string(), scopes: z.enum(['read', 'read_write', 'capture']) }),
           },
         },
         async (req) => {
@@ -919,6 +949,8 @@ export async function buildApp(opts: AppOptions) {
           updated: D.markReviewed(ctx(req), req.body),
         }),
       );
+      // memento-experiences: souvenirs, photos, places, people, wishes (EXA-01 to EXA-11).
+      registerSouvenirRoutes(api, { ctx, cacheDir: opts.cacheDir });
     },
     { prefix: '/api/v1' },
   );

@@ -37,6 +37,14 @@ export function exportData(ctx: Ctx) {
         .all()
         .filter((r) => !r.key.startsWith(SECRET_SETTING_PREFIX)),
       auditLog: ctx.db.select().from(s.auditLog).all(),
+      // D-157 to D-165: the rows only; the photo files are backed up with the data folder (photos/).
+      place: ctx.db.select().from(s.place).all(),
+      person: ctx.db.select().from(s.person).all(),
+      wishList: ctx.db.select().from(s.wishList).all(),
+      wish: ctx.db.select().from(s.wish).all(),
+      souvenir: ctx.db.select().from(s.souvenir).all(),
+      souvenirPerson: ctx.db.select().from(s.souvenirPerson).all(),
+      photo: ctx.db.select().from(s.photo).all(),
       apiToken: ctx.db
         .select({
           id: s.apiToken.id,
@@ -73,7 +81,16 @@ const IMPORT_ORDER = [
   ['report', schema.report],
   ['setting', schema.setting],
   ['auditLog', schema.auditLog],
+  ['place', schema.place],
+  ['person', schema.person],
+  ['wishList', schema.wishList],
+  ['wish', schema.wish],
+  ['souvenir', schema.souvenir],
+  ['souvenirPerson', schema.souvenirPerson],
+  ['photo', schema.photo],
 ] as const;
+/** Tables added in 1.3 (souvenirs): an older export has none, they are imported empty. */
+const SINCE_1_3 = new Set(['place', 'person', 'wishList', 'wish', 'souvenir', 'souvenirPerson', 'photo']);
 
 type ExportFile = { exportedAt?: string; tables: Record<string, unknown> };
 
@@ -91,7 +108,8 @@ function readExport(data: unknown): ExportFile {
       'Fichier non reconnu : ce n’est pas un export Mémento (version 1).',
     );
   for (const [key] of IMPORT_ORDER)
-    if (!Array.isArray(d.tables[key]))
+    if (d.tables[key] === undefined && SINCE_1_3.has(key)) d.tables[key] = [];
+    else if (!Array.isArray(d.tables[key]))
       throw new DomainError('INVALID_EXPORT', `Export incomplet : table « ${key} » absente.`);
   return d as ExportFile;
 }
@@ -193,6 +211,9 @@ export async function safetyCopy(ctx: Ctx, dir: string, kind: 'import' | 'purge'
 // keeping the configuration: domains, groups, settings, account, sessions, tokens and job runs. With
 // `history`, week plans, frozen reports and the journal go too (a clean start). Children first (foreign keys).
 const PURGE_TABLES = [
+  ['souvenirPerson', schema.souvenirPerson], // D-157: the souvenirs go with their tasks (wishes stay)
+  ['photo', schema.photo],
+  ['souvenir', schema.souvenir],
   ['taskDependency', schema.taskDependency],
   ['weekPlanItem', schema.weekPlanItem],
   ['resourceLink', schema.resourceLink],
@@ -212,6 +233,7 @@ const HISTORY_TABLES = [
 export function purgeData(ctx: Ctx, opts: { history: boolean }) {
   return tx(ctx, () => {
     const counts: Record<string, number> = {};
+    ctx.db.update(schema.wish).set({ taskId: null }).run(); // a wish outlives the task it was planned as
     for (const [key, table] of [...PURGE_TABLES, ...(opts.history ? HISTORY_TABLES : [])])
       counts[key] = ctx.db.delete(table).run().changes;
     // Logged after the wipe, so the journal keeps a trace even when it was emptied.

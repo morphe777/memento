@@ -3,11 +3,17 @@
 // tokens only (403 READ_ONLY_TOKEN). The API refuses to start if a listed route does not exist.
 // Closed to tokens by D-123: GET /settings, POST /changes/mark-reviewed, POST /reports/generate, writes on domains
 // and groups; by D-136: POST /notifications/read-all, POST /plan/migrate-dependencies; and, as before, accounts,
-// tokens, AI settings and helpers, notifications setup, import, export, purge.
-export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
+// tokens, AI settings and helpers, notifications setup, import, export, purge; by D-168: the configuration of the
+// people, the wish lists and the remembered places, the photo files and the map tiles.
+// `capture` (D-168): the routes of a capture token (iPhone Shortcut), which reaches nothing else; read_write tokens
+// may call them too, read tokens may not.
+export type TokenAccess = 'read' | 'write' | 'capture';
+export const TOKEN_ROUTES: Readonly<Record<string, TokenAccess>> = {
   'POST /api/v1/auth/logout': 'write',
   'GET /api/v1/auth/me': 'read',
   'GET /api/v1/calendar': 'read',
+  'POST /api/v1/captures': 'capture', // EXA-01
+  'POST /api/v1/captures/test': 'capture', // 03 §4 step 0: what arrived, nothing written
   'GET /api/v1/cap': 'read',
   'GET /api/v1/changes': 'read',
   'GET /api/v1/daily-recap': 'read',
@@ -19,6 +25,8 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'GET /api/v1/guide': 'read',
   'GET /api/v1/ideas': 'read',
   'GET /api/v1/inbox': 'read',
+  'GET /api/v1/living': 'read', // EX-60
+  'GET /api/v1/map/souvenirs': 'read', // EX-51
   'GET /api/v1/meta-objectives': 'read',
   'POST /api/v1/meta-objectives': 'write',
   'DELETE /api/v1/meta-objectives/:id': 'write',
@@ -29,6 +37,13 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'GET /api/v1/notifications': 'read',
   'GET /api/v1/notifications/:id': 'read',
   'GET /api/v1/objectives': 'read',
+  'GET /api/v1/persons': 'read', // EX-30
+  'PATCH /api/v1/photos/:id': 'write',
+  'DELETE /api/v1/photos/:id': 'write',
+  'GET /api/v1/places': 'read', // EX-13
+  'POST /api/v1/places': 'write',
+  'GET /api/v1/places/nearby': 'read',
+  'GET /api/v1/places/search': 'read',
   'POST /api/v1/objectives': 'write',
   'DELETE /api/v1/objectives/:id': 'write',
   'GET /api/v1/objectives/:id': 'read',
@@ -65,6 +80,17 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'POST /api/v1/resources': 'write',
   'DELETE /api/v1/resources/:id': 'write',
   'GET /api/v1/search': 'read',
+  'GET /api/v1/souvenirs': 'read', // EX-50
+  'GET /api/v1/souvenirs/on-this-day': 'read', // EX-52
+  'GET /api/v1/souvenirs/:id': 'read',
+  'PATCH /api/v1/souvenirs/:id': 'write',
+  'DELETE /api/v1/souvenirs/:id': 'write',
+  'POST /api/v1/souvenirs/:id/attach': 'write', // EX-14
+  'POST /api/v1/souvenirs/:id/cover': 'write',
+  'POST /api/v1/souvenirs/:id/merge': 'write',
+  'POST /api/v1/souvenirs/:id/photos': 'capture', // the photos after the capture, in the background
+  'POST /api/v1/souvenirs/:id/save': 'write',
+  'GET /api/v1/souvenirs/:id/suggestions': 'read',
   'GET /api/v1/tasks': 'read',
   'POST /api/v1/tasks': 'write',
   'DELETE /api/v1/tasks/:id': 'write',
@@ -91,6 +117,14 @@ export const TOKEN_ROUTES: Readonly<Record<string, 'read' | 'write'>> = {
   'POST /api/v1/week-plans/:isoWeek/propose': 'write',
   'POST /api/v1/week-plans/:isoWeek/validate': 'write',
   'GET /api/v1/weeks/:isoWeek/execution': 'read',
+  'GET /api/v1/wish-lists': 'read', // EX-40
+  'GET /api/v1/wishes': 'read',
+  'POST /api/v1/wishes': 'write',
+  'POST /api/v1/wishes/parse-url': 'read', // EXA-08: reads a page, writes nothing
+  'GET /api/v1/wishes/:id': 'read',
+  'PATCH /api/v1/wishes/:id': 'write',
+  'DELETE /api/v1/wishes/:id': 'write',
+  'POST /api/v1/wishes/:id/plan': 'write',
 };
 
 /** The access a token has to `METHOD /path` (route pattern), or undefined: signed-in user only. */

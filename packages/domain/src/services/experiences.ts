@@ -9,6 +9,7 @@ import { getSettings } from '../settings.ts';
 import { monthOf, parisDate } from '../time.ts';
 import { serializeProjects } from './projects.ts';
 import { listDomains } from './referential.ts';
+import { daysLived } from './souvenirs.ts';
 import { completeTask, createTask, listTasks } from './tasks.ts';
 
 const { task, project } = schema;
@@ -42,8 +43,17 @@ export function getExperiencesPage(ctx: Ctx) {
       .filter((t) => t.isExperience && t.plannedWeek)
       .map((t) => [t.id, t.plannedWeek]),
   );
+  // EXA-11: the days lived (a souvenir over several days counts once, its days apart).
+  const ends = new Map(
+    ctx.db
+      .select()
+      .from(schema.souvenir)
+      .all()
+      .map((s) => [s.taskId, s.endDate]),
+  );
   const view = (t: (typeof all)[number]) => {
     const p = t.projectId ? projects.get(t.projectId) : null;
+    const doneDate = t.doneAt ? parisDate(new Date(t.doneAt)) : null;
     return {
       id: t.id,
       title: t.title,
@@ -51,7 +61,8 @@ export function getExperiencesPage(ctx: Ctx) {
       durationMin: t.durationMin,
       dueDate: t.dueDate,
       doneAt: t.doneAt,
-      doneDate: t.doneAt ? parisDate(new Date(t.doneAt)) : null,
+      doneDate,
+      days: doneDate ? daysLived(doneDate, ends.get(t.id) ?? null) : 0,
       projectId: t.projectId,
       projectTitle: p?.title ?? null,
       domainId: p ? (p.domainIds[0] ?? null) : t.domainId,
@@ -82,7 +93,9 @@ export function getExperiencesPage(ctx: Ctx) {
     month,
     doneThisMonth,
     onTrack: doneThisMonth >= s['experience.target'],
+    daysThisMonth: lived.filter((t) => t.doneDate?.slice(0, 7) === month).reduce((a, t) => a + t.days, 0),
     thisYear: lived.filter((t) => t.doneDate?.startsWith(year)).length,
+    daysThisYear: lived.filter((t) => t.doneDate?.startsWith(year)).reduce((a, t) => a + t.days, 0),
     months,
     lived,
     planned,

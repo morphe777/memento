@@ -6,6 +6,7 @@ import { DEFAULT_AI_PROMPTS, PREVIOUS_AI_PROMPT_HASHES } from './ai/prompts.ts';
 // user's configuration (renamed, reordered, deleted) and the seed never reads or touches them again.
 import { type Ctx, newId, tx } from './context.ts';
 import { defaultWeight, SEED_DOMAINS, SEED_GROUPS } from './seed-data.ts';
+import { seedWishLists } from './services/wishes.ts';
 import { DEFAULT_SETTINGS } from './settings.ts';
 
 export function seed(ctx: Ctx): { domains: number; groups: number } {
@@ -40,6 +41,7 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
       }
     }
     for (const [key, value] of Object.entries(DEFAULT_SETTINGS)) {
+      if (value === null) continue; // no row: the default (null) is read (places.home)
       ctx.db.insert(schema.setting).values({ key, value }).onConflictDoNothing().run();
     }
     // D-72, D-122: a prompt never edited (an earlier default text, known by its hash) follows the new default.
@@ -57,6 +59,7 @@ export function seed(ctx: Ctx): { domains: number; groups: number } {
           .run();
     }
     clearTemplateDescriptions(ctx);
+    seedWishLists(ctx); // EX-40: the six default lists, once
     return { domains, groups };
   });
 }
