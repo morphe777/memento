@@ -9,7 +9,9 @@ Outil personnel, mono-utilisateur, auto-hébergé (homelab). Il organise ma vie 
 1. `docs/02-dossier-dev.md` — **le document de travail** : architecture, stack, modèle de données, règles métier (RB-xx), moteur, rapports, API, MCP, pages, design system, plan par lots.
 2. `docs/01-specs-fonctionnelles.md` — le pourquoi et le détail fonctionnel (IDs VIS, G, DM, CH, WF, R, V, F, NF). La section **9.0 « Décisions prises »** prime sur tout le reste.
 3. `maquettes/README.md` puis les 4 fichiers `.dc.html` — référence visuelle et comportementale des écrans clés, figée à la v0.1.
-4. `memento-vue-plan/` — dossier de conception de la Vue Plan (identifiants V-20 à V-31, DM-100 à DM-114, CH-20 à CH-23, API-xx, CA-xx), figé au 31/10/2026.
+4. Dossiers de conception livrés à part (Vue Plan : V-20 à V-31, DM-100 à DM-114, CH-20 à CH-23, CA-xx ;
+   Expériences et souvenirs : EX-xx, CE-xx, QE-xx) : hors du dépôt (`~/memento-dossiers/`, la Vue Plan reste dans
+   l'historique Git). Leurs règles sont reprises dans `docs/DECISIONS.md` et le code ; ne jamais les remettre dans le dépôt.
 5. `docs/DECISIONS.md` — toutes les décisions prises depuis (D-01 à D-1xx), datées : elles priment sur les documents
    précédents. `docs/api/guide-ia.md` : le contrat lu par l'IA (routes, outils MCP, codes d'erreur).
 

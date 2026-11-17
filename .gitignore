@@ -12,3 +12,7 @@ coverage/
 # Playwright (H-16)
 e2e/test-results/
 e2e/playwright-report/
+
+# Design folders handed over for a feature and personal audit notes: never in the repository.
+/memento-*/
+/docs/audit/
