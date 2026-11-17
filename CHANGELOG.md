@@ -19,7 +19,9 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - **Un seul menu « Expériences »** : onglets **Vécues** (journal, carte), **À vivre** (prévues, envies) et
   **Bilan** (D-170).
 - Lieux plus fiables : Photon prend le relais quand Overpass ne répond pas, l'écran de vérification recherche autour
-  des photos dès leur arrivée, la recherche par nom donne d'abord les lieux à moins de 100 km, lieux mémorisés compris (D-169, D-171).
+  des photos dès leur arrivée, la recherche par nom donne d'abord, à moins de 100 km, les
+  lieux qui contiennent les mots tapés, et « Garder … à l'endroit des photos » pour un lieu absent d'OpenStreetMap
+  (D-169, D-171, D-172).
 - **Envies** : la réserve d'expériences s'appelle désormais « Envies » ; « + Envie », et un lien ou un lieu partagé
   depuis l'iPhone devient une envie (titre lu sur la page ; texte, dates, prix et lieu dans la description). Le
   moteur en propose toujours quand la cible du mois n'est pas tenue (D-171).

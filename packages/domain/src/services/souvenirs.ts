@@ -437,18 +437,19 @@ export function deleteSouvenir(ctx: Ctx, id: string) {
 }
 
 // ---------- Suggestions (EX-14, EXA-04) ----------
-/** The point of a souvenir: its place, else its photos (cover first, then the biggest group). */
-/** D-169: where the photos were taken (the cover first); the chosen place only when they have no position. */
+/**
+ * D-169, D-172: where the photos were taken (the cover first). Never the chosen place: a wrong place would pull
+ * every later search towards it; without a position the search goes around the home.
+ */
 function pointOf(s: SouvenirView): Point | null {
   const cover = s.photos.find((p) => p.id === s.coverPhotoId);
-  const fromPhotos = prefillFromPhotos(
+  return prefillFromPhotos(
     [...(cover ? [cover] : []), ...s.photos.filter((p) => p !== cover)].map((p) => ({
       lat: p.lat,
       lng: p.lng,
     })),
     new Date(),
   ).point;
-  return fromPhotos ?? (s.place ? { lat: s.place.lat, lng: s.place.lng } : null);
 }
 
 /**

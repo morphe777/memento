@@ -207,7 +207,7 @@ Règles en bref :
   (`kind: 'idea'`, D-171) : titre lu sur la page, texte, lien, dates, prix et lieu dans la description. Un
   jeton « capture » n'appelle que les trois routes de capture ; partout ailleurs 403 `CAPTURE_ONLY`.
 - **Lieux** : cherche par nom avec `search_places` (OpenStreetMap, autour de `near` ou de la maison), pas par
-  coordonnées. Les réponses à moins de 100 km du point passent d'abord, lieux mémorisés compris (D-171). Un lieu choisi est **mémorisé une fois** (une référence = un lieu) et réutilisé. Service indisponible :
+  coordonnées. Dans la région (~100 km du point) : les lieux mémorisés et les réponses qui contiennent les mots tapés d'abord, puis les approchantes ; plus loin, seulement celles qui contiennent les mots (D-171, D-172). Lieu absent d'OpenStreetMap : `POST /places` avec `provider: 'manual'`. Un lieu choisi est **mémorisé une fois** (une référence = un lieu) et réutilisé. Service indisponible :
   503 `PLACE_PROVIDER_UNAVAILABLE`, jamais bloquant (lieu déjà mémorisé ou tapé à la main).
 - **Bilan `GET /living`** : `souvenirs`, `days`, `places`, `withPhotos`, `byPerson`, `categories`, `zones`, `medianKm`
   (distance médiane à la maison), `alike` (ce qui se ressemble), `novelties` (premières fois), `again` (« À refaire »),

@@ -258,6 +258,26 @@ interface PhotonFeature {
   geometry: { coordinates: [number, number] };
   properties: Record<string, string | number | undefined>;
 }
+const fold = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+/** Letters and digits only: « Bam'Bam », « bam bam » and « BAMBAM » read the same. */
+const compact = (s: string) => fold(s).replace(/[^a-z0-9]/g, '');
+/**
+ * D-172: an answer holds the typed words when each of them is in its name or address (accents, case and
+ * punctuation aside). Photon also answers approximately (typos), which gives an answer to anything.
+ */
+function holdsWords(q: string, p: { name: string; city?: string | null; address?: string | null }) {
+  const hay = compact(`${p.name} ${p.city ?? ''} ${p.address ?? ''}`);
+  return fold(q)
+    .split(/\s+/)
+    .map(compact)
+    .filter(Boolean)
+    .every((w) => hay.includes(w));
+}
+
 /** D-171: the region searched first around the photo (or the home), about 100 km each way. */
 const REGION_M = 100_000;
 
@@ -273,14 +293,14 @@ async function photon(ctx: Ctx, q: string, near: { lat: number; lng: number } | 
     );
   if (!near) return ask('');
   // D-169: a pull towards the point; D-171: the region first (a far exact name ranks before a near one
-  // otherwise), the whole world only when the region gives little.
+  // otherwise); D-172: the whole world only when no answer of the region holds the typed words.
   const bias = `&lat=${near.lat}&lon=${near.lng}&zoom=12&location_bias_scale=0.1`;
   const dLat = 0.9;
   const dLng = dLat / Math.max(0.2, Math.cos((near.lat * Math.PI) / 180));
   const r = (n: number) => Math.round(n * 1000) / 1000;
   const box = `&bbox=${r(near.lng - dLng)},${r(near.lat - dLat)},${r(near.lng + dLng)},${r(near.lat + dLat)}`;
   const region = await ask(bias + box);
-  if (region.length >= 5) return region;
+  if (region.some((p) => holdsWords(q, p))) return region;
   const seen = new Set(region.map((p) => `${p.provider}:${p.providerRef}`));
   return [...region, ...(await ask(bias)).filter((p) => !seen.has(`${p.provider}:${p.providerRef}`))];
 }
@@ -468,24 +488,19 @@ export async function placesNearby(ctx: Ctx, lat: number, lng: number, radius?: 
   return { point: at, candidates, providerError };
 }
 
-const fold = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-
 /**
- * EX-13 « du nom au lieu »: one knows the name of a place, not its address (« BAM Albi », CE-06). Remembered
- * places whose name matches first, then the provider's answers around the photo, or else around the home.
+ * EX-13 « du nom au lieu »: one knows the name of a place, not its address (« BAM Albi », CE-06), around the
+ * photos, or else around the home. D-171, D-172: in the region (~100 km), remembered places and answers holding
+ * the typed words first, then the approximate answers; from farther away, only those holding the words.
  */
 export async function searchPlaces(ctx: Ctx, q: string, near?: { lat: number; lng: number } | null) {
   const home = getSettings(ctx)['places.home'];
   const center = near ?? (home ? { lat: home.lat, lng: home.lng } : null);
-  const words = fold(q).split(/\s+/).filter(Boolean);
   const memorized = ctx.db
     .select()
     .from(place)
     .all()
-    .filter((p) => {
-      const hay = fold(`${p.name} ${p.city} ${p.address}`);
-      return words.every((w) => hay.includes(w));
-    })
+    .filter((p) => holdsWords(q, p))
     .map((p) => memorizedCandidate(p, center));
   const known = new Set(memorized.map((m) => `${m.provider}:${m.providerRef}`));
   let found: PlaceCandidate[] = [];
@@ -503,9 +518,16 @@ export async function searchPlaces(ctx: Ctx, q: string, near?: { lat: number; ln
     }
   }
   const all = [...memorized, ...found.filter((c) => !known.has(`${c.provider}:${c.providerRef}`))];
-  // D-171: everything within the region first (places already kept, then the provider's order), the rest after.
   const inRegion = (c: PlaceCandidate) => !center || (c.distanceM ?? Infinity) <= REGION_M;
-  return { candidates: [...all.filter(inRegion), ...all.filter((c) => !inRegion(c))], providerError };
+  const holds = (c: PlaceCandidate) => c.memorized || holdsWords(q, c);
+  return {
+    candidates: [
+      ...all.filter((c) => inRegion(c) && holds(c)),
+      ...all.filter((c) => inRegion(c) && !holds(c)),
+      ...all.filter((c) => !inRegion(c) && holds(c)),
+    ],
+    providerError,
+  };
 }
 
 /** A candidate as a remembered place: the existing one, or saved now. */

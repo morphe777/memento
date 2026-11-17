@@ -349,7 +349,7 @@ export function PlacePicker({
   const [q, setQ] = useState('');
   const [debounced, setDebounced] = useState('');
   useEffect(() => {
-    const t = setTimeout(() => setDebounced(q.trim()), 350);
+    const t = setTimeout(() => setDebounced(q.trim()), 400);
     return () => clearTimeout(t);
   }, [q]);
   const search = useQuery({
@@ -384,8 +384,12 @@ export function PlacePicker({
     }
   };
   const current = value ? candidates.find((c) => c.id === value.id) : null;
-  const list = debounced.length >= 2 ? (search.data?.candidates ?? []) : candidates;
-  const error = debounced.length >= 2 ? search.data?.providerError : providerError;
+  // D-172: from the 2nd letter typed, only the answers to what is typed (never the places around, meanwhile).
+  const typed = q.trim();
+  const searching = typed.length >= 2;
+  const pending = searching && (typed !== debounced || search.isFetching);
+  const list = searching ? (pending ? [] : (search.data?.candidates ?? [])) : candidates;
+  const error = searching ? search.data?.providerError : providerError;
   return (
     <div className="flex flex-col gap-1.5">
       <button
@@ -419,7 +423,7 @@ export function PlacePicker({
               Service des lieux indisponible : un lieu déjà mémorisé ou le nom tapé à la main.
             </div>
           )}
-          {search.isFetching && (
+          {pending && (
             <div className="text-[12px]" style={{ color: 'var(--text-ghost)' }}>
               Recherche…
             </div>
@@ -449,16 +453,16 @@ export function PlacePicker({
               </span>
             </button>
           ))}
-          {!list.length && debounced.length >= 2 && !search.isFetching && (
+          {searching && !pending && (
             <div className="text-[13px]" style={{ color: 'var(--text-ghost)' }}>
-              Rien trouvé.
+              {list.length ? 'Pas dans la liste ?' : 'Rien trouvé.'}
               {point && (
                 <button
                   type="button"
                   className="link-btn ml-1"
                   onClick={() =>
                     choose({
-                      name: q.trim(),
+                      name: typed,
                       lat: point.lat,
                       lng: point.lng,
                       provider: 'manual',
@@ -467,7 +471,7 @@ export function PlacePicker({
                     })
                   }
                 >
-                  Garder « {q.trim()} » ici
+                  Garder « {typed} » à l'endroit des photos
                 </button>
               )}
             </div>

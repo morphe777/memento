@@ -263,6 +263,58 @@ describe('places (EX-13)', () => {
     expect(r.candidates.at(-1)).toMatchObject({ memorized: true, lat: -37.76 });
     expect(calls[0]).toMatch(/bbox=1\.6\d*,45\.6\d*,4\.3\d*,47\.4\d*/);
   });
+  const feature = (id: number, name: string, lng: number, lat: number, city = '') => ({
+    geometry: { coordinates: [lng, lat] },
+    properties: { osm_type: 'N', osm_id: id, osm_key: 'amenity', osm_value: 'restaurant', name, city },
+  });
+  it('D-172: in the region, the names holding the typed words first, then the approximate ones; one request', async () => {
+    const ctx = souvenirCtx();
+    const calls = stubNetwork((url) =>
+      url.includes('photon')
+        ? new Response(
+            JSON.stringify({
+              features: [
+                feature(1, 'Rue du Bac', 3.01, 46.5),
+                feature(2, "Bam'Bam", 3.02, 46.51, 'Valbourg'),
+              ],
+            }),
+          )
+        : undefined,
+    );
+    const r = await searchPlaces(ctx, 'bam valbourg', LUCETTE);
+    expect(r.candidates.map((c) => c.name)).toEqual(["Bam'Bam", 'Rue du Bac']);
+    expect(calls).toHaveLength(1);
+  });
+  it('D-172: the world only when the region holds none of the words, and from there only the names that do', async () => {
+    const ctx = souvenirCtx();
+    const calls = stubNetwork((url) =>
+      url.includes('photon')
+        ? new Response(
+            JSON.stringify({
+              features: url.includes('bbox')
+                ? [feature(1, 'Rue du Bac', 3.01, 46.5)]
+                : [feature(3, 'Le Bac', 144.93, -37.76), feature(4, 'BAM', 144.94, -37.75, 'Melbourne')],
+            }),
+          )
+        : undefined,
+    );
+    const r = await searchPlaces(ctx, 'bam', LUCETTE);
+    expect(r.candidates.map((c) => c.name)).toEqual(['Rue du Bac', 'BAM']);
+    expect(calls).toHaveLength(2);
+  });
+  it('D-172: a souvenir without a photo position has no point, even with a chosen place (searched around the home)', async () => {
+    const ctx = souvenirCtx();
+    stubNetwork(osmRoutes);
+    const res = await createCapture(
+      ctx,
+      { photos: [] },
+      await photosOf([{ at: '2026-11-15T12:40:00' }]),
+      'app',
+    );
+    const far = savePlace(ctx, { name: 'Ailleurs', lat: -37.76, lng: 144.93, provider: 'manual' });
+    updateSouvenir(ctx, res.id, { placeId: far.id });
+    expect((await getSuggestions(ctx, res.id)).point).toBeNull();
+  });
   it('D-169: the check screen searches around the photos, even after a far place was chosen', async () => {
     const ctx = souvenirCtx();
     stubNetwork(osmRoutes);
