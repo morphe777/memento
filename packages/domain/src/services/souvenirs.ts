@@ -20,7 +20,6 @@ import {
 } from './photos.ts';
 import { distanceM, getPlace, nearestMemorized, placeFromCandidate, placesNearby } from './places.ts';
 import { serializeProjects } from './projects.ts';
-import { listDomains } from './referential.ts';
 import { completeTask, createTask, getTaskRow, listTasks, moveTask, updateTask } from './tasks.ts';
 import { createWishFromPlace, createWishFromUrl } from './wishes.ts';
 
@@ -516,10 +515,6 @@ export async function getSuggestions(ctx: Ctx, id: string) {
     duplicate: duplicate
       ? { id: duplicate.id, title: duplicate.title, photoCount: duplicate.photoCount }
       : null,
-    domains: {
-      // D-163: what the domain would be for these people (the screen shows it before « Enregistrer »).
-      family: listDomains(ctx).find((d) => d.name === 'Famille')?.id ?? null,
-    },
     home: home ? { lat: home.lat, lng: home.lng } : null,
   };
 }

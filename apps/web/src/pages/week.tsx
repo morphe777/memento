@@ -29,6 +29,7 @@ import { get, post } from '../lib/api.ts';
 import { fmtDateShort, fmtMin, fmtMonthName, shiftIsoWeek, weekNumber } from '../lib/format.ts';
 import { useAction, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import type { Execution } from '../lib/types.ts';
+import { CaptureSouvenirButton, OnThisDayCard } from './souvenirs.tsx';
 
 type Row = Execution['tasks'][number];
 
@@ -204,8 +205,9 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           label="Expériences"
           minWidth={0}
           foot={
-            <div className="text-[12px]" style={{ color: 'var(--text-muted)' }}>
-              cible de {fmtMonthName(ex.experiences.month)}
+            <div className="text-[12px] flex justify-between gap-2" style={{ color: 'var(--text-muted)' }}>
+              <span>cible de {fmtMonthName(ex.experiences.month)}</span>
+              <CaptureSouvenirButton className="link-btn text-[12px]" />
             </div>
           }
         >
@@ -213,6 +215,8 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           <span style={{ color: 'var(--text-faint)', fontSize: 14 }}>/ {ex.experiences.target}</span>
         </Kpi>
       </div>
+      {/* EX-52: a souvenir of the same day (or week) of a past year, discreetly; nothing when there is none. */}
+      <OnThisDayCard />
       <section className="card overflow-hidden min-w-0">
         <div
           className="flex justify-between items-baseline gap-3 flex-wrap"

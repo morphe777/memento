@@ -67,6 +67,8 @@ const NAV: { section: string; items: NavItem[] }[] = [
       { to: '/domaines', label: 'Domaines', more: true },
       { to: '/idees', label: 'Idées' },
       { to: '/experiences', label: 'Expériences' },
+      { to: '/souvenirs', label: 'Souvenirs' },
+      { to: '/envies', label: 'Envies', more: true },
     ],
   },
   {
@@ -1218,6 +1220,16 @@ const ICON_PATHS: Record<string, ReactNode> = {
       <path d="M6 1.5h4M6.5 1.5v4.5L2.5 13a1 1 0 0 0 .9 1.5h9.2a1 1 0 0 0 .9-1.5L9.5 6V1.5" />
       <path d="M4.5 10h7" />
     </>
+  ),
+  '/souvenirs': (
+    <>
+      <rect x="2" y="3" width="12" height="10" rx="1.5" />
+      <circle cx="6" cy="7" r="1.2" />
+      <path d="m2.5 12 3.5-3.5 2.5 2.5 2-2 3 3" />
+    </>
+  ),
+  '/envies': (
+    <path d="M8 13.5S2.5 10 2.5 6.2A2.7 2.7 0 0 1 8 4.8a2.7 2.7 0 0 1 5.5 1.4C13.5 10 8 13.5 8 13.5z" />
   ),
   '/rapports': <path d="M2 14h12M4 14V9M8 14V4M12 14V7" />,
   '/journal': (

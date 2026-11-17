@@ -3,8 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
-import { Markdown } from '../components/markdown.tsx';
+import { LivingView } from '../components/living.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
+import { SouvenirCard } from '../components/souvenir-ui.tsx';
 import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
 import {
   Duration,
@@ -22,7 +23,9 @@ import {
 import { get, post } from '../lib/api.ts';
 import { fmtDate, parisLocal, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup } from '../lib/hooks.ts';
+import type { Living, Souvenir } from '../lib/souvenirs.ts';
 import type { ExperiencesPage as Data, Project, TaskDuration } from '../lib/types.ts';
+import { CaptureSouvenirButton } from './souvenirs.tsx';
 
 type Item = Data['lived'][number];
 
@@ -40,11 +43,6 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
   if (!q.data) return <Loading />;
   const d = q.data;
   const max = Math.max(1, ...d.months.map((m) => m.count));
-  const byMonth = new Map<string, Item[]>();
-  for (const t of d.lived) {
-    const m = t.doneDate?.slice(0, 7) ?? '';
-    byMonth.set(m, [...(byMonth.get(m) ?? []), t]);
-  }
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -53,9 +51,15 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
           eyebrow="Vivre plus d'expériences · souvenirs et envies"
           title="Expériences"
           actions={
-            <button type="button" className="btn btn-primary" onClick={() => setLiving(true)}>
-              J'ai vécu une expérience
-            </button>
+            <>
+              <Link to="/envies" className="btn">
+                Envies
+              </Link>
+              <button type="button" className="btn" onClick={() => setLiving(true)}>
+                J'ai vécu une expérience
+              </button>
+              <CaptureSouvenirButton />
+            </>
           }
         />
       </div>
@@ -87,7 +91,9 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
             {d.thisYear}
           </span>
           <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
-            {d.planned.length} prévue{d.planned.length > 1 ? 's' : ''} · {d.reserve.length} en réserve
+            {d.daysThisYear} jour{d.daysThisYear > 1 ? 's' : ''} vécu{d.daysThisYear > 1 ? 's' : ''} ·{' '}
+            {d.planned.length} prévue
+            {d.planned.length > 1 ? 's' : ''} · {d.reserve.length} en réserve
           </span>
         </section>
         <section className="card flex flex-col gap-2" style={{ padding: '18px 20px' }}>
@@ -147,24 +153,9 @@ export function ExperiencesPage({ tache }: { tache?: string }) {
             ))}
           </Section>
         </div>
-        <Section
-          title="Souvenirs"
-          info="Les expériences vécues, de la plus récente à la plus ancienne. La description de la tâche sert de note : ouvre-la pour raconter ce que tu en retiens."
-          className="min-w-0"
-        >
-          {d.lived.length === 0 && <Empty>Pas encore de souvenir : la première est à vivre.</Empty>}
-          {[...byMonth].map(([m, items]) => (
-            <div key={m} className="flex flex-col gap-2">
-              <span className="label-caps" style={{ fontSize: 11 }}>
-                {m ? monthLong(m) : ''}
-              </span>
-              {items.map((t) => (
-                <Memory key={t.id} t={t} onOpen={open} />
-              ))}
-            </div>
-          ))}
-        </Section>
+        <RecentSouvenirs />
       </div>
+      <YearLiving />
       <TaskDrawer taskId={tache ?? null} onClose={() => navigate({ to: '/experiences', search: {} })} />
       {living && <LivedPanel onClose={() => setLiving(false)} />}
     </div>
@@ -214,34 +205,87 @@ function Row({
   );
 }
 
-function Memory({ t, onOpen }: { t: Item; onOpen: (id: string) => void }) {
-  const dl = useDomainLookup();
+/** EX-50: the latest souvenirs, big cards; the journal and the map have them all. */
+function RecentSouvenirs() {
+  const q = useQuery({ queryKey: ['souvenirs', ''], queryFn: () => get<Souvenir[]>('/souvenirs') });
+  const list = (q.data ?? []).slice(0, 6);
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(t.id)}
-      className="card text-left cursor-pointer flex flex-col gap-1"
-      style={{ padding: '12px 14px', borderLeft: '4px solid var(--experience)' }}
+    <Section
+      title="Souvenirs"
+      aside={
+        <Link to="/souvenirs" className="text-[13px]">
+          Journal et carte →
+        </Link>
+      }
+      info="Chaque expérience vécue a son souvenir : photos, lieu, personnes, une phrase. « + Souvenir » sur le téléphone, juste après."
+      className="min-w-0"
     >
-      <span className="flex items-center gap-2">
-        <span className="text-[15px] font-semibold flex-1 min-w-0">{t.title}</span>
-        <span className="mono text-[12px] flex-none" style={{ color: 'var(--text-faint)' }}>
-          {t.doneDate ? fmtDate(t.doneDate) : ''}
-        </span>
-      </span>
-      <span className="flex items-center gap-2 text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        <span className="dot" style={{ background: dl.color(t.domainId), width: 6, height: 6 }} />
-        {dl.name(t.domainId)}
-        {t.projectTitle ? ` · ${t.projectTitle}` : ''}
-      </span>
-      {t.description.trim() && (
-        <div
-          style={{ maxHeight: 72, overflow: 'hidden', maskImage: 'linear-gradient(#000 60%, transparent)' }}
+      {q.isLoading && <Loading />}
+      {!q.isLoading && list.length === 0 && <Empty>Pas encore de souvenir : la première est à vivre.</Empty>}
+      <div className="souvenir-grid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))' }}>
+        {list.map((s) => (
+          <SouvenirCard key={s.id} s={s} />
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+/** EX-60 / D-167: « Vivre » live, for a year or a quarter (the quarter report freezes its own). */
+function YearLiving() {
+  const now = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Paris' });
+  const [year, setYear] = useState(Number(now.slice(0, 4)));
+  const [quarter, setQuarter] = useState(0);
+  const from = quarter ? `${year}-${String((quarter - 1) * 3 + 1).padStart(2, '0')}-01` : `${year}-01-01`;
+  const to = quarter
+    ? `${year}-${String(quarter * 3).padStart(2, '0')}-${[31, 30, 30, 31][quarter - 1]}`
+    : `${year}-12-31`;
+  const q = useQuery({
+    queryKey: ['living', from, to],
+    queryFn: () => get<Living>(`/living?from=${from}&to=${to}`),
+  });
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="h2 mr-2">Bilan</span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setYear(year - 1)}
+          aria-label="Année précédente"
         >
-          <Markdown text={t.description} plain />
-        </div>
+          ‹
+        </button>
+        <span className="mono">{year}</span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setYear(year + 1)}
+          aria-label="Année suivante"
+        >
+          ›
+        </button>
+        <select
+          value={quarter}
+          onChange={(e) => setQuarter(Number(e.target.value))}
+          aria-label="Période"
+          style={{ width: 160 }}
+        >
+          <option value={0}>Toute l'année</option>
+          {[1, 2, 3, 4].map((n) => (
+            <option key={n} value={n}>
+              {n === 1 ? '1er' : `${n}e`} trimestre
+            </option>
+          ))}
+        </select>
+      </div>
+      {q.isError && <ErrorBox error={q.error} />}
+      {q.data ? (
+        <LivingView v={q.data} title={quarter ? `Vivre · T${quarter} ${year}` : `Vivre · ${year}`} />
+      ) : (
+        <Loading />
       )}
-    </button>
+    </div>
   );
 }
 

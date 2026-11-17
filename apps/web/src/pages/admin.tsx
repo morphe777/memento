@@ -24,6 +24,7 @@ import { ApiError, del, get, patch, post, put } from '../lib/api.ts';
 import { ACTION_LABEL, ENTITY_LABEL, fmtDate, fmtDateTime } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useGroups, useMe, useSettings } from '../lib/hooks.ts';
 import type { AiCheck, AiStatus, Change, Domain, Settings } from '../lib/types.ts';
+import { SouvenirsConfig } from './config-souvenirs.tsx';
 
 // ---------- À revoir ----------
 
@@ -156,6 +157,7 @@ const CONFIG_TABS = [
   { value: 'calendrier', label: 'Calendrier' },
   { value: 'notifications', label: 'Notifications' },
   { value: 'templates', label: 'Templates' },
+  { value: 'souvenirs', label: 'Souvenirs' },
   { value: 'ia', label: 'IA' },
   { value: 'acces', label: 'Accès' },
   { value: 'compte', label: 'Compte' },
@@ -194,6 +196,8 @@ export function ConfigPage({ onglet }: { onglet: string }) {
         <DomainsConfig />
       ) : tab === 'groupes' ? (
         <GroupsConfig />
+      ) : tab === 'souvenirs' ? (
+        <SouvenirsConfig />
       ) : tab === 'acces' ? (
         <AccessConfig />
       ) : tab === 'compte' ? (
@@ -581,30 +585,27 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       {tab === 'notifications' && (
         <NotifyConfig s={s} setS={setS} botToken={botToken} setBotToken={setBotToken} />
       )}
-      {tab === 'templates' && (
-        <>
-          {(
-            [
-              ['templates.meta_objective', 'Méta-objectif'],
-              ['templates.objective', 'Objectif'],
-              ['templates.project', 'Projet'],
-              ['templates.task', 'Tâche'],
-            ] as const
-          ).map(([k, l]) => (
-            <Field
-              key={k}
-              label={l}
-              info={`Texte pré-rempli dans la description d'un nouvel élément « ${l} ».`}
-            >
-              <textarea
-                value={s[k]}
-                onChange={(e) => setS({ ...s, [k]: e.target.value })}
-                style={{ minHeight: 120 }}
-              />
-            </Field>
-          ))}
-        </>
-      )}
+      {tab === 'templates' &&
+        (
+          [
+            ['templates.meta_objective', 'Méta-objectif'],
+            ['templates.objective', 'Objectif'],
+            ['templates.project', 'Projet'],
+            ['templates.task', 'Tâche'],
+          ] as const
+        ).map(([k, l]) => (
+          <Field
+            key={k}
+            label={l}
+            info={`Texte pré-rempli dans la description d'un nouvel élément « ${l} ».`}
+          >
+            <textarea
+              value={s[k]}
+              onChange={(e) => setS({ ...s, [k]: e.target.value })}
+              style={{ minHeight: 120 }}
+            />
+          </Field>
+        ))}
       {tab === 'ia' && <AiConfig s={s} setS={setS} aiKey={aiKey} setAiKey={setAiKey} />}
       <button type="button" className="btn btn-primary self-start" onClick={submit} disabled={save.isPending}>
         Enregistrer
@@ -991,10 +992,16 @@ interface TokenRow {
   revokedAt: string | null;
 }
 
+const SCOPE_LABEL: Record<string, string> = {
+  read: 'lecture',
+  read_write: 'lecture-écriture',
+  capture: 'capture (iPhone)',
+};
+
 function AccessConfig() {
   const tokens = useQuery({ queryKey: ['tokens'], queryFn: () => get<TokenRow[]>('/tokens') });
   const [name, setName] = useState('');
-  const [scopes, setScopes] = useState<'read' | 'read_write'>('read_write');
+  const [scopes, setScopes] = useState<'read' | 'read_write' | 'capture'>('read_write');
   const [created, setCreated] = useState<string | null>(null);
   const create = useAction(() => post<{ token: string }>('/tokens', { name, scopes }), {
     onSuccess: (t) => {
@@ -1036,7 +1043,7 @@ function AccessConfig() {
           >
             <span className="mono text-[14px] flex-1">ai:{t.name}</span>
             <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-              {t.scopes === 'read' ? 'lecture' : 'lecture-écriture'} ·{' '}
+              {SCOPE_LABEL[t.scopes] ?? t.scopes} ·{' '}
               {t.lastUsedAt ? `utilisé ${fmtDateTime(t.lastUsedAt)}` : 'jamais utilisé'}
               {t.revokedAt ? ' · révoqué' : ''}
             </span>
@@ -1069,11 +1076,17 @@ function AccessConfig() {
         >
           <option value="read_write">Lecture-écriture</option>
           <option value="read">Lecture seule</option>
+          <option value="capture">Capture (iPhone)</option>
         </select>
         <button type="submit" className="btn btn-primary" disabled={!name.trim()}>
           Créer un jeton
         </button>
       </form>
+      {scopes === 'capture' && (
+        <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+          Seulement l'envoi de photos et de liens (Raccourci de l'iPhone)
+        </span>
+      )}
     </Section>
   );
 }

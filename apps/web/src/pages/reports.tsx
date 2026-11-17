@@ -2,6 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
+import { LivingView } from '../components/living.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import {
   DELAY_HELP,
@@ -678,6 +679,8 @@ function QuarterReport({ r }: { r: Report }) {
           <div style={{ color: 'var(--text-faint)' }}>Aucune.</div>
         )}
       </Section>
+      {/* D-167: frozen from v1.3 on; older quarter reports have no « Vivre ». */}
+      {p.living && <LivingView v={p.living} />}
     </>
   );
 }

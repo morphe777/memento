@@ -29,8 +29,10 @@ import {
 import { PlanPage } from './pages/plan.tsx';
 import { IdeasPage, InboxPage, ProjectPage, ProjectsPage } from './pages/projects.tsx';
 import { ReportPage, ReportsPage } from './pages/reports.tsx';
+import { SouvenirPage, SouvenirsPage, type SouvenirsView, SouvenirVerifyPage } from './pages/souvenirs.tsx';
 import { TasksPage, type TaskView } from './pages/tasks.tsx';
 import { WeekPage } from './pages/week.tsx';
+import { WishesPage, WishPage } from './pages/wishes.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -178,6 +180,41 @@ const experiencesRoute = createRoute({
     return <ExperiencesPage tache={experiencesRoute.useSearch().tache} />;
   },
 });
+// memento-experiences: souvenirs (journal, map, sheet, check screen) and wishes.
+const souvenirsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/souvenirs',
+  validateSearch: (s: Record<string, unknown>): { vue?: SouvenirsView } => ({
+    vue: s.vue === 'carte' ? 'carte' : undefined,
+  }),
+  component: function Souvenirs() {
+    return <SouvenirsPage vue={souvenirsRoute.useSearch().vue} />;
+  },
+});
+const souvenirRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/souvenirs/$id',
+  component: function Souvenir() {
+    return <SouvenirPage id={souvenirRoute.useParams().id} />;
+  },
+});
+const souvenirVerifyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/souvenirs/$id/verifier',
+  component: function SouvenirVerify() {
+    const id = souvenirVerifyRoute.useParams().id;
+    return <SouvenirVerifyPage key={id} id={id} />;
+  },
+});
+const wishesRoute = route('/envies', WishesPage);
+const wishRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/envies/$id',
+  component: function Wish() {
+    const id = wishRoute.useParams().id;
+    return <WishPage key={id} id={id} />;
+  },
+});
 const reportsRoute = route('/rapports', ReportsPage);
 const reportRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -227,6 +264,11 @@ const routeTree = rootRoute.addChildren([
   domainRoute,
   ideasRoute,
   experiencesRoute,
+  souvenirsRoute,
+  souvenirRoute,
+  souvenirVerifyRoute,
+  wishesRoute,
+  wishRoute,
   reportsRoute,
   reportRoute,
   reviewRoute,
