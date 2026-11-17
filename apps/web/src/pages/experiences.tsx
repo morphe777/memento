@@ -249,7 +249,9 @@ function AddIdea() {
   const dl = useDomainLookup();
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState<TaskDuration | null>(120);
-  const [domainId, setDomainId] = useState('');
+  // User request 17/11/2026: Famille by default, like « J'ai vécu une expérience » (D-153).
+  const [picked, setDomainId] = useState<string | null>(null);
+  const domainId = picked ?? dl.domains.find((d) => d.name === 'Famille')?.id ?? '';
   const add = useAction(
     () => post('/experiences', { title: title.trim(), durationMin: duration, domainId: domainId || null }),
     { onSuccess: () => setTitle(''), toast: 'Ajoutée à la réserve.' },
@@ -284,7 +286,7 @@ function AddIdea() {
         aria-label="Domaine"
         style={{ width: 190 }}
       >
-        <option value="">Domaine…</option>
+        <option value="">Aucun domaine</option>
         {dl.domains.map((d) => (
           <option key={d.id} value={d.id}>
             {d.name}
