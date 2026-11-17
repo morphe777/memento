@@ -150,14 +150,11 @@ export function LivingView({ v, title = 'Vivre' }: { v: Living; title?: string }
           ))}
         </div>
       )}
-      {(off.kindsNeverDone.length > 0 || off.zonesNeverVisited.length > 0 || off.rarePeople.length > 0) && (
+      {(off.kindsNeverDone.length > 0 || off.rarePeople.length > 0) && (
         <div className="flex flex-col gap-1">
           <span className="label-caps">Sortir des sentiers battus</span>
           {off.kindsNeverDone.length > 0 && (
             <Line>Jamais fait : {off.kindsNeverDone.join(', ').toLocaleLowerCase('fr')}.</Line>
-          )}
-          {off.zonesNeverVisited.length > 0 && (
-            <Line>Jamais visité (dans les envies) : {off.zonesNeverVisited.join(', ')}.</Line>
           )}
           {off.rarePeople.length > 0 && <Line>Peu vus : {off.rarePeople.join(', ')}.</Line>}
         </div>

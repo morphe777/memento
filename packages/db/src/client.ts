@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
+import { sql } from 'drizzle-orm';
 import { type BetterSQLite3Database, drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.ts';
@@ -85,7 +86,18 @@ export async function backupDb(source: string, destination: string) {
   }
 }
 
-/** Applies pending migrations. Safe to run repeatedly (L0: "migrations rejouables"). */
+/**
+ * Applies pending migrations. Safe to run repeatedly (L0: "migrations rejouables"). Foreign keys are off while
+ * they run (a table rebuilt by SQLite's 12 steps, D-171: PRAGMA has no effect inside the migration transaction),
+ * then checked: any broken link stops here.
+ */
 export function runMigrations(db: Db): void {
-  migrate(db, { migrationsFolder });
+  db.run(sql`PRAGMA foreign_keys = OFF`);
+  try {
+    migrate(db, { migrationsFolder });
+    const broken = db.all(sql`PRAGMA foreign_key_check`);
+    if (broken.length) throw new Error(`Migration : ${broken.length} lien(s) cassé(s) (foreign_key_check).`);
+  } finally {
+    db.run(sql`PRAGMA foreign_keys = ON`);
+  }
 }

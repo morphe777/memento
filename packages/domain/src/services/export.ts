@@ -40,8 +40,6 @@ export function exportData(ctx: Ctx) {
       // D-157 to D-165: the rows only; the photo files are backed up with the data folder (photos/).
       place: ctx.db.select().from(s.place).all(),
       person: ctx.db.select().from(s.person).all(),
-      wishList: ctx.db.select().from(s.wishList).all(),
-      wish: ctx.db.select().from(s.wish).all(),
       souvenir: ctx.db.select().from(s.souvenir).all(),
       souvenirPerson: ctx.db.select().from(s.souvenirPerson).all(),
       photo: ctx.db.select().from(s.photo).all(),
@@ -83,14 +81,12 @@ const IMPORT_ORDER = [
   ['auditLog', schema.auditLog],
   ['place', schema.place],
   ['person', schema.person],
-  ['wishList', schema.wishList],
-  ['wish', schema.wish],
   ['souvenir', schema.souvenir],
   ['souvenirPerson', schema.souvenirPerson],
   ['photo', schema.photo],
 ] as const;
 /** Tables added in 1.3 (souvenirs): an older export has none, they are imported empty. */
-const SINCE_1_3 = new Set(['place', 'person', 'wishList', 'wish', 'souvenir', 'souvenirPerson', 'photo']);
+const SINCE_1_3 = new Set(['place', 'person', 'souvenir', 'souvenirPerson', 'photo']);
 
 type ExportFile = { exportedAt?: string; tables: Record<string, unknown> };
 
@@ -211,7 +207,7 @@ export async function safetyCopy(ctx: Ctx, dir: string, kind: 'import' | 'purge'
 // keeping the configuration: domains, groups, settings, account, sessions, tokens and job runs. With
 // `history`, week plans, frozen reports and the journal go too (a clean start). Children first (foreign keys).
 const PURGE_TABLES = [
-  ['souvenirPerson', schema.souvenirPerson], // D-157: the souvenirs go with their tasks (wishes stay)
+  ['souvenirPerson', schema.souvenirPerson], // D-157: the souvenirs go with their tasks
   ['photo', schema.photo],
   ['souvenir', schema.souvenir],
   ['taskDependency', schema.taskDependency],
@@ -233,7 +229,6 @@ const HISTORY_TABLES = [
 export function purgeData(ctx: Ctx, opts: { history: boolean }) {
   return tx(ctx, () => {
     const counts: Record<string, number> = {};
-    ctx.db.update(schema.wish).set({ taskId: null }).run(); // a wish outlives the task it was planned as
     for (const [key, table] of [...PURGE_TABLES, ...(opts.history ? HISTORY_TABLES : [])])
       counts[key] = ctx.db.delete(table).run().changes;
     // Logged after the wipe, so the journal keeps a trace even when it was emptied.

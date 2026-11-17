@@ -363,7 +363,7 @@ export const jobRun = sqliteTable(
   (t) => [uniqueIndex('job_run_uq').on(t.job, t.periodKey)],
 );
 
-// ---------- Souvenirs and wishes (memento-experiences, EX-xx / EXA-xx, D-157 to D-170) ----------
+// ---------- Souvenirs (EX-xx / EXA-xx, D-157 to D-171; the wishes are the reserve of experience tasks) ----------
 
 // EX-30: the people of the souvenirs, managed in Configuration. A name typed in « + quelqu'un d'autre » is created
 // `to_confirm` (CE-08) and offered again at the next capture.
@@ -390,7 +390,7 @@ export const person = sqliteTable(
   ],
 );
 
-// EX-13: places remembered once, reused by souvenirs and wishes. One provider reference = one place.
+// EX-13: places remembered once, reused by the souvenirs. One provider reference = one place.
 export const place = sqliteTable(
   'place',
   {
@@ -415,61 +415,6 @@ export const place = sqliteTable(
   ],
 );
 
-// EX-40: the typed lists of wishes (six by default, more in Configuration).
-export const wishList = sqliteTable('wish_list', {
-  ...base,
-  name: text('name').notNull(),
-  icon: text('icon').notNull().default('star'),
-  position: integer('position').notNull().default(0),
-});
-
-// EX-40: an experience one would like to live. `task_id`: the dated experience task of its last planning.
-export const wish = sqliteTable(
-  'wish',
-  {
-    ...base,
-    title: text('title').notNull(),
-    listId: text('list_id').references(() => wishList.id),
-    placeId: text('place_id').references(() => place.id),
-    url: text('url'),
-    hasImage: integer('has_image', { mode: 'boolean' }).notNull().default(false), // stored file, never remote
-    startDate: text('start_date'),
-    endDate: text('end_date'),
-    price: text('price'),
-    durationMin: integer('duration_min'),
-    dogAllowed: text('dog_allowed', { enum: ['yes', 'no', 'unknown'] })
-      .notNull()
-      .default('unknown'),
-    indoor: text('indoor', { enum: ['yes', 'no', 'mixed', 'unknown'] })
-      .notNull()
-      .default('unknown'),
-    season: text('season'),
-    personIds: text('person_ids', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
-    tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default(sql`'[]'`),
-    note: text('note').notNull().default(''),
-    status: text('status', { enum: ['wish', 'planned', 'lived', 'archived'] })
-      .notNull()
-      .default('wish'),
-    source: text('source', { enum: ['plus', 'share_url', 'share_place', 'ai'] })
-      .notNull()
-      .default('plus'),
-    sourceMeta: text('source_meta', { mode: 'json' }),
-    taskId: text('task_id').references(() => task.id),
-    clientCaptureId: text('client_capture_id'),
-  },
-  (t) => [
-    index('wish_list_idx').on(t.listId),
-    index('wish_task_idx').on(t.taskId),
-    uniqueIndex('wish_capture_uq').on(t.clientCaptureId),
-    check('wish_status_check', sql`${t.status} in ('wish', 'planned', 'lived', 'archived')`),
-    check('wish_source_check', sql`${t.source} in ('plus', 'share_url', 'share_place', 'ai')`),
-    check('wish_dog_check', sql`${t.dogAllowed} in ('yes', 'no', 'unknown')`),
-    check('wish_indoor_check', sql`${t.indoor} in ('yes', 'no', 'mixed', 'unknown')`),
-    check('wish_start_date_check', sql`${t.startDate} is null or date(${t.startDate}) is ${t.startDate}`),
-    check('wish_end_date_check', sql`${t.endDate} is null or date(${t.endDate}) is ${t.endDate}`),
-  ],
-);
-
 // EX-11: the souvenir of a lived experience task (1–1). Title, domain, project, start (done_at) stay on the task.
 export const souvenir = sqliteTable(
   'souvenir',
@@ -483,7 +428,6 @@ export const souvenir = sqliteTable(
     phrase: text('phrase').notNull().default(''),
     rating: text('rating', { enum: ['again', 'good', 'meh'] }),
     coverPhotoId: text('cover_photo_id'),
-    wishId: text('wish_id').references(() => wish.id),
     source: text('source', { enum: ['app', 'share', 'import'] })
       .notNull()
       .default('app'),

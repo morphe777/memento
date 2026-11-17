@@ -11,8 +11,6 @@ export type Suggestions = Awaited<ReturnType<typeof D.getSuggestions>>;
 export type Person = ReturnType<typeof D.listPersons>[number];
 export type Place = ReturnType<typeof D.listPlaces>[number];
 export type PlaceCandidate = D.PlaceCandidate;
-export type Wish = D.WishView;
-export type WishList = ReturnType<typeof D.listWishLists>[number];
 export type SouvenirMap = ReturnType<typeof D.souvenirMap>;
 export type OnThisDay = NonNullable<ReturnType<typeof D.onThisDay>>;
 export type Living = ReturnType<typeof D.livingReport>;
@@ -21,7 +19,6 @@ export type CaptureResult = D.CaptureResult & { editUrl: string };
 
 export const photoUrl = (id: string, size: 'full' | 'medium' | 'thumb' = 'medium') =>
   `/api/v1/photos/${id}/${size}`;
-export const wishImageUrl = (id: string) => `/api/v1/wishes/${id}/image`;
 
 export const RATING_LABEL: Record<Rating, string> = { again: 'À refaire', good: 'Bien', meh: 'Bof' };
 export const GROUP_LABEL: Record<string, string> = { family: 'Famille', friends: 'Amis', other: 'Autre' };

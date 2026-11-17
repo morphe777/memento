@@ -7,7 +7,7 @@ import { assertFound, DomainError } from '../errors.ts';
 import type { personCreate, personPatch } from '../schemas-souvenirs.ts';
 import { listDomains } from './referential.ts';
 
-const { person, souvenirPerson, wish } = schema;
+const { person, souvenirPerson } = schema;
 export type PersonCreate = z.infer<typeof personCreate>;
 export type PersonPatch = z.infer<typeof personPatch>;
 
@@ -96,7 +96,7 @@ export function updatePerson(ctx: Ctx, id: string, patch: PersonPatch) {
   });
 }
 
-/** Moves the souvenirs and wishes of `id` to `intoId`, then removes `id` (a duplicate typed at capture). */
+/** Moves the souvenirs of `id` to `intoId`, then removes `id` (a duplicate typed at capture). */
 export function mergePerson(ctx: Ctx, id: string, intoId: string) {
   return tx(ctx, () => {
     if (id === intoId) throw new DomainError('SAME_PERSON', 'Choisis une autre personne.');
@@ -110,7 +110,6 @@ export function mergePerson(ctx: Ctx, id: string, intoId: string) {
         .values({ souvenirId: l.souvenirId, personId: intoId })
         .onConflictDoNothing()
         .run();
-    replaceInWishes(ctx, id, intoId);
     ctx.db.delete(person).where(eq(person.id, id)).run();
     audit(ctx, 'person', id, 'merge', before, { mergedInto: intoId });
     return getPerson(ctx, intoId);
@@ -121,19 +120,10 @@ export function deletePerson(ctx: Ctx, id: string) {
   return tx(ctx, () => {
     const before = getPerson(ctx, id);
     ctx.db.delete(souvenirPerson).where(eq(souvenirPerson.personId, id)).run();
-    replaceInWishes(ctx, id, null);
     ctx.db.delete(person).where(eq(person.id, id)).run();
     audit(ctx, 'person', id, 'delete', before, null);
     return { ok: true as const };
   });
-}
-
-function replaceInWishes(ctx: Ctx, id: string, by: string | null) {
-  for (const w of ctx.db.select().from(wish).all()) {
-    if (!w.personIds.includes(id)) continue;
-    const next = [...new Set(w.personIds.map((p) => (p === id ? by : p)).filter((p): p is string => !!p))];
-    ctx.db.update(wish).set({ personIds: next }).where(eq(wish.id, w.id)).run();
-  }
 }
 
 /**

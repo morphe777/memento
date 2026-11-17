@@ -1,6 +1,6 @@
 // EX-60 / D-167: « Vivre », what one lived over a period (quarter report, year view): how many souvenirs and
 // days, with whom, where, what looks alike, what was new, what to do again, and « Sortir des sentiers battus »
-// (types never done, places of wishes never visited, people rarely seen). The soft alert per person (QE-07)
+// (types never done, people rarely seen). The soft alert per person (QE-07)
 // goes here, never in a notification.
 import type { Ctx } from '../context.ts';
 import { ctxNow } from '../context.ts';
@@ -9,7 +9,6 @@ import { daysBetween, parisDate } from '../time.ts';
 import { listPersons } from './persons.ts';
 import { distanceM } from './places.ts';
 import { listSouvenirs, type SouvenirView } from './souvenirs.ts';
-import { listWishes } from './wishes.ts';
 
 /** French labels of the place categories (D-161). */
 export const CATEGORY_LABEL: Record<string, string> = {
@@ -130,17 +129,8 @@ export function livingReport(ctx: Ctx, from: string, to: string) {
 
   // « Sortir des sentiers battus »: the entry of the future activity engine.
   const everKinds = new Set(all.map((s) => s.place?.category).filter(Boolean));
-  const everZones = new Set(all.map((s) => s.place?.city).filter(Boolean));
-  const wishZones = [
-    ...new Set(
-      listWishes(ctx)
-        .map((w) => w.place?.city)
-        .filter((c): c is string => !!c && !everZones.has(c)),
-    ),
-  ];
   const offTrack = {
     kindsNeverDone: OUTING_KINDS.filter((k) => !everKinds.has(k)).map((k) => CATEGORY_LABEL[k]),
-    zonesNeverVisited: wishZones.slice(0, 8),
     rarePeople: rare,
   };
 

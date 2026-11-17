@@ -949,7 +949,7 @@ export async function buildApp(opts: AppOptions) {
           updated: D.markReviewed(ctx(req), req.body),
         }),
       );
-      // memento-experiences: souvenirs, photos, places, people, wishes (EXA-01 to EXA-11).
+      // Souvenirs, photos, places, people (EXA-01 to EXA-11; the envies are experience tasks, D-171).
       registerSouvenirRoutes(api, { ctx, cacheDir: opts.cacheDir });
     },
     { prefix: '/api/v1' },

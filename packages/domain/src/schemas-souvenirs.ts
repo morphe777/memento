@@ -1,4 +1,4 @@
-// Input schemas of souvenirs, photos, people, places and wishes (memento-experiences, EXA-xx). Re-exported by
+// Input schemas of souvenirs, photos, people and places (EXA-xx). Re-exported by
 // schemas.ts: same single source for the API, OpenAPI, the web forms and the MCP tools.
 import { z } from 'zod';
 import { isValidDate } from './time.ts';
@@ -124,51 +124,3 @@ export const souvenirListQuery = z.object({
 });
 export type SouvenirListQuery = z.infer<typeof souvenirListQuery>;
 export const livingQuery = z.object({ from: date, to: date });
-
-// ---------- Wishes (EX-40, EX-41, EXA-07, EXA-08) ----------
-export const WISH_STATUSES = ['wish', 'planned', 'lived', 'archived'] as const;
-const wishFields = {
-  title,
-  listId: uuid.nullable(),
-  placeId: uuid.nullable(),
-  url: z.string().trim().url().max(2000).nullable(),
-  /** A picture of the page: downloaded and stored here (never shown from the remote site). */
-  imageUrl: z.string().trim().url().max(2000).nullable(),
-  startDate: date.nullable(),
-  endDate: date.nullable(),
-  price: z.string().trim().max(120).nullable(),
-  durationMin: duration.nullable(),
-  dogAllowed: z.enum(['yes', 'no', 'unknown']),
-  indoor: z.enum(['yes', 'no', 'mixed', 'unknown']),
-  season: z.string().trim().max(60).nullable(),
-  personIds: z.array(uuid).max(50),
-  tags: z.array(z.string().trim().min(1).max(40)).max(30),
-  note: z.string().max(4000),
-};
-export const wishCreate = z.object(wishFields).partial().extend({
-  title,
-  /** A place found by the provider, saved with the wish (instead of an existing placeId). */
-  place: placeInput.optional(),
-});
-export const wishPatch = z
-  .object({ ...wishFields, status: z.enum(['wish', 'archived']) })
-  .partial()
-  .extend({ place: placeInput.optional() });
-export type WishCreate = z.infer<typeof wishCreate>;
-export type WishPatch = z.infer<typeof wishPatch>;
-export const wishPlanBody = z.object({ date });
-export const wishParseBody = z.object({ url: z.string().trim().url().max(2000) });
-export const wishListQuery = z.object({
-  listId: uuid.optional(),
-  status: z.enum([...WISH_STATUSES, 'open']).optional(),
-  dog: z.enum(['yes', 'no']).optional(),
-  maxDurationMin: z.coerce.number().int().min(5).max(1440).optional(),
-  maxKm: z.coerce.number().min(1).max(20_000).optional(),
-  /** true: already lived at least once; false: never. */
-  done: z.enum(['true', 'false']).optional(),
-  season: z.string().max(60).optional(),
-  q: z.string().max(200).optional(),
-});
-export type WishListQuery = z.infer<typeof wishListQuery>;
-export const wishListCreate = z.object({ name, icon: z.string().trim().min(1).max(40).optional() });
-export const wishListPatch = wishListCreate.extend({ position: z.number().int().min(0) }).partial();

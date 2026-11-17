@@ -4,7 +4,7 @@
 // Closed to tokens by D-123: GET /settings, POST /changes/mark-reviewed, POST /reports/generate, writes on domains
 // and groups; by D-136: POST /notifications/read-all, POST /plan/migrate-dependencies; and, as before, accounts,
 // tokens, AI settings and helpers, notifications setup, import, export, purge; by D-168: the configuration of the
-// people, the wish lists and the remembered places, the photo files and the map tiles.
+// people and the remembered places, the photo files and the map tiles.
 // `capture` (D-168): the routes of a capture token (iPhone Shortcut), which reaches nothing else; read_write tokens
 // may call them too, read tokens may not.
 export type TokenAccess = 'read' | 'write' | 'capture';
@@ -117,14 +117,6 @@ export const TOKEN_ROUTES: Readonly<Record<string, TokenAccess>> = {
   'POST /api/v1/week-plans/:isoWeek/propose': 'write',
   'POST /api/v1/week-plans/:isoWeek/validate': 'write',
   'GET /api/v1/weeks/:isoWeek/execution': 'read',
-  'GET /api/v1/wish-lists': 'read', // EX-40
-  'GET /api/v1/wishes': 'read',
-  'POST /api/v1/wishes': 'write',
-  'POST /api/v1/wishes/parse-url': 'read', // EXA-08: reads a page, writes nothing
-  'GET /api/v1/wishes/:id': 'read',
-  'PATCH /api/v1/wishes/:id': 'write',
-  'DELETE /api/v1/wishes/:id': 'write',
-  'POST /api/v1/wishes/:id/plan': 'write',
 };
 
 /** The access a token has to `METHOD /path` (route pattern), or undefined: signed-in user only. */

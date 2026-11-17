@@ -1,7 +1,7 @@
-// EXA-08 / D-164: reads a shared page to pre-fill a wish: Open Graph, JSON-LD (schema.org Event, Place,
+// EXA-08 / D-164: reads a shared page to pre-fill an envie (D-171): Open Graph, JSON-LD (schema.org Event, Place,
 // Restaurant…), and the links of Google Maps and Apple Plans. The server fetches what the user shared, so the
 // address is checked first (SSRF): http(s) only, a public address only (never the homelab network), at most 4
-// redirects (each one checked), 8 s, 3 MB of HTML. An unreadable page never blocks: the wish keeps the URL.
+// redirects (each one checked), 8 s, 3 MB of HTML. An unreadable page never blocks: the envie keeps the URL.
 import { lookup as dnsLookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
 import { DomainError } from '../errors.ts';
@@ -180,7 +180,7 @@ function jsonLdNodes(html: string): Json[] {
     try {
       walk(JSON.parse(m[1].trim()));
     } catch {
-      // A broken JSON-LD block is skipped: the Open Graph tags still pre-fill the wish (CE-31).
+      // A broken JSON-LD block is skipped: the Open Graph tags still pre-fill the envie (CE-31).
     }
   }
   return nodes;
@@ -259,7 +259,7 @@ export interface ParsedPage {
   endDate: string | null;
   price: string | null;
   place: ParsedPlace | null;
-  /** What was read (Open Graph and schema.org nodes), kept with the wish to be exhaustive. */
+  /** What was read (Open Graph and schema.org nodes), (what was understood). */
   meta: Json;
 }
 
@@ -378,17 +378,6 @@ export async function readUrl(url: string): Promise<ParsedPage & { error: string
     return { ...parseHtml(url, res.finalUrl, res.body.toString('utf8')), error: null };
   } catch (e) {
     if (e instanceof DomainError && e.code === 'URL_UNREADABLE') return empty(url, e.code);
-    throw e;
-  }
-}
-
-/** A remote picture (the page's image), checked like the page: at most 10 MB. */
-export async function fetchImage(url: string): Promise<Buffer | null> {
-  try {
-    const res = await safeFetch(url, { maxBytes: 10 * 1024 * 1024, accept: 'image/*' });
-    return /^image\//.test(res.contentType) ? res.body : null;
-  } catch (e) {
-    if (e instanceof DomainError) return null;
     throw e;
   }
 }

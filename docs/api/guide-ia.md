@@ -144,8 +144,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   projets (≤ 120 caractères). Écris le pourquoi, pas le quoi.
 - **Suites de tâches** (RB-06, D-101) : dans un projet séquentiel, une tâche `isFree` n'attend rien et **démarre une
   nouvelle suite** : les tâches non libres placées dessous la suivent, pas celles du dessus.
-- Expériences : `GET /experiences` (cible du mois, souvenirs, prévues, réserve) ; `POST /experiences` ajoute une
-  envie ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
+- Expériences : `GET /experiences` (cible du mois, souvenirs, prévues, et `reserve` : les **envies**) ;
+  `POST /experiences { title, durationMin?, domainId?, description? }` ajoute une **envie** (D-171 : une tâche Inbox
+  marquée Expérience, sans date ; le moteur en propose quand la cible du mois n'est pas tenue) ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
   expérience **déjà vécue** (D-153) : faite à `doneAt` (maintenant si absent), dans le projet donné (durée alors
   obligatoire) ou dans le domaine (Famille si absent, aucun si `null`).
 
@@ -169,10 +170,10 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 7. **Construire un plan** : `GET /plan-graph` (garde `version`) → monte la liste d'ops → `POST /plan/preview` : lis
    `alerts` et `capacity` → ajuste → `POST /plan/apply { ops, baseVersion }`. Résume à l'utilisateur ce que tu as changé.
 
-## 6. Souvenirs, lieux, personnes, envies
+## 6. Souvenirs, lieux, personnes
 
 Un **souvenir** est la trace d'une expérience vécue (photos, lieu, personnes, phrase, avis). Une **envie** est une
-sortie ou un événement à vivre un jour. Accès : « lecture » = jeton lecture ou plus ; « écriture » = lecture-écriture.
+expérience à vivre un jour : une tâche Expérience sans date (`add_experience_idea`, section 4, D-171). Accès : « lecture » = jeton lecture ou plus ; « écriture » = lecture-écriture.
 
 | Route | Accès | Rôle |
 | --- | --- | --- |
@@ -181,49 +182,36 @@ sortie ou un événement à vivre un jour. Accès : « lecture » = jeton lectur
 | `PATCH /souvenirs/{id}` | écriture | titre, `startDate`, `endDate`, `placeId`, `personIds`, `newPersons` (prénoms), `phrase`, `rating`, `domainId`, `projectId`, `description` |
 | `GET /souvenirs/{id}/suggestions`, `GET /souvenirs/on-this-day` | lecture | expériences prévues à rattacher ; « il y a un an » |
 | `POST /souvenirs/{id}/attach\|merge\|save\|cover`, `DELETE /souvenirs/{id}` | écriture | rattacher, fusionner, enregistrer un brouillon, photo à la une, supprimer (seulement si l'utilisateur le demande) |
-| `POST /captures`, `POST /captures/test`, `POST /souvenirs/{id}/photos` | jeton « capture » ou écriture | capture (photos, `url` ou `lat`/`lng`/`name`) et envoi des photos |
+| `POST /captures`, `POST /captures/test`, `POST /souvenirs/{id}/photos` | jeton « capture » ou écriture | capture (photos ; ou `url`, ou `lat`/`lng`/`name` : une envie) et envoi des photos |
 | `GET /places/search?q=&near=lat,lng` | lecture | lieux par leur nom (OpenStreetMap) |
 | `GET /places`, `GET /places/nearby`, `POST /places` | lecture / lecture / écriture | lieux mémorisés, proches d'un point, ajout |
 | `GET /persons` | lecture | personnes (`id`, `name`, `group` : `family`, `friends`, `other`, `toConfirm`) ; écritures : interface seule |
-| `GET /wish-lists` | lecture | listes d'envies (Restaurants, Spectacles et événements…) ; écritures : interface seule |
-| `GET /wishes` | lecture | filtres `listId`, `status` (`wish`, `planned`, `lived`, `archived`, `open` = hors archivées, par défaut), `dog` (`yes`/`no`), `maxDurationMin`, `maxKm`, `done` (`true`/`false`), `season`, `q` |
-| `GET /wishes/{id}` | lecture | détail |
-| `POST /wishes` | écriture | `title` obligatoire ; `listId`, `placeId` ou `place` (trouvé par `/places/search`), `url`, `imageUrl`, `startDate`, `endDate`, `price`, `durationMin`, `dogAllowed`, `indoor`, `season`, `personIds`, `tags`, `note` |
-| `POST /wishes/parse-url` `{ url }` | lecture | lit une page et propose les champs d'une envie, sans rien écrire |
-| `PATCH /wishes/{id}` | écriture | mêmes champs ; `status` : `wish` ou `archived` seulement |
-| `POST /wishes/{id}/plan` `{ date }` | écriture | prévoit l'envie |
 | `GET /living?from&to` | lecture | bilan « Vivre » d'une période |
 
-Photos, images d'envies, tuiles de carte, configuration des personnes et des listes, modification et oubli des lieux :
+Photos, tuiles de carte, configuration des personnes, modification et oubli des lieux :
 interface seule (`USER_ONLY`). **Tu ne peux pas téléverser de photo** par MCP : la capture se fait par l'application ou le
 Raccourci de l'utilisateur.
 
 Champs d'un souvenir : `id`, `title`, `description`, `startDate`, `endDate`, `days`, `place` (`id`, `name`, `category`,
 `lat`, `lng`, `city`), `persons` (`id`, `name`, `group`), `phrase`, `rating`, `photoCount`, `photos`, `domainId`,
-`projectId`, `wishId`. Champs d'une envie : `id`, `title`, `status`, `listId`, `place`, `url`, `startDate`, `endDate`,
-`durationMin`, `dogAllowed`, `plannedTask` (`id`, `dueDate`), `persons`, `tags`, `note`.
+`projectId`.
 
 Règles en bref :
 
 - **Un souvenir par expérience vécue** (1–1 avec la tâche Expérience, D-157) : le cocher ou `log_experience` en crée un ;
   `title`, `description`, `domainId`, `projectId` et `startDate` (heure de « faite ») sont ceux de la tâche, que
   `PATCH /souvenirs/{id}` met à jour. Décocher la tâche cache le souvenir, le supprimer l'emporte avec ses photos.
-- **Capture** (`POST /captures`) : un brouillon déjà compté comme vécu, que l'utilisateur vérifie dans l'application
-  (`editUrl`). Rejouer le même `clientCaptureId` (8 caractères ou plus) renvoie la première capture, sans doublon. Un
+- **Capture** (`POST /captures`) : des photos donnent un brouillon de souvenir déjà compté comme vécu, que
+  l'utilisateur vérifie dans l'application (`editUrl`, `kind: 'souvenir'`) ; rejouer le même `clientCaptureId`
+  (8 caractères ou plus) renvoie la première capture, sans doublon. Un lien ou un lieu donne une **envie**
+  (`kind: 'idea'`, D-171) : titre lu sur la page, texte, lien, dates, prix et lieu dans la description. Un
   jeton « capture » n'appelle que les trois routes de capture ; partout ailleurs 403 `CAPTURE_ONLY`.
 - **Lieux** : cherche par nom avec `search_places` (OpenStreetMap, autour de `near` ou de la maison), pas par
-  coordonnées. Un lieu choisi est **mémorisé une fois** (une référence = un lieu) et réutilisé. Service indisponible :
+  coordonnées. Les réponses à moins de 100 km du point passent d'abord, lieux mémorisés compris (D-171). Un lieu choisi est **mémorisé une fois** (une référence = un lieu) et réutilisé. Service indisponible :
   503 `PLACE_PROVIDER_UNAVAILABLE`, jamais bloquant (lieu déjà mémorisé ou tapé à la main).
-- **Statut d'une envie, lu et non stocké** : `wish` ; `planned` tant que sa tâche est à faire ; `lived` dès qu'un
-  souvenir y est rattaché (elle reste dans sa liste et peut être replanifiée) ; `archived` à la main, ou d'office 7 jours
-  après la fin d'un événement daté.
-- **`plan_wish`** (`date` aujourd'hui ou à venir) crée une tâche Expérience datée dans l'Inbox, ajoutée au plan de la
-  semaine de cette date (domaine déduit des personnes) ; replanifier déplace la date.
-- **`parse_wish_url`** lit la page (JSON-LD, Open Graph) : à relire avec l'utilisateur avant `create_wish`. Une page
-  illisible n'est pas une erreur : l'avertissement `URL_UNREADABLE` accompagne un titre « (à confirmer) ».
 - **Bilan `GET /living`** : `souvenirs`, `days`, `places`, `withPhotos`, `byPerson`, `categories`, `zones`, `medianKm`
   (distance médiane à la maison), `alike` (ce qui se ressemble), `novelties` (premières fois), `again` (« À refaire »),
-  `offTrack` (idées pour sortir des sentiers battus), `alerts` (« Aucun souvenir avec Alice depuis 90 jours »).
+  `offTrack` (types jamais faits, personnes peu vues), `alerts` (« Aucun souvenir avec Alice depuis 90 jours »).
 - Exemples fictifs : « Chez Lucette » à Valbourg, avec Alice.
 
 ## 7. Ce que tu ne fais pas
@@ -266,13 +254,12 @@ Règles en bref :
 | `INVALID_DATE` | date impossible ou mal écrite (`AAAA-MM-JJ`) |
 | `UNSUPPORTED_MEDIA` | photo dans un format non lu (HEIC refusé : envoyer du JPEG) |
 | `PHOTO_TOO_LARGE` | photo de plus de 40 Mo |
-| `URL_UNREADABLE` | page illisible : **avertissement non bloquant**, l'envie est créée avec un titre « (à confirmer) » |
+| `URL_UNREADABLE` | lien partagé illisible : **avertissement non bloquant**, l'envie est créée avec un titre « (à confirmer) » |
 | `PLACE_PROVIDER_UNAVAILABLE` (503) | recherche de lieux indisponible : lieu mémorisé ou tapé à la main |
 | `CAPTURE_ONLY` (403) | un jeton « capture » n'appelle que les routes de capture |
 | `NOT_PLANNED_EXPERIENCE` | seule une expérience encore à vivre se rattache à un souvenir |
 | `SOUVENIR_EXISTS` | cette expérience a déjà un souvenir |
-| `DATE_PAST` | planifier une envie aujourd'hui ou plus tard |
-| `PLACE_IN_USE` | lieu encore utilisé par un souvenir ou une envie |
+| `PLACE_IN_USE` | lieu encore utilisé par un souvenir |
 | `PERSON_EXISTS` | une personne porte déjà ce nom |
 | `USER_ONLY` (403) | route réservée à l'interface |
 | `TASK_NOT_FOUND` / `GROUP_NOT_FOUND` | tâche ou groupe inconnu (dans une sélection, une liste de groupes) |
@@ -292,12 +279,12 @@ l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
   `list_projects`, `get_project`, `get_templates`, `get_experiences`, `list_meta_objectives`, `get_meta_objective`,
   `get_plan_graph`, `preview_plan_changes`, `list_tasks`, `list_inbox`, `get_task`, `get_calendar`, `parse_task`,
   `get_cap`, `get_week_plan`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`, `list_souvenirs`, `get_souvenir`,
-  `search_places`, `list_persons`, `list_wishes`, `parse_wish_url` (lit une page, n'écrit rien), `get_living_report`.
+  `search_places`, `list_persons`, `get_living_report`.
 - **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
   en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `add_experience_idea`,
   `log_experience`, `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`,
   `update_meta_objective`, `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`,
   `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
-  `add_vacation`, `add_resource`, `update_souvenir`, `create_wish`, `plan_wish`.
+  `add_vacation`, `add_resource`, `update_souvenir`.
 - **Suppression ou remplacement** : `set_project_dependencies`, `remove_project_dependency`, `apply_plan_changes`,
   `set_week_plan_items`, `remove_vacation`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`.

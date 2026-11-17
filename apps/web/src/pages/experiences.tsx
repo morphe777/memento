@@ -2,7 +2,7 @@
 // (GET /experiences); the page adds ideas to the reserve, records a lived experience (D-153) and opens tasks.
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { LivingView } from '../components/living.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
@@ -26,7 +26,6 @@ import { useAction, useDomainLookup } from '../lib/hooks.ts';
 import type { Living } from '../lib/souvenirs.ts';
 import type { ExperiencesPage as Data, Project, TaskDuration } from '../lib/types.ts';
 import { SouvenirsJournal, type SouvenirsView, useCaptureSouvenir } from './souvenirs.tsx';
-import { NewWishPanel, WishesBoard } from './wishes.tsx';
 
 type Item = Data['lived'][number];
 
@@ -39,7 +38,7 @@ export type ExperiencesTab = 'vecues' | 'a-vivre' | 'bilan';
 
 /**
  * One page for the experiences (user request 17/11/2026, D-170): the counters, then « Vécues » (the souvenirs:
- * journal or map), « À vivre » (planned, wishes, reserve) and « Bilan » (« Vivre » for a year or a quarter).
+ * journal or map), « À vivre » (planned, then the envies: the reserve, D-171) and « Bilan » (« Vivre » for a year or a quarter).
  */
 export function ExperiencesPage({
   tache,
@@ -56,11 +55,16 @@ export function ExperiencesPage({
     navigate({ to: '/experiences', search: { onglet, ...(onglet === 'vecues' ? { vue } : {}), ...search } });
   const open = (id: string) => go({ tache: id });
   const [living, setLiving] = useState(false);
-  const [addingWish, setAddingWish] = useState(false);
+  // « + Envie »: the « À vivre » tab, the cursor in the envie field.
+  const [focusIdea, setFocusIdea] = useState(0);
+  const newIdea = () => {
+    go({ onglet: 'a-vivre', vue: undefined });
+    setFocusIdea((n) => n + 1);
+  };
   const capture = useCaptureSouvenir();
   usePageFab(
     onglet === 'a-vivre' ? 'Nouvelle envie' : 'Nouveau souvenir',
-    onglet === 'a-vivre' ? () => setAddingWish(true) : capture.pick,
+    onglet === 'a-vivre' ? newIdea : capture.pick,
   );
   if (q.isError) return <ErrorBox error={q.error} />;
   if (!q.data) return <Loading />;
@@ -75,7 +79,7 @@ export function ExperiencesPage({
           title="Expériences"
           actions={
             <>
-              <button type="button" className="btn" onClick={() => setAddingWish(true)}>
+              <button type="button" className="btn" onClick={newIdea}>
                 + Envie
               </button>
               <button
@@ -128,7 +132,7 @@ export function ExperiencesPage({
           <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
             {d.daysThisYear} jour{d.daysThisYear > 1 ? 's' : ''} vécu{d.daysThisYear > 1 ? 's' : ''} ·{' '}
             {d.planned.length} prévue
-            {d.planned.length > 1 ? 's' : ''} · {d.reserve.length} en réserve
+            {d.planned.length > 1 ? 's' : ''} · {d.reserve.length} envie{d.reserve.length > 1 ? 's' : ''}
           </span>
         </section>
         <section className="card flex flex-col gap-2" style={{ padding: '18px 20px' }}>
@@ -167,7 +171,7 @@ export function ExperiencesPage({
           { value: 'vecues', label: `Vécues · ${d.thisYear} cette année` },
           {
             value: 'a-vivre',
-            label: `À vivre · ${d.planned.length} prévue${d.planned.length > 1 ? 's' : ''}`,
+            label: `À vivre · ${d.planned.length + d.reserve.length}`,
           },
           { value: 'bilan', label: 'Bilan' },
         ]}
@@ -191,15 +195,11 @@ export function ExperiencesPage({
               />
             ))}
           </Section>
-          <div className="flex flex-col gap-3">
-            <h2 className="h2">Envies</h2>
-            <WishesBoard adding={addingWish} onAdding={setAddingWish} />
-          </div>
           <Section
-            title="Réserve"
-            info="Les idées d'expériences gardées comme tâches Inbox marquées Expérience : le moteur peut en proposer dans le plan de la semaine quand la cible du mois n'est pas tenue."
+            title="Envies"
+            info="Les expériences à vivre un jour, sans date. Le moteur en propose dans le plan de la semaine quand la cible du mois n'est pas tenue. Un lien ou un lieu partagé depuis l'iPhone arrive ici."
           >
-            <AddIdea />
+            <AddIdea focus={focusIdea} />
             {d.reserve.map((t) => (
               <Row key={t.id} t={t} onOpen={open} />
             ))}
@@ -207,7 +207,6 @@ export function ExperiencesPage({
         </div>
       )}
       {onglet === 'bilan' && <YearLiving />}
-      {onglet !== 'a-vivre' && addingWish && <NewWishPanel onClose={() => setAddingWish(false)} listId="" />}
       <TaskDrawer taskId={tache ?? null} onClose={() => go({ tache: undefined })} />
       {living && <LivedPanel onClose={() => setLiving(false)} />}
     </div>
@@ -315,7 +314,11 @@ function YearLiving() {
   );
 }
 
-function AddIdea() {
+function AddIdea({ focus }: { focus: number }) {
+  const field = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (focus) field.current?.focus();
+  }, [focus]);
   const dl = useDomainLookup();
   const [title, setTitle] = useState('');
   const [duration, setDuration] = useState<TaskDuration | null>(120);
@@ -324,7 +327,7 @@ function AddIdea() {
   const domainId = picked ?? dl.domains.find((d) => d.name === 'Famille')?.id ?? '';
   const add = useAction(
     () => post('/experiences', { title: title.trim(), durationMin: duration, domainId: domainId || null }),
-    { onSuccess: () => setTitle(''), toast: 'Ajoutée à la réserve.' },
+    { onSuccess: () => setTitle(''), toast: 'Envie ajoutée.' },
   );
   return (
     <form
@@ -335,10 +338,11 @@ function AddIdea() {
       }}
     >
       <input
+        ref={field}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        placeholder="Une envie d'expérience (ex. baptême de plongée)"
-        aria-label="Nouvelle idée d'expérience"
+        placeholder="Une envie (ex. baptême de plongée)"
+        aria-label="Nouvelle envie"
         style={{ flex: '1 1 220px' }}
       />
       <select

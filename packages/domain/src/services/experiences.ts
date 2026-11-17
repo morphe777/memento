@@ -1,13 +1,15 @@
 // Page « Expériences » (decision D-54): the goal of living more experiences, made visible.
 // Target per calendar month (R-02, D-154), memories (done experiences), planned ones (in a plan of this week or a
-// week ahead, or with a deadline) and the reserve (other experience tasks to do). D-153: a lived experience is
+// week ahead, or with a deadline) and the envies (D-171: the reserve, other experience tasks to do). D-153: a lived experience is
 // recorded directly, done.
 import { desc, eq, schema } from '@memento/db';
 import { type Ctx, ctxNow, tx } from '../context.ts';
 import type { ExperienceIdea, ExperienceLived } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
 import { monthOf, parisDate } from '../time.ts';
+import { placesNearby } from './places.ts';
 import { serializeProjects } from './projects.ts';
+import { readUrl } from './read-url.ts';
 import { listDomains } from './referential.ts';
 import { daysLived } from './souvenirs.ts';
 import { completeTask, createTask, listTasks } from './tasks.ts';
@@ -103,10 +105,60 @@ export function getExperiencesPage(ctx: Ctx) {
   };
 }
 
-/** « Ajouter à la réserve »: an experience idea is an Inbox task flagged as experience (no date). */
+/** « + Envie » (D-171): an experience idea is an Inbox task flagged as experience (no date). */
 export function addExperienceIdea(ctx: Ctx, input: ExperienceIdea) {
   return createTask(ctx, { ...input, isExperience: true });
 }
+
+/** D-171: a shared idea goes to the envies, in Famille like « + Envie » (found by its name, none without it). */
+const shareIdea = (ctx: Ctx, title: string, lines: (string | null | undefined)[]) =>
+  addExperienceIdea(ctx, {
+    title: title.slice(0, 200),
+    description: lines.filter(Boolean).join('\n'),
+    durationMin: null,
+    domainId: listDomains(ctx).find((d) => d.name === 'Famille')?.id ?? null,
+  });
+
+/**
+ * CE-30, CE-31, D-171: a shared page becomes an envie titled from the page; what it says (text, address, dates,
+ * price, place) goes in the description. An unreadable page still gives an envie: the URL, a title to confirm.
+ */
+export async function ideaFromUrl(ctx: Ctx, url: string) {
+  const page = await readUrl(url);
+  const host = new URL(page.finalUrl).hostname.replace(/^www\./, '');
+  const p = page.place;
+  const t = shareIdea(ctx, page.title ?? `${host} (à confirmer)`, [
+    page.description,
+    url,
+    page.startDate &&
+      `Dates : ${fmtDay(page.startDate)}${page.endDate && page.endDate !== page.startDate ? ` → ${fmtDay(page.endDate)}` : ''}`,
+    page.price && `Prix : ${page.price}`,
+    p && (p.name || p.address) && `Lieu : ${[p.name, p.address, p.city].filter(Boolean).join(', ')}`,
+  ]);
+  return { task: t, warnings: page.error ? [page.error] : [] };
+}
+
+/** CE-32, D-171: a place shared from Plans or Google Maps: its name (or the named place there), and a map link. */
+export async function ideaFromPlace(ctx: Ctx, p: { lat: number; lng: number; name?: string }) {
+  const warnings: string[] = [];
+  let name = p.name?.trim() ?? '';
+  let where = '';
+  if (!name) {
+    const near = await placesNearby(ctx, p.lat, p.lng);
+    if (near.providerError) warnings.push(near.providerError);
+    const named = near.candidates.find((c) => !['address', 'city'].includes(c.category ?? ''));
+    name = named?.name ?? 'Lieu partagé';
+    where = named ? [named.address, named.city].filter(Boolean).join(', ') : '';
+  }
+  const t = shareIdea(ctx, name, [
+    where && `Lieu : ${where}`,
+    `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=18/${p.lat}/${p.lng}`,
+  ]);
+  return { task: t, warnings };
+}
+
+const fmtDay = (d: string) =>
+  new Date(`${d}T12:00:00Z`).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
 /**
  * D-153: « J'ai vécu une expérience »: an experience recorded already done (Paris time, now by default), traced like

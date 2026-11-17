@@ -29,7 +29,6 @@ export function photosDir(ctx: Pick<Ctx, 'photosDir'>): string {
 export function photoFile(dir: string, id: string, size: PhotoSize): string {
   return join(dir, id.slice(0, 2), `${id}-${size}.webp`);
 }
-export const wishImageFile = (dir: string, wishId: string) => join(dir, 'wishes', `${wishId}.webp`);
 
 /** EXIF « 2026:11:15 12:40:05 » (+ offset) or ISO: an instant. Without an offset, the time is Paris time. */
 export function normalizeTakenAt(raw: string | null | undefined, offset?: string | null): string | null {
@@ -124,7 +123,7 @@ export function removePhotoFiles(dir: string, ids: string[]) {
 }
 
 /**
- * Files whose photo (or wish) is gone, older than an hour (an upload writes its files just before its row):
+ * Files whose photo is gone (D-171: the old « wishes » pictures too), older than an hour (an upload writes its files just before its row):
  * removed. Run at API start, after deletions that go through tasks or projects.
  */
 export function sweepPhotoFiles(ctx: Ctx, olderThanMs = 3_600_000): number {
@@ -137,14 +136,6 @@ export function sweepPhotoFiles(ctx: Ctx, olderThanMs = 3_600_000): number {
       .all()
       .map((p) => p.id),
   );
-  const wishes = new Set(
-    ctx.db
-      .select({ id: schema.wish.id, img: schema.wish.hasImage })
-      .from(schema.wish)
-      .all()
-      .filter((w) => w.img)
-      .map((w) => w.id),
-  );
   const limit = Date.now() - olderThanMs;
   let removed = 0;
   for (const sub of readdirSync(dir)) {
@@ -152,7 +143,7 @@ export function sweepPhotoFiles(ctx: Ctx, olderThanMs = 3_600_000): number {
     if (!statSync(folder).isDirectory()) continue;
     for (const f of readdirSync(folder)) {
       const id = f.replace(/(-(full|medium|thumb))?\.webp$/, '');
-      const known = sub === 'wishes' ? wishes.has(id) : photos.has(id);
+      const known = sub !== 'wishes' && photos.has(id);
       const file = join(folder, f);
       if (!known && statSync(file).mtimeMs < limit) {
         unlinkSync(file);
@@ -161,23 +152,4 @@ export function sweepPhotoFiles(ctx: Ctx, olderThanMs = 3_600_000): number {
     }
   }
   return removed;
-}
-
-/** A remote picture (wish page): one 1 280 px WebP, no metadata; null when it is not a picture. */
-export async function processWishImage(buf: Buffer): Promise<Buffer | null> {
-  const readable = await sharp(buf)
-    .metadata()
-    .then((m) => !!m.format)
-    .catch(() => false);
-  if (!readable) return null;
-  return sharp(buf, { animated: false })
-    .rotate()
-    .resize(PHOTO_SIZES.medium, PHOTO_SIZES.medium, { fit: 'inside', withoutEnlargement: true })
-    .webp({ quality: 80 })
-    .toBuffer();
-}
-
-export function writeWishImage(dir: string, wishId: string, data: Buffer) {
-  mkdirSync(join(dir, 'wishes'), { recursive: true });
-  writeFileSync(wishImageFile(dir, wishId), data);
 }

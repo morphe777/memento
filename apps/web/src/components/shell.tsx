@@ -69,7 +69,7 @@ const NAV: { section: string; items: NavItem[] }[] = [
       {
         to: '/experiences',
         label: 'Expériences',
-        // D-170: souvenirs and wishes are tabs of Expériences (their sheets too).
+        // D-170: souvenirs and envies are tabs of Expériences (a souvenir's sheet too).
         active: (path) => under(path, '/experiences') || under(path, '/souvenirs') || under(path, '/envies'),
       },
     ],

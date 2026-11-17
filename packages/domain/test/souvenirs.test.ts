@@ -254,6 +254,15 @@ describe('places (EX-13)', () => {
     expect(r.candidates.map((c) => c.city)).toEqual(['Valbourg', '']);
     expect(calls[0]).toContain('location_bias_scale');
   });
+  it('D-171: a place kept far away comes after the answers of the region, searched first within 100 km', async () => {
+    const ctx = souvenirCtx();
+    savePlace(ctx, { name: 'Chez Lucette', lat: -37.76, lng: 144.93, provider: 'manual' });
+    const calls = stubNetwork(osmRoutes);
+    const r = await searchPlaces(ctx, 'Chez Lucette', LUCETTE);
+    expect(r.candidates[0]).toMatchObject({ name: 'Chez Lucette', city: 'Valbourg', memorized: false });
+    expect(r.candidates.at(-1)).toMatchObject({ memorized: true, lat: -37.76 });
+    expect(calls[0]).toMatch(/bbox=1\.6\d*,45\.6\d*,4\.3\d*,47\.4\d*/);
+  });
   it('D-169: the check screen searches around the photos, even after a far place was chosen', async () => {
     const ctx = souvenirCtx();
     stubNetwork(osmRoutes);
@@ -445,8 +454,7 @@ describe('every lived experience has its souvenir (D-157)', () => {
     });
     // An export of 1.2 (no souvenir tables) still imports.
     const old = JSON.parse(JSON.stringify(dump));
-    for (const k of ['place', 'person', 'wishList', 'wish', 'souvenir', 'souvenirPerson', 'photo'])
-      delete old.tables[k];
+    for (const k of ['place', 'person', 'souvenir', 'souvenirPerson', 'photo']) delete old.tables[k];
     expect(importData(souvenirCtx(), old).ok).toBe(true);
     purgeData(ctx, { history: false });
     expect(listSouvenirs(ctx)).toEqual([]);

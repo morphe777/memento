@@ -32,7 +32,6 @@ import { ReportPage, ReportsPage } from './pages/reports.tsx';
 import { SouvenirPage, type SouvenirsView, SouvenirVerifyPage } from './pages/souvenirs.tsx';
 import { TasksPage, type TaskView } from './pages/tasks.tsx';
 import { WeekPage } from './pages/week.tsx';
-import { WishPage } from './pages/wishes.tsx';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -188,7 +187,7 @@ const experiencesRoute = createRoute({
     return <ExperiencesPage tache={tache} onglet={onglet} vue={vue} />;
   },
 });
-// D-170: souvenirs and wishes are tabs of Expériences; the old addresses lead there.
+// D-170: souvenirs and envies are tabs of Expériences; the old addresses lead there.
 const souvenirsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/souvenirs',
@@ -214,15 +213,9 @@ const souvenirVerifyRoute = createRoute({
     return <SouvenirVerifyPage key={id} id={id} />;
   },
 });
+// D-170, D-171: the envies are the « À vivre » tab of Expériences (an old link to one envie leads there too).
 const wishesRoute = route('/envies', () => <Navigate to="/experiences" search={{ onglet: 'a-vivre' }} />);
-const wishRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/envies/$id',
-  component: function Wish() {
-    const id = wishRoute.useParams().id;
-    return <WishPage key={id} id={id} />;
-  },
-});
+const wishRoute = route('/envies/$id', () => <Navigate to="/experiences" search={{ onglet: 'a-vivre' }} />);
 const reportsRoute = route('/rapports', ReportsPage);
 const reportRoute = createRoute({
   getParentRoute: () => rootRoute,

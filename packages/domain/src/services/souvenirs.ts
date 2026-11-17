@@ -9,6 +9,7 @@ import type { CaptureBody, PhotoMeta, SouvenirListQuery, SouvenirPatch } from '.
 import { getSettings } from '../settings.ts';
 import { addDays, daysBetween, frMonth, isoWeekOf, parisClock, parisDate } from '../time.ts';
 import { deleteTask } from './deletion.ts';
+import { ideaFromPlace, ideaFromUrl } from './experiences.ts';
 import { domainForPeople, personByName } from './persons.ts';
 import {
   normalizeTakenAt,
@@ -21,9 +22,8 @@ import {
 import { distanceM, getPlace, nearestMemorized, placeFromCandidate, placesNearby } from './places.ts';
 import { serializeProjects } from './projects.ts';
 import { completeTask, createTask, getTaskRow, listTasks, moveTask, updateTask } from './tasks.ts';
-import { createWishFromPlace, createWishFromUrl } from './wishes.ts';
 
-const { souvenir, souvenirPerson, photo, task, person, place, project, wish } = schema;
+const { souvenir, souvenirPerson, photo, task, person, place, project } = schema;
 type SouvenirRow = typeof souvenir.$inferSelect;
 type Point = { lat: number; lng: number };
 
@@ -133,7 +133,6 @@ function views(ctx: Ctx, rows: SouvenirRow[]) {
       domainId: p ? (p.domainIds[0] ?? null) : t.domainId,
       projectId: t.projectId,
       projectTitle: p?.title ?? null,
-      wishId: r.wishId,
       createdAt: r.createdAt,
     };
   });
@@ -211,7 +210,7 @@ export interface CaptureFile {
   meta?: PhotoMeta;
 }
 export interface CaptureResult {
-  kind: 'souvenir' | 'wish';
+  kind: 'souvenir' | 'idea';
   id: string;
   editPath: string;
   existing: boolean;
@@ -220,7 +219,7 @@ export interface CaptureResult {
 
 /**
  * EXA-01: the single entry of every capture (app, share sheet, Shortcut): photos (with or without their files)
- * give a draft souvenir, a URL or a place give a wish. CE-11: the same `clientCaptureId` twice gives back the first.
+ * give a draft souvenir, a URL or a place give an envie (D-171). CE-11: the same photos sent twice give one souvenir.
  * The draft is already a lived experience (counted); « Annuler » on the check screen deletes it.
  */
 export async function createCapture(
@@ -240,27 +239,16 @@ export async function createCapture(
         existing: true,
         warnings: [],
       };
-    const w = ctx.db.select().from(wish).where(eq(wish.clientCaptureId, cid)).get();
-    if (w) return { kind: 'wish', id: w.id, editPath: `/envies/${w.id}`, existing: true, warnings: [] };
   }
-  if ('url' in body) {
-    const w = await createWishFromUrl(ctx, body.url, { clientCaptureId: cid });
+  // D-171: a shared page or place is an envie (an experience task of the reserve), opened in its drawer.
+  if ('url' in body || 'lat' in body) {
+    const r = 'url' in body ? await ideaFromUrl(ctx, body.url) : await ideaFromPlace(ctx, body);
     return {
-      kind: 'wish',
-      id: w.wish.id,
-      editPath: `/envies/${w.wish.id}`,
+      kind: 'idea',
+      id: r.task.id,
+      editPath: `/experiences?onglet=a-vivre&tache=${r.task.id}`,
       existing: false,
-      warnings: w.warnings,
-    };
-  }
-  if ('lat' in body) {
-    const w = await createWishFromPlace(ctx, body, { clientCaptureId: cid });
-    return {
-      kind: 'wish',
-      id: w.wish.id,
-      editPath: `/envies/${w.wish.id}`,
-      existing: false,
-      warnings: w.warnings,
+      warnings: r.warnings,
     };
   }
   const processed: (Awaited<ReturnType<typeof processPhoto>> & { meta: PhotoMeta })[] = [];
@@ -465,20 +453,12 @@ function pointOf(s: SouvenirView): Point | null {
 
 /**
  * CE-10: experiences still to live that this souvenir may be: due within 2 days of its dates, planned the week
- * of its first day, or planned from a wish at the same place.
+ * of its first day.
  */
 export function attachCandidates(ctx: Ctx, s: SouvenirView) {
   const from = addDays(s.startDate, -2);
   const to = addDays(s.endDate ?? s.startDate, 2);
   const week = isoWeekOf(s.startDate);
-  const wishPlace = new Map(
-    ctx.db
-      .select()
-      .from(wish)
-      .all()
-      .filter((w) => w.taskId && w.placeId)
-      .map((w) => [w.taskId!, w.placeId!]),
-  );
   return listTasks(ctx, { status: 'todo' })
     .filter((t) => t.isExperience && t.id !== s.taskId)
     .map((t) => {
@@ -487,9 +467,7 @@ export function attachCandidates(ctx: Ctx, s: SouvenirView) {
           ? ('date' as const)
           : t.plannedWeek === week
             ? ('week' as const)
-            : s.place && wishPlace.get(t.id) === s.place.id
-              ? ('place' as const)
-              : null;
+            : null;
       return { taskId: t.id, title: t.title, dueDate: t.dueDate, plannedWeek: t.plannedWeek, reason };
     })
     .filter((c) => c.reason);

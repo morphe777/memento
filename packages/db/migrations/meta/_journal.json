@@ -78,6 +78,13 @@
       "when": 1794909550566,
       "tag": "0010_souvenirs",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1794925168222,
+      "tag": "0011_wishes_to_reserve",
+      "breakpoints": true
     }
   ]
 }

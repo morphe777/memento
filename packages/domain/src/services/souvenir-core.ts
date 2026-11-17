@@ -3,37 +3,14 @@
 import { eq, inArray, schema } from '@memento/db';
 import { type Ctx, newId } from '../context.ts';
 
-const { souvenir, souvenirPerson, photo, task, wish } = schema;
+const { souvenir, souvenirPerson, photo, task } = schema;
 
-/**
- * A done experience task without souvenir gets one (saved, nothing else filled). The wish this task was planned
- * from (EX-40 cycle) becomes lived: the souvenir points to it.
- */
+/** A done experience task without souvenir gets one (saved, nothing else filled). */
 export function ensureSouvenir(ctx: Ctx, taskId: string) {
   const t = ctx.db.select().from(task).where(eq(task.id, taskId)).get();
   if (!t?.isExperience || t.status !== 'done') return;
-  const origin = ctx.db.select().from(wish).where(eq(wish.taskId, taskId)).get();
-  const existing = ctx.db.select().from(souvenir).where(eq(souvenir.taskId, taskId)).get();
-  if (!existing) {
-    ctx.db
-      .insert(souvenir)
-      .values({
-        id: newId(),
-        createdBy: ctx.actor,
-        taskId,
-        wishId: origin?.id ?? null,
-        placeId: origin?.placeId ?? null,
-        status: 'saved',
-      })
-      .run();
-    return;
-  }
-  if (origin && !existing.wishId)
-    ctx.db
-      .update(souvenir)
-      .set({ wishId: origin.id, placeId: existing.placeId ?? origin.placeId })
-      .where(eq(souvenir.id, existing.id))
-      .run();
+  if (ctx.db.select().from(souvenir).where(eq(souvenir.taskId, taskId)).get()) return;
+  ctx.db.insert(souvenir).values({ id: newId(), createdBy: ctx.actor, taskId, status: 'saved' }).run();
 }
 
 /** Rows of the souvenirs of these tasks removed (people, photos); returns the photo ids (files to remove). */
@@ -54,8 +31,6 @@ export function removeSouvenirsOfTasks(ctx: Ctx, taskIds: string[]): string[] {
     ctx.db.delete(photo).where(inArray(photo.souvenirId, ids)).run();
     ctx.db.delete(souvenir).where(inArray(souvenir.id, ids)).run();
   }
-  // A wish planned as one of these tasks goes back to the wishes (its souvenirs keep pointing to it).
-  ctx.db.update(wish).set({ taskId: null }).where(inArray(wish.taskId, taskIds)).run();
   return photoIds;
 }
 

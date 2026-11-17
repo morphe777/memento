@@ -16,16 +16,17 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 - **Revivre** : journal par mois, carte (un point par lieu, rayon de vie), fiche avec galerie plein écran et
   parcours des photos, « Il y a un an » sur Ma semaine, bilan **« Vivre »** dans le rapport trimestriel et la page
   Expériences (D-166, D-167).
-- **Un seul menu « Expériences »** : onglets **Vécues** (journal, carte), **À vivre** (prévues, envies, réserve)
-  et **Bilan** (D-170).
+- **Un seul menu « Expériences »** : onglets **Vécues** (journal, carte), **À vivre** (prévues, envies) et
+  **Bilan** (D-170).
 - Lieux plus fiables : Photon prend le relais quand Overpass ne répond pas, l'écran de vérification recherche autour
-  des photos dès leur arrivée, la recherche par nom donne d'abord les lieux proches (D-169).
-- **Envies** : listes typées, « + Envie », un lien partagé ou collé est lu (titre, image, dates, lieu, tarif),
-  « Que faire ? », « Planifier » vers le plan de la semaine (D-164, D-165).
-- API : `/captures`, `/souvenirs`, `/photos`, `/places`, `/persons`, `/wishes`, `/wish-lists`, `/map`, `/living` ;
+  des photos dès leur arrivée, la recherche par nom donne d'abord les lieux à moins de 100 km, lieux mémorisés compris (D-169, D-171).
+- **Envies** : la réserve d'expériences s'appelle désormais « Envies » ; « + Envie », et un lien ou un lieu partagé
+  depuis l'iPhone devient une envie (titre lu sur la page ; texte, dates, prix et lieu dans la description). Le
+  moteur en propose toujours quand la cible du mois n'est pas tenue (D-171).
+- API : `/captures`, `/souvenirs`, `/photos`, `/places`, `/persons`, `/map`, `/living` ;
   jeton **capture** (D-168). MCP : `list_souvenirs`, `get_souvenir`, `update_souvenir`, `search_places`,
-  `list_persons`, `list_wishes`, `create_wish`, `parse_wish_url`, `plan_wish`, `get_living_report`.
-- Données : les photos vont dans `photos/` du dossier de données (même bind, même sauvegarde) ; migration `0010`.
+  `list_persons`, `get_living_report`.
+- Données : les photos vont dans `photos/` du dossier de données (même bind, même sauvegarde) ; migrations `0010` et `0011` (D-171 : les envies d'avant deviennent des envies de la réserve).
 
 ## 1.2.0 — 2026-11
 

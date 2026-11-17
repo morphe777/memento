@@ -1,4 +1,4 @@
-// Shared pieces of the souvenirs and wishes screens (maquette memento-experiences): people chips, rating
+// Shared pieces of the souvenirs screens: people chips, rating
 // segments, the place picker (OSM candidates + search by name), the big journal card.
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';

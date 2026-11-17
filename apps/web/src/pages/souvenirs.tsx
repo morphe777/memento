@@ -502,11 +502,7 @@ export function SouvenirVerifyPage({ id }: { id: string }) {
             <span>
               C'est « <b>{a.title}</b> » ?{' '}
               <span style={{ color: 'var(--text-faint)' }}>
-                {a.reason === 'place'
-                  ? 'prévue au même lieu'
-                  : a.dueDate
-                    ? `prévue le ${fmtSpan(a.dueDate, null, false)}`
-                    : 'prévue cette semaine'}
+                {a.dueDate ? `prévue le ${fmtSpan(a.dueDate, null, false)}` : 'prévue cette semaine'}
               </span>
             </span>
             <button
@@ -972,14 +968,6 @@ export function SouvenirPage({ id }: { id: string }) {
                 <Link to="/experiences" search={{ tache: s.taskId }}>
                   Ouvrir la tâche
                 </Link>
-                {s.wishId && (
-                  <>
-                    {' · '}
-                    <Link to="/envies/$id" params={{ id: s.wishId }}>
-                      l'envie d'origine
-                    </Link>
-                  </>
-                )}
               </Info>
               {s.description.trim() && (
                 <div className="text-[14px] whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>

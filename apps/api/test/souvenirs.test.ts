@@ -1,5 +1,5 @@
 // memento-experiences through HTTP: the capture of the iPhone Shortcut (multipart, capture token), the app (JSON
-// then the files), the photo files, the wishes from a URL, the map tiles (D-157 to D-168). Fictional data only.
+// then the files), the photo files, the envies from a URL (D-171), the map tiles (D-157 to D-168). Fictional data only.
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -167,7 +167,7 @@ describe('capture over HTTP (EXA-01)', () => {
     expect(exp).toMatchObject({ doneThisMonth: 1, daysThisMonth: 1 });
   });
 
-  it('a shared URL gives a wish; a picture in HEIC is refused with UNSUPPORTED_MEDIA', async () => {
+  it('D-171: a shared URL gives an envie (an experience idea); a picture in HEIC is refused with UNSUPPORTED_MEDIA', async () => {
     stubNetwork((url) =>
       url.startsWith('https://theatre.example.org')
         ? new Response('<meta property="og:title" content="Le Petit Prince">', {
@@ -181,8 +181,11 @@ describe('capture over HTTP (EXA-01)', () => {
       headers: { authorization: `Bearer ${iphone}` },
       payload: { url: 'https://theatre.example.org/p' },
     });
-    expect(res.json()).toMatchObject({ kind: 'wish' });
-    expect(res.json().editUrl).toMatch(/\/envies\//);
+    expect(res.json()).toMatchObject({ kind: 'idea' });
+    expect(res.json().editUrl).toMatch(/\/experiences\?onglet=a-vivre&tache=/);
+    const exp = (await app.inject({ method: 'GET', url: '/api/v1/experiences', headers: { cookie } })).json();
+    expect(exp.reserve[0]).toMatchObject({ title: 'Le Petit Prince' });
+    expect(exp.reserve[0].description).toContain('https://theatre.example.org/p');
     const heic = multipart([Buffer.from('....ftypheic....')]);
     const bad = await app.inject({
       method: 'POST',
@@ -213,7 +216,7 @@ describe('capture over HTTP (EXA-01)', () => {
     ).toEqual([]);
   });
 
-  it('CE-51: a read token reads the souvenirs and the wishes, never writes', async () => {
+  it('CE-51: a read token reads the souvenirs and the envies, never writes', async () => {
     const list = await app.inject({
       method: 'GET',
       url: '/api/v1/souvenirs',
@@ -222,7 +225,7 @@ describe('capture over HTTP (EXA-01)', () => {
     expect(list.statusCode).toBe(200);
     const w = await app.inject({
       method: 'POST',
-      url: '/api/v1/wishes',
+      url: '/api/v1/experiences',
       headers: { authorization: `Bearer ${reader}` },
       payload: { title: 'x' },
     });

@@ -1,4 +1,4 @@
-// Routes of souvenirs, photos, places, people and wishes (memento-experiences EXA-01 to EXA-11). Thin adapters
+// Routes of souvenirs, photos, places and people (EXA-01 to EXA-11; D-171: the envies are experience tasks). Thin adapters
 // around @memento/domain, as the rest of the API (F-26). Multipart for the photos (@fastify/multipart).
 import { createReadStream, existsSync, mkdirSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -241,48 +241,4 @@ export function registerSouvenirRoutes(api: FastifyInstance, deps: Deps) {
   s.delete('/persons/:id', { schema: { ...tag('Personnes'), params: D.idParam } }, async (req) =>
     D.deletePerson(ctx(req), req.params.id),
   );
-
-  // ---------- Wishes (EX-40, EX-41, EXA-07, EXA-08) ----------
-  s.get('/wish-lists', { schema: tag('Envies') }, async (req) => D.listWishLists(ctx(req)));
-  s.post('/wish-lists', { schema: { ...tag('Envies'), body: D.wishListCreate } }, async (req) =>
-    D.createWishList(ctx(req), req.body),
-  );
-  s.patch(
-    '/wish-lists/:id',
-    { schema: { ...tag('Envies'), params: D.idParam, body: D.wishListPatch } },
-    async (req) => D.updateWishList(ctx(req), req.params.id, req.body),
-  );
-  s.delete('/wish-lists/:id', { schema: { ...tag('Envies'), params: D.idParam } }, async (req) =>
-    D.deleteWishList(ctx(req), req.params.id),
-  );
-  s.get('/wishes', { schema: { ...tag('Envies'), querystring: D.wishListQuery } }, async (req) =>
-    D.listWishes(ctx(req), req.query),
-  );
-  s.post('/wishes', { schema: { ...tag('Envies'), body: D.wishCreate } }, async (req) =>
-    D.createWish(ctx(req), req.body, req.principal!.kind === 'token' ? 'ai' : 'plus'),
-  );
-  s.post('/wishes/parse-url', { schema: { ...tag('Envies'), body: D.wishParseBody } }, async (req) =>
-    D.readUrl(req.body.url),
-  );
-  s.get('/wishes/:id', { schema: { ...tag('Envies'), params: D.idParam } }, async (req) =>
-    D.getWish(ctx(req), req.params.id),
-  );
-  s.patch(
-    '/wishes/:id',
-    { schema: { ...tag('Envies'), params: D.idParam, body: D.wishPatch } },
-    async (req) => D.updateWish(ctx(req), req.params.id, req.body),
-  );
-  s.delete('/wishes/:id', { schema: { ...tag('Envies'), params: D.idParam } }, async (req) =>
-    D.deleteWish(ctx(req), req.params.id),
-  );
-  s.post(
-    '/wishes/:id/plan',
-    { schema: { ...tag('Envies'), params: D.idParam, body: D.wishPlanBody } },
-    async (req) => D.planWish(ctx(req), req.params.id, req.body.date),
-  );
-  s.get('/wishes/:id/image', { schema: { ...tag('Envies'), params: D.idParam } }, async (req, reply) => {
-    const c = ctx(req);
-    D.getWish(c, req.params.id);
-    return sendFile(reply, D.wishImageFile(D.photosDir(c), req.params.id), 'image/webp');
-  });
 }

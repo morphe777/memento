@@ -162,28 +162,14 @@ const PARAMS: Record<string, string> = {
   to: 'Dernier jour (AAAA-MM-JJ) ou dernière période incluse.',
   url: 'Adresse du lien (https://…).',
   category: 'Catégorie du lieu (ex. restaurant, parc), telle que rendue par les souvenirs.',
-  dog: "yes ou no : seulement les envies où le chien est (yes) ou n'est pas (no) accepté.",
-  dogAllowed: 'Chien accepté : yes, no ou unknown.',
-  done: 'true : déjà vécues au moins une fois ; false : jamais vécues.',
   endDate: 'Dernier jour AAAA-MM-JJ (souvenir ou événement sur plusieurs jours), ou null.',
-  imageUrl: "Adresse d'une image de la page (https://…), téléchargée et conservée par Mémento ; ou null.",
-  indoor: 'Lieu couvert : yes, no, mixed ou unknown.',
-  listId: "Identifiant (uuid) d'une liste d'envies, ou null.",
-  maxDurationMin: 'Durée maximale en minutes (5 à 1440).',
-  maxKm: 'Distance maximale en kilomètres depuis la maison (1 à 20000).',
   near: 'Position « lat,lng » autour de laquelle chercher (ex. 48.85,2.35) ; la maison sinon.',
   newPersons: 'Prénoms de personnes à ajouter, créées « à confirmer » ou retrouvées par leur nom.',
-  note: 'Note libre (4000 caractères maximum).',
   personId: "Identifiant (uuid) d'une personne (voir list_persons).",
   personIds: 'Identifiants (uuid) des personnes concernées (voir list_persons).',
   phrase: 'Une phrase de souvenir (280 caractères maximum).',
-  place:
-    "Lieu trouvé avec search_places, enregistré avec l'envie : { name, lat, lng, provider, providerRef, … }.",
   placeId: "Identifiant (uuid) d'un lieu retenu, ou null.",
-  price: 'Prix en texte libre (ex. « 12 € »), ou null.',
   rating: "Avis sur le souvenir : again (à refaire), good (bien) ou meh (bof) ; null pour l'effacer.",
-  season: 'Saison conseillée en texte libre (ex. « été »), ou null.',
-  tags: "Étiquettes courtes de l'envie.",
   withPhotos: 'true : seulement les souvenirs avec photos ; false : sans photo.',
   withProjects: "false pour dupliquer l'objectif sans ses projets.",
 };
@@ -197,8 +183,7 @@ const described = <T extends z.ZodRawShape>(shape: T): T =>
 
 /** H-12: tools that only read (readOnlyHint, the only ones a read token sees). */
 export const isReadTool = (name: string) =>
-  /^(get|list)_/.test(name) ||
-  ['search', 'preview_plan_changes', 'parse_task', 'parse_wish_url'].includes(name);
+  /^(get|list)_/.test(name) || ['search', 'preview_plan_changes', 'parse_task'].includes(name);
 /** H-12: tools that delete or replace what exists (destructiveHint: ask the user first). */
 export const isDestructiveTool = (name: string) =>
   /^(delete|remove)_/.test(name) ||
@@ -390,13 +375,13 @@ export function buildServer(call: Call, canWrite = true) {
   );
   tool(
     'get_experiences',
-    'Expériences (objectif de vivre plus d’expériences) : cible du mois civil (D-154), souvenirs (faites), prévues, réserve.',
+    'Expériences (objectif de vivre plus d’expériences) : cible du mois civil (D-154), souvenirs (faites), prévues, envies (reserve : les idées sans date).',
     {},
     () => call('GET', '/experiences'),
   );
   tool(
     'add_experience_idea',
-    'Ajoute une idée d’expérience à la réserve (tâche Inbox marquée Expérience, sans date).',
+    'Ajoute une envie : une idée d’expérience à vivre (tâche Inbox marquée Expérience, sans date). Le moteur en propose dans le plan quand la cible du mois n’est pas tenue.',
     S.experienceIdea.shape,
     (a) => call('POST', '/experiences', a),
   );
@@ -424,32 +409,8 @@ export function buildServer(call: Call, canWrite = true) {
     { q: z.string().min(2), near: S.placesSearchQuery.shape.near },
     (a) => call('GET', p`/places/search${qs(a)}`),
   );
-  tool('list_persons', 'Liste les personnes (proches) connues, pour les souvenirs et les envies.', {}, () =>
+  tool('list_persons', 'Liste les personnes (proches) connues, pour les souvenirs.', {}, () =>
     call('GET', '/persons'),
-  );
-  tool(
-    'list_wishes',
-    'Liste les envies (statut dérivé : wish, planned, lived, archived ; « open » = à faire ou prévues) ; filtres : liste, chien, durée, distance, déjà vécues, saison, mots.',
-    S.wishListQuery.shape,
-    (a) => call('GET', p`/wishes${qs(a)}`),
-  );
-  tool(
-    'create_wish',
-    "Ajoute une envie (titre obligatoire ; lien, lieu, dates d'un événement, durée, chien, intérieur, personnes, étiquettes, note facultatifs).",
-    S.wishCreate.shape,
-    (a) => call('POST', '/wishes', a),
-  );
-  tool(
-    'parse_wish_url',
-    "Lit une page web et propose les champs d'une envie (titre, image, dates, prix…) sans rien écrire. Une page illisible donne un avertissement URL_UNREADABLE, non bloquant.",
-    { url: S.wishParseBody.shape.url },
-    (a) => call('POST', '/wishes/parse-url', a),
-  );
-  tool(
-    'plan_wish',
-    "Prévoit une envie à une date : crée une tâche d'expérience datée dans le plan de la semaine de ce jour.",
-    { id: S.uuid, date: S.wishPlanBody.shape.date },
-    ({ id, date }) => call('POST', p`/wishes/${id}/plan`, { date }),
   );
   tool(
     'get_living_report',

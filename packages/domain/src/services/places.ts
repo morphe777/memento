@@ -1,7 +1,7 @@
 // EX-13 / D-161: places by their name, never by their coordinates. Memento relays OpenStreetMap (Overpass for
 // the named places near a point, Photon for a search by name, Nominatim for the address when nothing is named),
 // with a cache and one request per second and per host (Nominatim's rule). A chosen place is saved once and
-// reused: one provider reference = one place (souvenirs, wishes, the future activity engine).
+// reused: one provider reference = one place (souvenirs, the future activity engine).
 import { eq, schema } from '@memento/db';
 import type { z } from 'zod';
 import { audit, type Ctx, ctxNowIso, newId, tx } from '../context.ts';
@@ -10,7 +10,7 @@ import type { placeInput, placePatch } from '../schemas-souvenirs.ts';
 import { getSettings } from '../settings.ts';
 import { APP_VERSION } from '../version.ts';
 
-const { place, souvenir, wish } = schema;
+const { place, souvenir } = schema;
 export type PlaceInput = z.infer<typeof placeInput>;
 export type PlaceRow = typeof place.$inferSelect;
 
@@ -258,14 +258,31 @@ interface PhotonFeature {
   geometry: { coordinates: [number, number] };
   properties: Record<string, string | number | undefined>;
 }
+/** D-171: the region searched first around the photo (or the home), about 100 km each way. */
+const REGION_M = 100_000;
+
 async function photon(ctx: Ctx, q: string, near: { lat: number; lng: number } | null) {
   const s = getSettings(ctx);
-  // D-169: a strong pull towards the photo (or the home): « BAM Albi » is not a place on the other side of the world.
-  const bias = near ? `&lat=${near.lat}&lon=${near.lng}&zoom=12&location_bias_scale=0.1` : '';
-  const json = await getJson<{ features?: PhotonFeature[] }>(
-    `${s['places.photon_url']}/api/?q=${encodeURIComponent(q)}&limit=15&lang=fr${bias}`,
-  );
-  return fromPhoton(json.features ?? []);
+  const ask = async (extra: string) =>
+    fromPhoton(
+      (
+        await getJson<{ features?: PhotonFeature[] }>(
+          `${s['places.photon_url']}/api/?q=${encodeURIComponent(q)}&limit=15&lang=fr${extra}`,
+        )
+      ).features ?? [],
+    );
+  if (!near) return ask('');
+  // D-169: a pull towards the point; D-171: the region first (a far exact name ranks before a near one
+  // otherwise), the whole world only when the region gives little.
+  const bias = `&lat=${near.lat}&lon=${near.lng}&zoom=12&location_bias_scale=0.1`;
+  const dLat = 0.9;
+  const dLng = dLat / Math.max(0.2, Math.cos((near.lat * Math.PI) / 180));
+  const r = (n: number) => Math.round(n * 1000) / 1000;
+  const box = `&bbox=${r(near.lng - dLng)},${r(near.lat - dLat)},${r(near.lng + dLng)},${r(near.lat + dLat)}`;
+  const region = await ask(bias + box);
+  if (region.length >= 5) return region;
+  const seen = new Set(region.map((p) => `${p.provider}:${p.providerRef}`));
+  return [...region, ...(await ask(bias)).filter((p) => !seen.has(`${p.provider}:${p.providerRef}`))];
 }
 
 /** D-169: the places around a point when Overpass does not answer (Photon reverse, 150 m). */
@@ -300,10 +317,7 @@ function fromPhoton(features: PhotonFeature[]): PlaceInput[] {
 export function listPlaces(ctx: Ctx) {
   const rows = ctx.db.select().from(place).all();
   const used = new Map<string, number>();
-  for (const r of [
-    ...ctx.db.select({ p: souvenir.placeId }).from(souvenir).all(),
-    ...ctx.db.select({ p: wish.placeId }).from(wish).all(),
-  ])
+  for (const r of [...ctx.db.select({ p: souvenir.placeId }).from(souvenir).all()])
     if (r.p) used.set(r.p, (used.get(r.p) ?? 0) + 1);
   return rows
     .map((p) => ({ ...p, uses: used.get(p.id) ?? 0 }))
@@ -483,21 +497,15 @@ export async function searchPlaces(ctx: Ctx, q: string, near?: { lat: number; ln
         distanceM: center ? distanceM(center, p) : null,
         memorized: false,
       }));
-      // D-169: around the photo (or the home), the answers within 50 km come first, in the provider's order.
-      if (center)
-        found = [
-          ...found.filter((c) => c.distanceM! <= 50_000),
-          ...found.filter((c) => c.distanceM! > 50_000),
-        ];
     } catch (e) {
       if (!(e instanceof ProviderError)) throw e;
       providerError = e.code;
     }
   }
-  return {
-    candidates: [...memorized, ...found.filter((c) => !known.has(`${c.provider}:${c.providerRef}`))],
-    providerError,
-  };
+  const all = [...memorized, ...found.filter((c) => !known.has(`${c.provider}:${c.providerRef}`))];
+  // D-171: everything within the region first (places already kept, then the provider's order), the rest after.
+  const inRegion = (c: PlaceCandidate) => !center || (c.distanceM ?? Infinity) <= REGION_M;
+  return { candidates: [...all.filter(inRegion), ...all.filter((c) => !inRegion(c))], providerError };
 }
 
 /** A candidate as a remembered place: the existing one, or saved now. */

@@ -2,7 +2,7 @@
 
 Le partage depuis Photos, Safari ou Plans passe par un **Raccourci** iOS (app Raccourcis) : une PWA n'apparaît pas
 dans la feuille de partage d'iOS. Le Raccourci envoie à `POST /api/v1/captures`, puis ouvre l'écran de vérification
-(souvenir) ou la fiche de l'envie (lien, lieu). Décisions : D-158, D-160, D-164, D-168.
+(souvenir) ou l'envie créée dans Expériences › À vivre (lien, lieu). Décisions : D-158, D-160, D-168, D-171.
 
 ## 0. Avant tout : jeton et réseau
 
@@ -69,7 +69,8 @@ Réglages du Raccourci : **Afficher dans la feuille de partage**, types accepté
 
 - URL : **Obtenir le contenu de l'URL**, `POST`, corps **JSON** `{ "url": "<l'URL partagée>" }`.
 - Lieu : corps **JSON** `{ "lat": <latitude>, "lng": <longitude>, "name": "<nom du lieu>" }`.
-- Puis `editUrl` → **Ouvrir les URL** : la fiche de l'envie s'ouvre (titre, image, dates, lieu lus sur la page).
+- Puis `editUrl` → **Ouvrir les URL** : l'envie s'ouvre dans Expériences › À vivre (titre lu sur la page ; texte,
+  lien, dates, prix et lieu dans sa description).
 
 ### En cas d'échec
 
@@ -81,5 +82,5 @@ retour ». Codes possibles : 401 (jeton), 413 `PHOTO_TOO_LARGE` (plus de 40 Mo),
 - Une **expérience vécue** est créée tout de suite (brouillon), titrée d'après le lieu trouvé près de la photo à la
   une (« Chez Lucette »), sinon « Sortie du 15 novembre ». « Annuler » sur l'écran de vérification la supprime.
 - Les photos sont gardées en WebP (2 560, 1 280 et 480 px) **sans métadonnées** ; date et position restent en base.
-- Si une expérience était prévue ce jour-là (ou planifiée depuis une envie au même lieu), l'écran propose
+- Si une expérience était prévue ce jour-là (ou planifiée cette semaine), l'écran propose
   « Rattacher ». Si un souvenir existe déjà le même jour au même lieu : « Ajouter ces photos au souvenir existant ».

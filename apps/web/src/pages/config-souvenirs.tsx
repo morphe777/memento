@@ -1,4 +1,4 @@
-// Configuration › Souvenirs (EX-30, EX-40, D-161, D-162, D-165, D-168): people, wish lists, home, places.
+// Configuration › Souvenirs (EX-30, D-161, D-162, D-168): people, home, places.
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { ConfirmDialog, Empty, Field, InfoTip, Loading, Section } from '../components/ui.tsx';
@@ -15,12 +15,6 @@ interface PersonRow {
   active: boolean;
   alertAfterDays: number | null;
   toConfirm: boolean;
-}
-interface WishListRow {
-  id: string;
-  name: string;
-  position: number;
-  count: number;
 }
 interface PlaceRow {
   id: string;
@@ -47,7 +41,6 @@ export function SouvenirsConfig() {
   return (
     <div className="flex flex-col gap-8">
       <PersonsConfig />
-      <WishListsConfig />
       <HomeConfig />
       <PlacesConfig />
     </div>
@@ -276,136 +269,6 @@ function PersonLine({ p, others }: { p: PersonRow; others: PersonRow[] }) {
   );
 }
 
-// ---------- Listes d'envies (EX-40) ----------
-
-function WishListsConfig() {
-  const lists = useQuery({ queryKey: ['wish-lists'], queryFn: () => get<WishListRow[]>('/wish-lists') });
-  const [name, setName] = useState('');
-  const add = useAction(() => post('/wish-lists', { name: name.trim() }), { onSuccess: () => setName('') });
-  const move = useAction(({ id, position }: { id: string; position: number }) =>
-    patch(`/wish-lists/${id}`, { position }),
-  );
-  const rows = lists.data ?? [];
-  return (
-    <Section
-      title="Listes d'envies"
-      aside="Restaurants, spectacles, nature…"
-      info="Les listes qui rangent tes envies. Le rang ici est l'ordre d'affichage dans l'onglet Envies."
-    >
-      {!lists.data ? (
-        <Loading />
-      ) : (
-        <div className="card overflow-hidden">
-          {rows.map((l, i) => (
-            <WishListLine
-              key={l.id}
-              l={l}
-              first={i === 0}
-              last={i === rows.length - 1}
-              onMove={(delta) => move.mutate({ id: l.id, position: i + delta })}
-            />
-          ))}
-          {rows.length === 0 && <Empty>Aucune liste.</Empty>}
-        </div>
-      )}
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (name.trim()) add.mutate(undefined);
-        }}
-      >
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="Nouvelle liste (ex. Balades)"
-          style={{ flex: '1 1 200px' }}
-        />
-        <button type="submit" className="btn btn-primary" disabled={!name.trim() || add.isPending}>
-          Ajouter
-        </button>
-      </form>
-    </Section>
-  );
-}
-
-function WishListLine({
-  l,
-  first,
-  last,
-  onMove,
-}: {
-  l: WishListRow;
-  first: boolean;
-  last: boolean;
-  onMove: (delta: -1 | 1) => void;
-}) {
-  const [name, setName] = useState(l.name);
-  const [askDelete, setAskDelete] = useState(false);
-  const rename = useAction(() => patch(`/wish-lists/${l.id}`, { name: name.trim() }), {
-    toast: 'Liste renommée.',
-  });
-  const remove = useAction(() => del(`/wish-lists/${l.id}`), {
-    toast: 'Liste supprimée.',
-    onSuccess: () => setAskDelete(false),
-  });
-  return (
-    <div className="row-line flex flex-wrap items-center gap-2" style={{ padding: '10px 12px' }}>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        aria-label="Nom de la liste"
-        style={{ flex: '1 1 180px' }}
-      />
-      <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-        {l.count} envie{l.count > 1 ? 's' : ''}
-      </span>
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={!name.trim() || name.trim() === l.name || rename.isPending}
-        onClick={() => rename.mutate(undefined)}
-      >
-        Renommer
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={first}
-        aria-label="Monter"
-        onClick={() => onMove(-1)}
-      >
-        ↑
-      </button>
-      <button
-        type="button"
-        className="btn btn-sm"
-        disabled={last}
-        aria-label="Descendre"
-        onClick={() => onMove(1)}
-      >
-        ↓
-      </button>
-      <button type="button" className="btn btn-sm btn-ghost" onClick={() => setAskDelete(true)}>
-        Supprimer
-      </button>
-      <ConfirmDialog
-        open={askDelete}
-        title={`Supprimer la liste « ${l.name} » ?`}
-        onClose={() => setAskDelete(false)}
-        onConfirm={() => remove.mutate(undefined)}
-        busy={remove.isPending}
-      >
-        <p>
-          {l.count > 0
-            ? `Les ${l.count} envie${l.count > 1 ? 's' : ''} de cette liste ne sont pas supprimées : elles restent, sans liste.`
-            : 'Cette liste est vide.'}
-        </p>
-      </ConfirmDialog>
-    </div>
-  );
-}
-
 // ---------- Lieux : domicile et fournisseur (D-161) ----------
 
 function HomeConfig() {
@@ -600,7 +463,7 @@ function PlacesConfig() {
     <Section
       title="Lieux mémorisés"
       aside="Gardés pour être retrouvés sans recherche"
-      info="Un lieu est mémorisé la première fois qu'un souvenir ou une envie s'y rattache. « Oublier » est refusé tant qu'un souvenir ou une envie l'utilise."
+      info="Un lieu est mémorisé la première fois qu'un souvenir s'y rattache. « Oublier » est refusé tant qu'un souvenir ou une envie l'utilise."
     >
       {!places.data ? (
         <Loading />
