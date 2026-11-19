@@ -3,7 +3,10 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
-## 1.3.0 — en cours
+## 1.3.0 — 2026-11
+
+Expériences et souvenirs : ce qu'on a vécu (photos, lieux, personnes), ce qu'on aimerait vivre (envies), un
+seul menu « Expériences ».
 
 - Chaque appel à l'IA est mesuré dans le journal (fonction, durée, tokens dont réflexion, relance, hôte), sans son
   contenu, pour trouver d'où vient la lenteur (D-156).

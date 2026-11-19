@@ -21,6 +21,8 @@ Configuration › Accès › nom (`claude`, `n8n`…) + portée :
 
 - **Lecture seule** : consulter (rapports, plans, projets). Idéal pour une IA d'analyse ou un tableau de bord.
 - **Lecture-écriture** : créer des idées, découper des projets, proposer un plan de semaine…
+- **Capture** : pour le Raccourci de l'iPhone ([guide](../raccourci-iphone.md)) ; il n'envoie que des photos, des
+  liens et des lieux (souvenirs, envies), rien d'autre.
 
 Le secret `mem_…` n'est affiché **qu'une fois** (seule son empreinte est stockée). Un jeton par agent : chaque
 action est signée `ai:<nom>` dans le Journal. Révoquer coupe l'accès immédiatement. Les routes ouvertes aux jetons

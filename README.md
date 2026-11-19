@@ -1,6 +1,7 @@
 # Mémento
 
-Outil personnel de pilotage : objectifs, projets, charge mentale. Voir `CLAUDE.md` et `docs/`.
+Outil personnel de pilotage : objectifs, projets, charge mentale, et depuis la 1.3 les **expériences** vécues
+(souvenirs avec photos, lieux et personnes) ou à vivre (envies). Voir `CLAUDE.md` et `docs/`.
 
 ## Architecture
 
@@ -51,6 +52,8 @@ réservée à l'interface (403 `USER_ONLY`) :
 
 - jeton **lecture** : les lectures de la liste, plus deux POST qui n'écrivent rien (`/plan/preview`, `/tasks/parse`) ;
 - jeton **lecture-écriture** : toute la liste, suppressions comprises (D-60 ; le contenu supprimé est journalisé) ;
+- jeton **capture** (le Raccourci de l'iPhone, D-168) : seulement l'envoi de photos, de liens et de lieux
+  (`POST /captures`, `POST /captures/test`, `POST /souvenirs/{id}/photos`) ;
 - **jamais pour un jeton** : les réglages (même en lecture), les jetons, le compte, l'import, l'export, la purge,
   la configuration et les assistants IA de l'interface, les notifications (Telegram, push), l'écriture sur les
   domaines et les groupes, la génération d'un rapport et « Marquer comme revu ».
@@ -159,6 +162,12 @@ Raccourcis iOS (app Raccourcis) :
      `Authorization: Bearer mem_…`, corps JSON `title` = Texte dicté, `durationMin` = 15 (nombre) ;
   3. « Afficher une notification » « Ajouté à l'Inbox ».
   La tâche est alors journalisée « ai:iphone » et apparaît dans « À revoir ».
+
+**Souvenirs** (1.3) : « + Souvenir » dans Expériences, ou depuis Photos › Partager avec le Raccourci décrit dans
+[`docs/raccourci-iphone.md`](docs/raccourci-iphone.md) (jeton **capture**). Date tirée des photos ; les lieux
+proches sont proposés (OpenStreetMap, relayé par le serveur, désactivable) ; une photo prise à moins de 100 m du
+**domicile** (Configuration › Souvenirs › Lieux : nom et adresse) est « à la maison ». Un lien ou un lieu partagé
+devient une **envie** (Expériences › À vivre).
 
 Les deux passent par le réseau de la maison (VPN dehors).
 
