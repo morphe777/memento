@@ -358,7 +358,7 @@ export function PlacePicker({
       get<{ candidates: PlaceCandidate[]; providerError: string | null }>(
         `/places/search?q=${encodeURIComponent(debounced)}${point ? `&near=${point.lat},${point.lng}` : ''}`,
       ),
-    enabled: open && debounced.length >= 2,
+    enabled: debounced.length >= 2,
   });
   const choose = async (c: PlaceCandidate) => {
     try {
@@ -390,13 +390,15 @@ export function PlacePicker({
   const pending = searching && (typed !== debounced || search.isFetching);
   const list = searching ? (pending ? [] : (search.data?.candidates ?? [])) : candidates;
   const error = searching ? search.data?.providerError : providerError;
+  // D-173: with no place chosen, the places nearby are proposed at once (never chosen for the user).
+  const expanded = open || !value;
   return (
     <div className="flex flex-col gap-1.5">
       <button
         type="button"
         className="field-box flex items-center gap-2 text-left cursor-pointer"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
+        onClick={() => setOpen(!expanded)}
+        aria-expanded={expanded}
       >
         <span className="flex-1 min-w-0 truncate">
           {value ? placeLabel(value) : <span style={{ color: 'var(--text-ghost)' }}>Aucun lieu</span>}
@@ -410,7 +412,7 @@ export function PlacePicker({
           ▾
         </span>
       </button>
-      {open && (
+      {expanded && (
         <div className="flex flex-col gap-1">
           <input
             className="field-box"

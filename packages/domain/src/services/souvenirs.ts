@@ -19,7 +19,7 @@ import {
   removePhotoFiles,
   writePhotoFiles,
 } from './photos.ts';
-import { distanceM, getPlace, nearestMemorized, placeFromCandidate, placesNearby } from './places.ts';
+import { distanceM, getPlace, homeCandidate, placeFromCandidate, placesNearby } from './places.ts';
 import { serializeProjects } from './projects.ts';
 import { completeTask, createTask, getTaskRow, listTasks, moveTask, updateTask } from './tasks.ts';
 
@@ -268,24 +268,11 @@ export async function createCapture(
   const metas = processed.length ? processed.map((p) => p.meta) : body.photos;
   const pre = prefillFromPhotos(metas, ctxNow(ctx));
   const warnings: string[] = [];
-  let placeId: string | null = null;
-  let placeName: string | null = null;
-  if (pre.point) {
-    const known = nearestMemorized(ctx, pre.point);
-    if (known) {
-      placeId = known.id;
-      placeName = known.name;
-    } else {
-      const near = await placesNearby(ctx, pre.point.lat, pre.point.lng);
-      if (near.providerError) warnings.push(near.providerError);
-      const best = near.candidates[0];
-      if (best) {
-        const saved = placeFromCandidate(ctx, best);
-        placeId = saved.id;
-        placeName = ['address', 'city'].includes(saved.category) ? null : saved.name;
-      }
-    }
-  }
+  // D-173: the places nearby are proposed on the check screen, never chosen here; only « at home » is.
+  const home = pre.point ? homeCandidate(ctx, pre.point) : null;
+  const atHome = home ? placeFromCandidate(ctx, home) : null;
+  const placeId = atHome?.id ?? null;
+  const placeName = atHome?.name ?? null;
   const dir = processed.length ? photosDir(ctx) : null;
   const photoIds = processed.map(() => randomUUID());
   if (dir) for (const [i, p] of processed.entries()) writePhotoFiles(dir, photoIds[i], p.files);
@@ -481,10 +468,14 @@ export async function getSuggestions(ctx: Ctx, id: string) {
   const places = point
     ? await placesNearby(ctx, point.lat, point.lng)
     : { candidates: [], providerError: null };
-  const duplicate = s.place
-    ? (listSouvenirs(ctx, { placeId: s.place.id }).find(
-        (o) => o.id !== s.id && o.status === 'saved' && o.startDate === s.startDate,
-      ) ?? null)
+  // A souvenir of the same day at the same spot (its place, else its photos; D-173: within 150 m).
+  const where = s.place ?? point;
+  const whereOf = (o: SouvenirView) => o.place ?? pointOf(o);
+  const duplicate = where
+    ? (listSouvenirs(ctx).find((o) => {
+        const w = o.id !== s.id && o.status === 'saved' && o.startDate === s.startDate ? whereOf(o) : null;
+        return !!w && distanceM(where, w) <= 150;
+      }) ?? null)
     : null;
   const home = getSettings(ctx)['places.home'];
   return {

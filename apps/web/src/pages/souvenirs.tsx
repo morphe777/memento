@@ -2,7 +2,7 @@
 // souvenir sheet (full-screen gallery, mini-map, editing, photos added by drag and drop), the journal by month
 // and the map. Every rule is in the API; the screens show what it returns.
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Breadcrumb } from '../components/shell.tsx';
 import { SouvenirLeaflet } from '../components/souvenir-map.tsx';
@@ -23,6 +23,8 @@ import {
   Field,
   Loading,
   PageHeader,
+  Panel,
+  SAVE_HINT,
   SearchSelect,
   Tabs,
 } from '../components/ui.tsx';
@@ -108,8 +110,10 @@ interface FormState {
   projectId: string;
   description: string;
 }
+/** D-173: a draft named « Sortie du … » shows an empty title (the date stays the title if none is typed). */
+const autoTitle = (s: Souvenir) => s.status === 'draft' && /^Sortie du /.test(s.title);
 const formOf = (s: Souvenir): FormState => ({
-  title: s.title,
+  title: autoTitle(s) ? '' : s.title,
   startDate: s.startDate,
   endDate: s.endDate ?? '',
   place: s.place ? { id: s.place.id, name: s.place.name, category: s.place.category } : null,
@@ -168,6 +172,7 @@ function SouvenirFields({
           className="w-full"
           value={f.title}
           onChange={(e) => set('title', e.target.value)}
+          placeholder={autoTitle(s) ? s.title : undefined}
           aria-label="Titre"
         />
       </div>
@@ -200,11 +205,12 @@ function SouvenirFields({
           point={point}
           providerError={suggestions?.providerError}
           onChange={(p) => {
-            // The title follows the place while it is still the automatic one (EX-11).
-            const auto = !f.place || f.title === f.place.name || /^Sortie du /.test(f.title);
+            // The title follows the place while it is still the automatic one (EX-11); an address or a town
+            // names nothing: no title then (D-173).
+            const auto = !f.title.trim() || f.title === f.place?.name;
             set('place', p);
-            if (p && auto && s.status === 'draft' && !['address', 'city'].includes(p.category ?? ''))
-              set('title', p.name);
+            if (auto && s.status === 'draft')
+              set('title', p && !['address', 'city'].includes(p.category ?? '') ? p.name : '');
           }}
         />
       </div>
@@ -452,14 +458,8 @@ export function SouvenirVerifyPage({ id }: { id: string }) {
   useEffect(() => {
     if (q.data && !f) setF(formOf(q.data));
   }, [q.data, f]);
-  // The first candidate of OSM becomes the place when the draft has none yet (the capture could not reach it).
-  useEffect(() => {
-    if (!f || f.place || !q.data || q.data.status !== 'draft') return;
-    const c = sugg.data?.places[0];
-    if (c?.id) setF({ ...f, place: { id: c.id, name: c.name, category: c.category ?? null } });
-  }, [sugg.data, f, q.data]);
   const save = useAction(() => post<Souvenir>(`/souvenirs/${id}/save`, bodyOf(q.data!, f!, domainTouched)), {
-    onSuccess: () => navigate({ to: '/souvenirs/$id', params: { id } }),
+    onSuccess: () => navigate({ to: '/souvenirs/$id', params: { id }, replace: true }),
     toast: 'Souvenir enregistré.',
   });
   const cancel = useAction(() => del(`/souvenirs/${id}`), {
@@ -471,7 +471,7 @@ export function SouvenirVerifyPage({ id }: { id: string }) {
     toast: 'Rattaché à l’expérience prévue.',
   });
   const merge = useAction((intoId: string) => post<Souvenir>(`/souvenirs/${id}/merge`, { intoId }), {
-    onSuccess: (s) => navigate({ to: '/souvenirs/$id', params: { id: s.id } }),
+    onSuccess: (s) => navigate({ to: '/souvenirs/$id', params: { id: s.id }, replace: true }),
     toast: 'Photos ajoutées au souvenir existant.',
   });
   if (q.isError) return <ErrorBox error={q.error} />;
@@ -537,7 +537,7 @@ export function SouvenirVerifyPage({ id }: { id: string }) {
         type="button"
         className="btn btn-primary w-full"
         style={{ minHeight: 50, fontSize: 16 }}
-        disabled={save.isPending || !f.title.trim()}
+        disabled={save.isPending || (!draft && !f.title.trim())}
         onClick={() => save.mutate(undefined)}
       >
         Enregistrer
@@ -649,6 +649,11 @@ function Gallery({ s, start, onClose }: { s: Souvenir; start: number; onClose: (
 // ---------- Souvenir sheet (EX-50, EX-15) ----------
 export function SouvenirPage({ id }: { id: string }) {
   const navigate = useNavigate();
+  const router = useRouter();
+  const canGoBack = useCanGoBack();
+  // Back where one came from (journal, map, week…), the journal when the sheet was opened directly.
+  const back = () =>
+    canGoBack ? router.history.back() : navigate({ to: '/experiences', search: { onglet: 'vecues' } });
   const qc = useQueryClient();
   const q = useSouvenir(id);
   const dl = useDomainLookup();
@@ -665,10 +670,18 @@ export function SouvenirPage({ id }: { id: string }) {
     queryFn: () => get<Suggestions>(`/souvenirs/${id}/suggestions`),
     enabled: editing,
   });
-  const save = useAction(() => patch<Souvenir>(`/souvenirs/${id}`, bodyOf(q.data!, f!, domainTouched)), {
-    onSuccess: () => setEditing(false),
+  const save = useAction((b: Record<string, unknown>) => patch<Souvenir>(`/souvenirs/${id}`, b), {
     toast: 'Souvenir modifié.',
   });
+  /** D-40, D-173: as everywhere, closing the panel (click outside, ✕) saves what changed; Escape discards. */
+  const closeEdit = () => {
+    if (q.data && f) {
+      const b = bodyOf(q.data, f, domainTouched);
+      if (!f.title.trim()) return toast('Le titre est obligatoire.', 'error');
+      if (Object.keys(b).length) save.mutate(b);
+    }
+    setEditing(false);
+  };
   const remove = useAction(() => del(`/souvenirs/${id}`), {
     onSuccess: () => navigate({ to: '/experiences', search: { onglet: 'vecues' } }),
     toast: 'Souvenir supprimé.',
@@ -730,6 +743,9 @@ export function SouvenirPage({ id }: { id: string }) {
       onDrop={drop}
     >
       <div>
+        <button type="button" className="link-btn text-[14px] mb-2" onClick={back}>
+          ‹ Retour
+        </button>
         <Breadcrumb
           items={[
             { label: 'Expériences', to: '/experiences', search: { onglet: 'vecues' } },
@@ -890,92 +906,67 @@ export function SouvenirPage({ id }: { id: string }) {
           )}
         </div>
         <div className="flex flex-col gap-4 min-w-0">
-          {editing && f ? (
-            <div className="card flex flex-col gap-4" style={{ padding: '18px 20px' }}>
-              <SouvenirFields
-                s={s}
-                f={f}
-                set={set}
-                suggestions={sugg.data}
-                touched={() => setDomainTouched(true)}
-              />
-              <div className="flex gap-2 justify-end">
-                <button type="button" className="btn" onClick={() => setEditing(false)}>
-                  Annuler
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  disabled={save.isPending || !f.title.trim()}
-                  onClick={() => save.mutate(undefined)}
-                >
-                  Enregistrer
-                </button>
+          <div className="card flex flex-col gap-3" style={{ padding: '18px 20px' }}>
+            {s.phrase && (
+              <div className="text-[17px] italic" style={{ color: 'var(--text-2)' }}>
+                « {s.phrase} »
               </div>
-            </div>
-          ) : (
-            <div className="card flex flex-col gap-3" style={{ padding: '18px 20px' }}>
-              {s.phrase && (
-                <div className="text-[17px] italic" style={{ color: 'var(--text-2)' }}>
-                  « {s.phrase} »
-                </div>
+            )}
+            <Info label="Quand">
+              {fmtSpan(s.startDate, s.endDate)}
+              {s.days > 1 ? ` · ${s.days} jours vécus` : ''}
+            </Info>
+            <Info label="Où">
+              {s.place ? (
+                <>
+                  {placeLabel(s.place)}
+                  {(s.place.address || s.place.city) && (
+                    <span style={{ color: 'var(--text-faint)' }}> · {fmtAddress(s.place)}</span>
+                  )}
+                </>
+              ) : (
+                <span style={{ color: 'var(--text-ghost)' }}>aucun lieu</span>
               )}
-              <Info label="Quand">
-                {fmtSpan(s.startDate, s.endDate)}
-                {s.days > 1 ? ` · ${s.days} jours vécus` : ''}
-              </Info>
-              <Info label="Où">
-                {s.place ? (
-                  <>
-                    {placeLabel(s.place)}
-                    {(s.place.address || s.place.city) && (
-                      <span style={{ color: 'var(--text-faint)' }}> · {fmtAddress(s.place)}</span>
-                    )}
-                  </>
-                ) : (
-                  <span style={{ color: 'var(--text-ghost)' }}>aucun lieu</span>
-                )}
-              </Info>
-              <Info label="Avec qui">
-                {s.persons.length ? (
-                  <span className="flex flex-wrap gap-1.5">
-                    {s.persons.map((p) => (
-                      <Chip key={p.id} small>
-                        <Avatar name={p.name} color={p.color} size={16} />
-                        {p.name}
-                      </Chip>
-                    ))}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--text-ghost)' }}>personne de noté</span>
-                )}
-              </Info>
-              {s.rating && <Info label="Note">{RATING_LABEL[s.rating as Rating]}</Info>}
-              <Info label="Domaine">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="dot" style={{ background: dl.color(s.domainId) }} />
-                  {dl.name(s.domainId)}
+            </Info>
+            <Info label="Avec qui">
+              {s.persons.length ? (
+                <span className="flex flex-wrap gap-1.5">
+                  {s.persons.map((p) => (
+                    <Chip key={p.id} small>
+                      <Avatar name={p.name} color={p.color} size={16} />
+                      {p.name}
+                    </Chip>
+                  ))}
                 </span>
-              </Info>
-              {s.projectId && (
-                <Info label="Projet">
-                  <Link to="/projets/$id" params={{ id: s.projectId }}>
-                    {s.projectTitle}
-                  </Link>
-                </Info>
+              ) : (
+                <span style={{ color: 'var(--text-ghost)' }}>personne de noté</span>
               )}
-              <Info label="Expérience">
-                <Link to="/experiences" search={{ tache: s.taskId }}>
-                  Ouvrir la tâche
+            </Info>
+            {s.rating && <Info label="Note">{RATING_LABEL[s.rating as Rating]}</Info>}
+            <Info label="Domaine">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="dot" style={{ background: dl.color(s.domainId) }} />
+                {dl.name(s.domainId)}
+              </span>
+            </Info>
+            {s.projectId && (
+              <Info label="Projet">
+                <Link to="/projets/$id" params={{ id: s.projectId }}>
+                  {s.projectTitle}
                 </Link>
               </Info>
-              {s.description.trim() && (
-                <div className="text-[14px] whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>
-                  {s.description}
-                </div>
-              )}
-            </div>
-          )}
+            )}
+            <Info label="Expérience">
+              <Link to="/experiences" search={{ tache: s.taskId }}>
+                Ouvrir la tâche
+              </Link>
+            </Info>
+            {s.description.trim() && (
+              <div className="text-[14px] whitespace-pre-wrap" style={{ color: 'var(--text-2)' }}>
+                {s.description}
+              </div>
+            )}
+          </div>
           {points.length > 0 && (
             <div className="flex flex-col gap-1.5">
               <span className="label-caps">{route.length > 1 ? 'Parcours des photos' : 'Sur la carte'}</span>
@@ -985,6 +976,23 @@ export function SouvenirPage({ id }: { id: string }) {
         </div>
       </div>
       {gallery !== null && <Gallery s={s} start={gallery} onClose={() => setGallery(null)} />}
+      <Panel
+        open={editing && !!f}
+        onClose={closeEdit}
+        onCancel={() => setEditing(false)}
+        title="Modifier le souvenir"
+        hint={SAVE_HINT}
+      >
+        {f && (
+          <SouvenirFields
+            s={s}
+            f={f}
+            set={set}
+            suggestions={sugg.data}
+            touched={() => setDomainTouched(true)}
+          />
+        )}
+      </Panel>
       <ConfirmDialog
         open={confirmDelete}
         title="Supprimer ce souvenir ?"

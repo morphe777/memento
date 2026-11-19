@@ -1,5 +1,6 @@
-// Scenario 6 (D-158): « + Souvenir » with a photo opens the check screen; « Enregistrer » gives the souvenir sheet
-// with its photo; the souvenir is in the journal; « Supprimer » removes it.
+// Scenario 6 (D-158, D-173): « + Souvenir » with a photo opens the check screen; « Enregistrer » gives the souvenir
+// sheet with its photo; « Modifier » opens the panel, a click beside it saves; « ‹ Retour » goes back to the
+// journal; « Supprimer » removes it.
 import { createRequire } from 'node:module';
 import { expect, test } from '@playwright/test';
 import { login, unique } from './helpers.ts';
@@ -21,24 +22,39 @@ test('a photo becomes a souvenir through the check screen', async ({ page }) => 
   await page.getByRole('button', { name: '+ Souvenir' }).first().click();
   await (await chooser).setFiles({ name: 'photo.jpg', mimeType: 'image/jpeg', buffer: photo });
 
-  // The check screen, title pre-filled (no place: « Sortie du … »), the photo arrives in the background.
+  // The check screen: no place, so no title (« Sortie du … » only as a hint, D-173); the photo arrives later.
   await expect(page.getByText('Nouveau souvenir')).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue(/^Sortie du /);
+  await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Titre' })).toHaveAttribute('placeholder', /^Sortie du /);
   await expect(page.getByRole('button', { name: 'Photo à la une' })).toBeVisible();
   await page.getByRole('textbox', { name: 'Une phrase' }).fill(phrase);
   await page.getByRole('button', { name: 'À refaire' }).click();
   await page.getByRole('button', { name: 'Enregistrer' }).click();
 
-  // The sheet.
+  // The sheet, titled after the date.
   await expect(page.getByText(`« ${phrase} »`)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: /^Sortie du / })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Voir les photos en grand' })).toBeVisible();
 
-  // In the journal, then deleted.
+  // D-40: « Modifier » opens the panel; a click beside it saves.
+  const edited = `${phrase} !`;
+  await page.getByRole('button', { name: 'Modifier' }).click();
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Une phrase' }).fill(edited);
+  await page
+    .getByRole('button', { name: 'Fermer' })
+    .first()
+    .click({ position: { x: 20, y: 200 } });
+  await expect(page.getByText(`« ${edited} »`)).toBeVisible();
+
+  // In the journal; the sheet's « ‹ Retour » comes back to it; then deleted.
   await page.goto('/experiences');
-  await expect(page.getByText(`« ${phrase} »`)).toBeVisible();
-  await page.getByText(`« ${phrase} »`).click();
+  await expect(page.getByText(`« ${edited} »`)).toBeVisible();
+  await page.getByText(`« ${edited} »`).click();
+  await page.getByRole('button', { name: '‹ Retour' }).click();
+  await expect(page).toHaveURL(/\/experiences/);
+  await page.getByText(`« ${edited} »`).click();
   await page.getByRole('button', { name: 'Supprimer', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Supprimer', exact: true }).click();
   await expect(page).toHaveURL(/onglet=vecues/);
-  await expect(page.getByText(`« ${phrase} »`)).toHaveCount(0);
+  await expect(page.getByText(`« ${edited} »`)).toHaveCount(0);
 });

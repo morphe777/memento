@@ -201,8 +201,8 @@ Règles en bref :
 - **Un souvenir par expérience vécue** (1–1 avec la tâche Expérience, D-157) : le cocher ou `log_experience` en crée un ;
   `title`, `description`, `domainId`, `projectId` et `startDate` (heure de « faite ») sont ceux de la tâche, que
   `PATCH /souvenirs/{id}` met à jour. Décocher la tâche cache le souvenir, le supprimer l'emporte avec ses photos.
-- **Capture** (`POST /captures`) : des photos donnent un brouillon de souvenir déjà compté comme vécu, que
-  l'utilisateur vérifie dans l'application (`editUrl`, `kind: 'souvenir'`) ; rejouer le même `clientCaptureId`
+- **Capture** (`POST /captures`) : des photos donnent un brouillon de souvenir déjà compté comme vécu, sans lieu
+  choisi d'office (sauf à moins de 100 m du domicile : lieu « Maison », D-173), que l'utilisateur vérifie dans l'application (`editUrl`, `kind: 'souvenir'`) ; rejouer le même `clientCaptureId`
   (8 caractères ou plus) renvoie la première capture, sans doublon. Un lien ou un lieu donne une **envie**
   (`kind: 'idea'`, D-171) : titre lu sur la page, texte, lien, dates, prix et lieu dans la description. Un
   jeton « capture » n'appelle que les trois routes de capture ; partout ailleurs 403 `CAPTURE_ONLY`.

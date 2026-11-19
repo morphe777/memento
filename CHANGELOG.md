@@ -13,6 +13,9 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
   arrière-plan ; « Rattacher » à une expérience prévue, fusion avec un souvenir du même jour (D-158 à D-160).
 - **Lieux par leur nom** (OpenStreetMap, désactivable), mémorisés une fois ; **proches** en Configuration ; domaine
   déduit des personnes (D-161 à D-163).
+- **Domicile** (nom et adresse en Configuration) : une photo prise chez soi est « à la maison », et le reste après un
+  déménagement. Ailleurs, aucun lieu choisi d'office : les lieux proches sont proposés ; une adresse ne donne pas de
+  titre. Fiche souvenir : « ‹ Retour », modification dans le panneau comme partout (D-173).
 - **Revivre** : journal par mois, carte (un point par lieu, rayon de vie), fiche avec galerie plein écran et
   parcours des photos, « Il y a un an » sur Ma semaine, bilan **« Vivre »** dans le rapport trimestriel et la page
   Expériences (D-166, D-167).

@@ -74,12 +74,14 @@ export const settingsSchema = z.object({
   'notify.app_url': z.union([z.literal(''), z.url({ protocol: /^https?$/ })]),
   // D-161: places by name (OpenStreetMap, relayed by the server); off = places typed by hand only.
   'places.provider': z.enum(['osm', 'none']),
-  // The home: centre of the searches, distances of « Que faire ? », life radius of the map.
+  // The home: centre of the searches, life radius of the map, the « Maison » place of the photos (D-173).
   'places.home': z
     .object({
       lat: z.number().min(-90).max(90),
       lng: z.number().min(-180).max(180),
       label: z.string().trim().max(200),
+      /** D-173: the address found in Configuration, kept on the « Maison » place of the souvenirs. */
+      address: z.string().trim().max(300).optional(),
     })
     .nullable(),
   'places.photon_url': z.url({ protocol: /^https?$/ }),

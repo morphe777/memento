@@ -40,6 +40,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   hotel: 'hébergement',
   address: 'adresse',
   city: 'commune',
+  home: 'domicile',
   other: 'lieu',
 };
 export const placeLabel = (p: { name: string; category?: string | null }) =>

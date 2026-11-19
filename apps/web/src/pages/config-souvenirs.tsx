@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { ConfirmDialog, Empty, Field, InfoTip, Loading, Section } from '../components/ui.tsx';
 import { del, get, patch, post } from '../lib/api.ts';
 import { toast, useAction, useSettings } from '../lib/hooks.ts';
+import { fmtAddress } from '../lib/souvenirs.ts';
 import type { Settings } from '../lib/types.ts';
 
 interface PersonRow {
@@ -280,6 +281,7 @@ function HomeConfig() {
 function HomeForm({ s }: { s: Settings }) {
   const home = s['places.home'];
   const [label, setLabel] = useState(home?.label ?? '');
+  const [address, setAddress] = useState(home?.address ?? '');
   const [lat, setLat] = useState(home ? String(home.lat) : '');
   const [lng, setLng] = useState(home ? String(home.lng) : '');
   const [provider, setProvider] = useState(s['places.provider']);
@@ -292,9 +294,13 @@ function HomeForm({ s }: { s: Settings }) {
   const save = useAction((body: Partial<Settings>) => patch('/settings', body), {
     toast: 'Réglages enregistrés.',
   });
-  const search = useAction(() => get<PlaceCandidate[]>(`/places/search?q=${encodeURIComponent(q.trim())}`), {
-    onSuccess: setFound,
-  });
+  const search = useAction(
+    () =>
+      get<{ candidates: PlaceCandidate[] }>(`/places/search?q=${encodeURIComponent(q.trim())}`).then(
+        (r) => r.candidates,
+      ),
+    { onSuccess: setFound },
+  );
   const latN = Number(lat);
   const lngN = Number(lng);
   const valid =
@@ -307,11 +313,14 @@ function HomeForm({ s }: { s: Settings }) {
   const empty = lat.trim() === '' && lng.trim() === '' && !label.trim();
   const saveHome = () => {
     if (empty) return save.mutate({ 'places.home': null });
-    if (!valid) return toast('Latitude et longitude valides requises.', 'error');
-    save.mutate({ 'places.home': { lat: latN, lng: lngN, label: label.trim() } });
+    if (!valid) return toast('Cherche ton adresse et choisis-la (ou donne latitude et longitude).', 'error');
+    save.mutate({
+      'places.home': { lat: latN, lng: lngN, label: label.trim() || 'Maison', address: address.trim() },
+    });
   };
   const clearHome = () => {
     setLabel('');
+    setAddress('');
     setLat('');
     setLng('');
     save.mutate({ 'places.home': null });
@@ -320,54 +329,38 @@ function HomeForm({ s }: { s: Settings }) {
     <Section
       title="Lieux"
       aside="Domicile et fournisseur"
-      info="Le domicile centre les recherches de lieux, les distances de « Que faire ? » et le rayon de vie de la carte."
+      info="Le domicile centre les recherches de lieux et le rayon de vie de la carte. Une photo prise à moins de 100 m devient un souvenir « à la maison » (D-173) : ce lieu reste attaché au souvenir, même après un déménagement."
     >
-      <Field label="Domicile" hint="Nom, latitude et longitude (ex. Maison, 48.8566, 2.3522).">
-        <div className="flex flex-wrap gap-2">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Nom (ex. Maison)"
-            style={{ flex: '1 1 180px' }}
-          />
-          <input
-            type="number"
-            step="any"
-            value={lat}
-            onChange={(e) => setLat(e.target.value)}
-            placeholder="Latitude"
-            aria-label="Latitude"
-            style={{ width: 130 }}
-          />
-          <input
-            type="number"
-            step="any"
-            value={lng}
-            onChange={(e) => setLng(e.target.value)}
-            placeholder="Longitude"
-            aria-label="Longitude"
-            style={{ width: 130 }}
-          />
-        </div>
+      <Field label="Nom du domicile" hint="Le lieu et le titre des souvenirs pris chez toi.">
+        <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Maison" />
       </Field>
-      <form
-        className="flex flex-wrap gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (q.trim().length >= 2) search.mutate(undefined);
-        }}
+      <Field
+        label="Adresse"
+        hint={
+          valid
+            ? `${address || 'Position'} · ${latN.toFixed(5)}, ${lngN.toFixed(5)}`
+            : 'Cherche ton adresse, puis choisis-la dans la liste.'
+        }
       >
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Chercher une adresse"
-          aria-label="Chercher une adresse"
-          style={{ flex: '1 1 220px' }}
-        />
-        <button type="submit" className="btn" disabled={q.trim().length < 2 || search.isPending}>
-          Chercher une adresse
-        </button>
-      </form>
+        <form
+          className="flex flex-wrap gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (q.trim().length >= 2) search.mutate(undefined);
+          }}
+        >
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="ex. 12 rue des Lilas, Valbourg"
+            aria-label="Chercher une adresse"
+            style={{ flex: '1 1 220px' }}
+          />
+          <button type="submit" className="btn" disabled={q.trim().length < 2 || search.isPending}>
+            Chercher
+          </button>
+        </form>
+      </Field>
       {found && (
         <div className="card overflow-hidden">
           {found.map((c) => (
@@ -377,21 +370,49 @@ function HomeForm({ s }: { s: Settings }) {
               className="row-line w-full text-left flex flex-col"
               style={{ padding: '8px 12px' }}
               onClick={() => {
-                setLabel(c.name);
+                setAddress(
+                  c.name === c.address || !c.address
+                    ? fmtAddress({ address: c.name, city: c.city })
+                    : `${c.name}, ${fmtAddress(c)}`,
+                );
                 setLat(String(c.lat));
                 setLng(String(c.lng));
                 setFound(null);
+                setQ('');
               }}
             >
               <span className="text-[14px]">{c.name}</span>
               <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
-                {[c.address, c.city].filter(Boolean).join(', ')}
+                {fmtAddress(c)}
               </span>
             </button>
           ))}
           {found.length === 0 && <Empty>Aucun résultat.</Empty>}
         </div>
       )}
+      <details>
+        <summary className="label-caps cursor-pointer">Coordonnées</summary>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <input
+            type="number"
+            step="any"
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
+            placeholder="Latitude"
+            aria-label="Latitude"
+            style={{ width: 150 }}
+          />
+          <input
+            type="number"
+            step="any"
+            value={lng}
+            onChange={(e) => setLng(e.target.value)}
+            placeholder="Longitude"
+            aria-label="Longitude"
+            style={{ width: 150 }}
+          />
+        </div>
+      </details>
       <div className="flex flex-wrap gap-2">
         <button type="button" className="btn btn-primary" disabled={save.isPending} onClick={saveHome}>
           Enregistrer le domicile

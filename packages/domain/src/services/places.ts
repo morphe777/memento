@@ -51,6 +51,7 @@ export const PLACE_CATEGORIES = [
   'hotel',
   'address',
   'city',
+  'home',
   'other',
 ] as const;
 /** The ones an outing usually is: preferred over a shop or an address at the same distance. */
@@ -352,14 +353,21 @@ export function savePlace(ctx: Ctx, input: PlaceInput): PlaceRow {
   return tx(ctx, () => {
     const provider = input.provider ?? 'manual';
     const ref = provider === 'manual' ? null : (input.providerRef ?? null);
-    if (ref) {
-      const found = ctx.db
-        .select()
-        .from(place)
-        .all()
-        .find((p) => p.provider === provider && p.providerRef === ref);
-      if (found) return found;
-    }
+    // One provider reference = one place; by hand (D-173), the same name at the same point = one place.
+    const found = ctx.db
+      .select()
+      .from(place)
+      .all()
+      .find((p) =>
+        ref
+          ? p.provider === provider && p.providerRef === ref
+          : provider === 'manual' &&
+            p.provider === 'manual' &&
+            p.name === input.name &&
+            p.lat === input.lat &&
+            p.lng === input.lng,
+      );
+    if (found) return found;
     const id = newId();
     ctx.db
       .insert(place)
@@ -426,6 +434,38 @@ const memorizedCandidate = (p: PlaceRow, from: { lat: number; lng: number } | nu
   memorized: true,
 });
 
+/** D-173: a photo taken this close to the home is « at home ». */
+export const HOME_M = 100;
+
+/**
+ * D-173: « Maison » (the name chosen in Configuration) when the point is within 100 m of the home: the place
+ * remembered for this home and this name, else a new one to save. A move or another name gives another place;
+ * the souvenirs keep the one of their time.
+ */
+export function homeCandidate(ctx: Ctx, at: { lat: number; lng: number }): PlaceCandidate | null {
+  const home = getSettings(ctx)['places.home'];
+  if (!home || distanceM(at, home) > HOME_M) return null;
+  const name = home.label || 'Maison';
+  const kept = ctx.db
+    .select()
+    .from(place)
+    .all()
+    .find((p) => p.provider === 'manual' && p.name === name && p.lat === home.lat && p.lng === home.lng);
+  if (kept) return memorizedCandidate(kept, at);
+  return {
+    name,
+    category: 'home',
+    lat: home.lat,
+    lng: home.lng,
+    address: home.address ?? '',
+    city: '',
+    provider: 'manual',
+    providerRef: null,
+    distanceM: distanceM(at, home),
+    memorized: false,
+  };
+}
+
 /** The remembered place nearest to a point, within `radius` metres (a second visit needs no network). */
 export function nearestMemorized(ctx: Ctx, at: { lat: number; lng: number }, radius = 50) {
   return (
@@ -442,9 +482,9 @@ export function nearestMemorized(ctx: Ctx, at: { lat: number; lng: number }, rad
 const rank = (c: PlaceCandidate) => (c.distanceM ?? 0) * (OUTING.has(c.category ?? 'other') ? 1 : 3);
 
 /**
- * EX-13 « du point au nom »: the named places within 50 m (150 m when there is none), nearest and most likely
- * first (an outing before a shop), remembered ones included; then the address, then the town. The first one is
- * the default choice (CE-05).
+ * EX-13 « du point au nom »: the home (D-173), then the named places within 50 m (150 m when there is none),
+ * nearest and most likely first (an outing before a shop), remembered ones included; then the address, then the
+ * town. Proposed, never chosen for the user (D-173), except the home at the capture.
  */
 export async function placesNearby(ctx: Ctx, lat: number, lng: number, radius?: number) {
   const at = { lat, lng };
@@ -481,8 +521,11 @@ export async function placesNearby(ctx: Ctx, lat: number, lng: number, radius?: 
       providerError = e.code;
     }
   }
+  // D-173: the home first when the point is there.
+  const home = homeCandidate(ctx, at);
   const candidates = [
-    ...memorized.sort((a, b) => rank(a) - rank(b)),
+    ...(home ? [home] : []),
+    ...memorized.filter((m) => m.id !== home?.id).sort((a, b) => rank(a) - rank(b)),
     ...found.filter((c) => !known.has(`${c.provider}:${c.providerRef}`)),
   ];
   return { point: at, candidates, providerError };

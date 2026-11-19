@@ -48,6 +48,10 @@ Le dépôt GitHub est **public**. Chaque changement passe ces règles.
 - Jobs planifiés : passer par `once()` de `services/jobs.ts` (tout ou rien, relance, échec signalé, C-07). Pas de
   `catch` vide.
 - Une route ou un outil MCP qui change : mettre à jour `docs/api/guide-ia.md` (lu par l'IA à l'exécution).
+- Interface : **le même comportement partout** (D-40). Toute modification s'ouvre dans le panneau à droite (`Panel` +
+  `SAVE_HINT`) : clic à côté ou ✕ = enregistrer si quelque chose a changé, Échap = annuler. Pas de formulaire en ligne
+  avec ses propres boutons Annuler / Enregistrer (sauf un parcours guidé comme la vérification d'une capture). Toute
+  page de détail a un « ‹ Retour » visible : l'app installée sur iPhone ou iPad n'a pas de bouton retour.
 
 **Tests**
 - Écrire d'abord le test qui échoue, puis la correction.

@@ -28,6 +28,7 @@ import {
   onThisDay,
   patchSettings,
   photoFile,
+  placeFromCandidate,
   placesNearby,
   prefillFromPhotos,
   processPhoto,
@@ -45,6 +46,10 @@ import { lookups } from './helpers.ts';
 import { jpeg, LUCETTE, osmRoutes, resetNetwork, souvenirCtx, stubNetwork } from './souvenirs-helpers.ts';
 
 afterEach(resetNetwork);
+
+/** D-173: the place is chosen on the check screen (the first one proposed around the photos). */
+const lucetteChosen = async (ctx: ReturnType<typeof souvenirCtx>) =>
+  placeFromCandidate(ctx, (await placesNearby(ctx, LUCETTE.lat, LUCETTE.lng)).candidates[0]).id;
 
 const photosOf = async (spec: { at: string; lat?: number; lng?: number }[]) =>
   Promise.all(spec.map(async (s) => ({ buf: await jpeg(s) })));
@@ -112,9 +117,9 @@ describe('pre-fill (EX-11)', () => {
 });
 
 describe('capture (EX-10, EXA-01)', () => {
-  it('CE-01: 4 shared photos give a draft souvenir named after the restaurant, dated and placed', async () => {
+  it('CE-01, D-173: 4 shared photos give a draft souvenir, dated, the places nearby proposed (none chosen)', async () => {
     const ctx = souvenirCtx();
-    stubNetwork(osmRoutes);
+    const calls = stubNetwork(osmRoutes);
     const files = await photosOf([
       { at: '2026-11-15T12:40:00', ...LUCETTE },
       { at: '2026-11-15T12:55:00', ...LUCETTE },
@@ -127,15 +132,17 @@ describe('capture (EX-10, EXA-01)', () => {
       existing: false,
       editPath: `/souvenirs/${res.id}/verifier`,
     });
+    expect(calls).toEqual([]); // nothing chosen for the user: no request at the capture
     const s = getSouvenir(ctx, res.id);
     expect(s).toMatchObject({
       status: 'draft',
       source: 'share',
-      title: 'Chez Lucette',
+      title: 'Sortie du 15 novembre',
+      place: null,
       startDate: '2026-11-15',
       days: 1,
     });
-    expect(s.place).toMatchObject({ name: 'Chez Lucette', category: 'restaurant', city: 'Valbourg' });
+    expect((await getSuggestions(ctx, res.id)).places[0]).toMatchObject({ name: 'Chez Lucette' });
     expect(s.photoCount).toBe(4);
     expect(s.coverPhotoId).toBe(s.photos[0].id);
     expect(s.doneAt).toBe('2026-11-15T11:40:00.000Z');
@@ -146,16 +153,43 @@ describe('capture (EX-10, EXA-01)', () => {
     expect(getExperiencesPage(ctx).doneThisMonth).toBe(1);
   });
 
-  it('CE-02: the app sends the metadata first (files later): same pre-fill, a second visit needs no network', async () => {
+  it('D-173: a photo within 100 m of the home is placed « at home », under the name chosen for it', async () => {
     const ctx = souvenirCtx();
     const calls = stubNetwork(osmRoutes);
-    await createCapture(ctx, { photos: [{ takenAt: '2026-11-10T19:00', ...LUCETTE }] });
-    const n = calls.length;
-    const again = await createCapture(ctx, {
-      photos: [{ takenAt: '2026-11-16T12:00', lat: 46.50005, lng: 3.0001 }],
+    patchSettings(ctx, {
+      'places.home': { lat: 46.5, lng: 3.0005, label: 'Maison', address: '1 place du Marché' },
     });
-    expect(calls.length).toBe(n); // remembered place within 50 m
-    expect(getSouvenir(ctx, again.id).place?.name).toBe('Chez Lucette');
+    const r = await createCapture(
+      ctx,
+      { photos: [] },
+      await photosOf([{ at: '2026-11-10T19:00', ...LUCETTE }]),
+    );
+    expect(calls).toEqual([]);
+    expect(getSouvenir(ctx, r.id)).toMatchObject({
+      title: 'Maison',
+      place: { name: 'Maison', category: 'home', lat: 46.5, lng: 3.0005, address: '1 place du Marché' },
+    });
+    // The home is proposed first nearby too, as the same remembered place.
+    const sugg = await getSuggestions(ctx, r.id);
+    expect(sugg.places[0]).toMatchObject({ id: getSouvenir(ctx, r.id).place!.id, name: 'Maison' });
+  });
+
+  it('D-173: after a move, the old souvenirs keep the old home; the new one is another place', async () => {
+    const ctx = souvenirCtx();
+    stubNetwork(osmRoutes);
+    patchSettings(ctx, { 'places.home': { lat: 46.5, lng: 3.0, label: 'Maison' } });
+    const before = await createCapture(ctx, { photos: [{ takenAt: '2026-11-10T19:00', ...LUCETTE }] });
+    const again = await createCapture(ctx, { photos: [{ takenAt: '2026-11-11T19:00', ...LUCETTE }] });
+    expect(getSouvenir(ctx, again.id).place!.id).toBe(getSouvenir(ctx, before.id).place!.id);
+    patchSettings(ctx, { 'places.home': { lat: 45.2, lng: 4.1, label: 'Maison' } });
+    const after = await createCapture(ctx, {
+      photos: [{ takenAt: '2026-11-12T19:00', lat: 45.2001, lng: 4.1 }],
+    });
+    expect(getSouvenir(ctx, before.id).place).toMatchObject({ name: 'Maison', lat: 46.5, lng: 3.0 });
+    expect(getSouvenir(ctx, after.id).place).toMatchObject({ name: 'Maison', lat: 45.2, lng: 4.1 });
+    // The old home is no longer « at home »: a photo there is a plain one.
+    const back = await createCapture(ctx, { photos: [{ takenAt: '2026-11-13T19:00', ...LUCETTE }] });
+    expect(getSouvenir(ctx, back.id).place).toBeNull();
   });
 
   it('CE-11: the same capture sent twice gives one souvenir', async () => {
@@ -167,14 +201,18 @@ describe('capture (EX-10, EXA-01)', () => {
     expect(listSouvenirs(ctx)).toHaveLength(1);
   });
 
-  it('no position: « Sortie du … »; the provider down never blocks (warning)', async () => {
+  it('no position: « Sortie du … »; the provider down never blocks (warning with the proposals)', async () => {
     const ctx = souvenirCtx();
     stubNetwork(() => new Response('down', { status: 503 }));
     const a = await createCapture(ctx, { photos: [{ takenAt: '2026-11-01T10:00' }] });
     expect(getSouvenir(ctx, a.id).title).toBe('Sortie du 1er novembre');
-    const b = await createCapture(ctx, { photos: [{ takenAt: '2026-11-02T10:00', lat: 45, lng: 4 }] });
-    expect(b.warnings).toEqual(['PLACE_PROVIDER_UNAVAILABLE']);
+    const b = await createCapture(
+      ctx,
+      { photos: [] },
+      await photosOf([{ at: '2026-11-02T10:00', lat: 45, lng: 4 }]),
+    );
     expect(getSouvenir(ctx, b.id)).toMatchObject({ title: 'Sortie du 2 novembre', place: null });
+    expect((await getSuggestions(ctx, b.id)).providerError).toBe('PLACE_PROVIDER_UNAVAILABLE');
   });
 });
 
@@ -314,6 +352,12 @@ describe('places (EX-13)', () => {
     const far = savePlace(ctx, { name: 'Ailleurs', lat: -37.76, lng: 144.93, provider: 'manual' });
     updateSouvenir(ctx, res.id, { placeId: far.id });
     expect((await getSuggestions(ctx, res.id)).point).toBeNull();
+  });
+  it('D-173: the same name kept by hand at the same point is the same place', () => {
+    const ctx = souvenirCtx();
+    const a = savePlace(ctx, { name: 'BAM', lat: 46.5, lng: 3, provider: 'manual' });
+    expect(savePlace(ctx, { name: 'BAM', lat: 46.5, lng: 3, provider: 'manual' }).id).toBe(a.id);
+    expect(savePlace(ctx, { name: 'BAM', lat: 46.6, lng: 3, provider: 'manual' }).id).not.toBe(a.id);
   });
   it('D-169: the check screen searches around the photos, even after a far place was chosen', async () => {
     const ctx = souvenirCtx();
@@ -494,7 +538,7 @@ describe('every lived experience has its souvenir (D-157)', () => {
       { photos: [] },
       await photosOf([{ at: '2026-11-15T12:00', ...LUCETTE }]),
     );
-    saveSouvenir(ctx, id, { newPersons: ['Alice'], rating: 'again' });
+    saveSouvenir(ctx, id, { newPersons: ['Alice'], rating: 'again', placeId: await lucetteChosen(ctx) });
     const dump = exportData(ctx);
     expect(dump.tables.souvenir).toHaveLength(1);
     const other = souvenirCtx();
@@ -526,9 +570,13 @@ describe('revivre (EX-50 to EX-52, EX-60)', () => {
       body: Parameters<typeof saveSouvenir>[2],
     ) => {
       const { id } = await createCapture(ctx, { photos: [{ takenAt: at, ...(point ?? {}) }] });
-      return saveSouvenir(ctx, id, body);
+      return saveSouvenir(ctx, id, { ...(point ? { placeId: await lucetteChosen(ctx) } : {}), ...body });
     };
-    const a = await add('2026-11-15T12:00', LUCETTE, { personIds: [alice.id], rating: 'again' });
+    const a = await add('2026-11-15T12:00', LUCETTE, {
+      personIds: [alice.id],
+      rating: 'again',
+      title: 'Chez Lucette',
+    });
     // Same place, the photos elsewhere: still one point (CE-07).
     const b = await add('2026-09-20T12:00', LUCETTE, { personIds: [bruno.id], rating: 'good' });
     await updateSouvenir(ctx, b.id, {});

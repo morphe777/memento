@@ -113,7 +113,13 @@ describe('capture over HTTP (EXA-01)', () => {
     const s = (
       await app.inject({ method: 'GET', url: `/api/v1/souvenirs/${out.id}`, headers: { cookie } })
     ).json();
-    expect(s).toMatchObject({ status: 'draft', source: 'share', title: 'Chez Lucette', photoCount: 4 });
+    expect(s).toMatchObject({
+      status: 'draft',
+      source: 'share',
+      title: 'Sortie du 15 novembre',
+      place: null,
+      photoCount: 4,
+    });
     // The photo files: WebP, private cache.
     const thumb = await app.inject({
       method: 'GET',
