@@ -387,7 +387,7 @@ export function buildServer(call: Call, canWrite = true) {
   );
   tool(
     'add_experience_idea',
-    'Ajoute une envie : une idée d’expérience à vivre (tâche Inbox marquée Expérience, sans date). Le moteur en propose dans le plan quand la cible du mois n’est pas tenue.',
+    'Ajoute une envie : une idée d’expérience à vivre un jour (tâche marquée Expérience, sans date, hors Inbox). Le moteur ne la propose jamais : l’utilisateur la choisit dans Planifier › Semaine (groupe Envies, hors budget).',
     S.experienceIdea.shape,
     (a) => call('POST', '/experiences', a),
   );

@@ -178,9 +178,10 @@ describe('D-155 « Compléter le budget » with the AI', () => {
     expect(p.summary).toBe('On équilibre vers la maison.');
     expect(p.items.map((i) => [i.title, i.angle, i.key])).toEqual([
       ['Appeler le notaire', 'deadline', 'ta signature'],
-      ['Planétarium', 'experience', 'Aucune expérience'], // an experience is outside the budget (RB-09)
-      ['Payer la cantine', 'balance', 'Vite'],
+      ['Payer la cantine', 'balance', 'Vite'], // D-178: the envie « Planétarium » is never proposed
+      ['Arroser', 'balance', 'trop'],
     ]);
+    expect(sent).not.toContain('Planétarium');
     expect(getPlanningPage(ctx, '2026-W44').items.map((i) => i.taskId)).toEqual([tasks[0].id]);
   });
 

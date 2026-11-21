@@ -3,17 +3,22 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   addExperienceIdea,
+  createTask,
   getExperiencesPage,
+  getPlanningPage,
   getTask,
   ideaFromPlace,
   ideaFromUrl,
   isPrivateAddress,
+  listInbox,
   parseHtml,
   parseMapsUrl,
+  proposeWeek,
   readUrl,
   savePlace,
+  setWeekItems,
 } from '../src/index.ts';
-import { lookups } from './helpers.ts';
+import { lookups, makeCtx } from './helpers.ts';
 import { html, LUCETTE, osmRoutes, resetNetwork, souvenirCtx, stubNetwork } from './souvenirs-helpers.ts';
 
 afterEach(resetNetwork);
@@ -190,5 +195,32 @@ describe('envie with a place (user request 21/11/2026, D-174)', () => {
         placeId: '00000000-0000-4000-8000-000000000000',
       }),
     ).toThrow();
+  });
+});
+
+describe('envies apart from the Inbox and the engine (user request 21/11/2026, D-178)', () => {
+  it('an envie is neither in the Inbox nor proposed, even under the month target; it is at the end of Planifier', () => {
+    const ctx = makeCtx('2026-10-26T08:00:00.000Z'); // Monday W44, no experience done this month
+    const colis = createTask(ctx, { title: 'Colis', durationMin: 30 });
+    const envie = addExperienceIdea(ctx, { title: 'Planétarium', durationMin: 120, domainId: null });
+    expect(listInbox(ctx).open.map((t) => t.title)).toEqual(['Colis']);
+    proposeWeek(ctx, '2026-W44');
+    const page = getPlanningPage(ctx, '2026-W44');
+    expect(page.items.map((i) => i.taskId)).not.toContain(envie.id);
+    expect(page.groups.map((g) => g.key)).toEqual(['inbox', 'month', 'consider', 'envies']);
+    const inbox = page.groups[0]!.cards.flatMap((c) => c.tasks.map((t) => t.title));
+    expect(inbox).toEqual(['Colis']);
+    const envies = page.groups[3]!;
+    expect(envies.cards[0]!.tasks.map((t) => [t.title, t.selection, t.why])).toEqual([
+      ['Planétarium', null, ''],
+    ]);
+    // Planned by hand: kept, outside the budget (RB-09).
+    setWeekItems(ctx, '2026-W44', [
+      { taskId: colis.id, kind: 'week' },
+      { taskId: envie.id, kind: 'week' },
+    ]);
+    const after = getPlanningPage(ctx, '2026-W44');
+    expect(after.groups[3]!.cards[0]!.tasks[0]!.selection).toBe('week');
+    expect(after.budget.plannedMin).toBe(30);
   });
 });

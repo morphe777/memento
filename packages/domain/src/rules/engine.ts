@@ -181,6 +181,8 @@ interface Prepared {
   projectById: Map<string, EngineProject>;
   tasksByProject: Map<string, EngineTask[]>;
   inboxTasks: EngineTask[];
+  /** D-178: the envies (experience tasks outside projects): never proposed, chosen by hand only. */
+  envies: EngineTask[];
   monday: string;
   sunday: string;
   month: string;
@@ -199,8 +201,9 @@ const isMonthProject = (P: Prepared, p: EngineProject) => !!p.monthFlag && P.mon
 function prepare(input: EngineInput): Prepared {
   const tasksByProject = new Map<string, EngineTask[]>();
   const inboxTasks: EngineTask[] = [];
+  const envies: EngineTask[] = [];
   for (const t of input.tasks) {
-    if (t.projectId === null) inboxTasks.push(t);
+    if (t.projectId === null) (t.isExperience ? envies : inboxTasks).push(t);
     else tasksByProject.set(t.projectId, [...(tasksByProject.get(t.projectId) ?? []), t]);
   }
   const monday = weekMonday(input.isoWeek);
@@ -215,6 +218,7 @@ function prepare(input: EngineInput): Prepared {
     projectById: new Map(input.projects.map((p) => [p.id, p])),
     tasksByProject,
     inboxTasks,
+    envies,
     monday,
     sunday: weekSunday(input.isoWeek),
     month: monthOf(monday),
@@ -390,7 +394,7 @@ export interface PageCard {
 export const INBOX_VISIBLE = 3;
 
 export interface PageGroup {
-  key: 'inbox' | 'month' | 'consider';
+  key: 'inbox' | 'month' | 'consider' | 'envies';
   name: string;
   hint: string;
   countLabel: string;
@@ -501,6 +505,13 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
   const inboxShown = inboxRows.filter((r, i) => i < INBOX_VISIBLE || r.selection);
   const inboxFolded = inboxRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection));
   const dueById = new Map(inboxSorted.map((t) => [t.id, t.dueDate]));
+  // D-178: the envies, by title, no score nor reason (the engine never proposes them); folded like the Inbox.
+  const envieRows = P.envies
+    .filter((t) => t.status === 'todo')
+    .sort((a, b) => a.title.localeCompare(b.title, 'fr') || a.id.localeCompare(b.id))
+    .map((t) => ({ ...row(t, false), why: '' }));
+  const envieShown = envieRows.filter((r, i) => i < INBOX_VISIBLE || r.selection);
+  const envieFolded = envieRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection));
 
   const card = (p: EngineProject, visibleBase: number): { card: PageCard; best: number } => {
     const ptasks = P.tasksByProject.get(p.id) ?? [];
@@ -622,6 +633,34 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       hint: 'suggérés par le moteur, hors projets du mois',
       countLabel: `${considered.length} projet${considered.length > 1 ? 's' : ''}`,
       cards: considered.map((c) => c.card),
+    },
+    {
+      key: 'envies',
+      name: 'Envies',
+      hint: 'à choisir toi-même, hors budget',
+      countLabel: `${envieRows.length} envie${envieRows.length > 1 ? 's' : ''}`,
+      cards: envieRows.length
+        ? [
+            {
+              projectId: null,
+              title: 'Envies',
+              domainId: null,
+              objectiveId: null,
+              objectiveTitle: null,
+              waitingOn: [],
+              tasks: envieShown,
+              hidden: envieFolded.map((r) => ({
+                taskId: r.taskId,
+                title: r.title,
+                durationMin: r.durationMin,
+              })),
+              hiddenTasks: envieFolded,
+              hiddenDueCount: 0,
+              laterRecurring: [],
+              deltaMin: null,
+            },
+          ]
+        : [],
     },
   ];
 

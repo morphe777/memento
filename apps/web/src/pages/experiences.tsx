@@ -197,7 +197,7 @@ export function ExperiencesPage({
           </Section>
           <Section
             title="Envies"
-            info="Les expériences à vivre un jour, sans date. Le moteur en propose dans le plan de la semaine quand la cible du mois n'est pas tenue. Un lien ou un lieu partagé depuis l'iPhone arrive ici."
+            info="Ta liste d'expériences à vivre un jour, pour t'y référer. Hors Inbox, jamais proposées par le moteur : pour en vivre une cette semaine, coche-la en bas de Planifier › Semaine (hors budget). Un lien partagé depuis l'iPhone arrive ici."
           >
             <button type="button" className="btn self-start" onClick={newIdea}>
               + Envie

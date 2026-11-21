@@ -151,9 +151,11 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 - **Suites de tâches** (RB-06, D-101) : dans un projet séquentiel, une tâche `isFree` n'attend rien et **démarre une
   nouvelle suite** : les tâches non libres placées dessous la suivent, pas celles du dessus.
 - Expériences : `GET /experiences` (cible du mois, souvenirs, prévues, et `reserve` : les **envies**) ;
-  `POST /experiences { title, durationMin?, domainId?, description?, placeId? }` ajoute une **envie** (D-171 : une tâche Inbox
+  `POST /experiences { title, durationMin?, domainId?, description?, placeId? }` ajoute une **envie** (D-171 : une tâche hors projet
   marquée Expérience, sans date ; `placeId` = un lieu mémorisé (`POST /places`), écrit dans la description avec un
-  lien de carte, D-174 ; le moteur en propose quand la cible du mois n'est pas tenue) ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
+  lien de carte, D-174). **D-178** : les envies ne sont ni dans l'Inbox (`GET /inbox`) ni proposées par le moteur ;
+  elles forment le groupe `envies`, en dernier, de `GET /week-plans/{semaine}` : ne les mets dans une semaine que
+  si l'utilisateur le demande (hors budget, RB-09) ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
   expérience **déjà vécue** (D-153) : faite à `doneAt` (maintenant si absent), dans le projet donné (durée alors
   obligatoire) ou dans le domaine (Famille si absent, aucun si `null`).
 

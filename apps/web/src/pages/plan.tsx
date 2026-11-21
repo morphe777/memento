@@ -205,7 +205,9 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
                 ? 'Inbox vide.'
                 : g.key === 'month'
                   ? 'Aucun projet du mois : choisis-les dans Planifier › Mois.'
-                  : 'Rien d’autre à proposer.'}
+                  : g.key === 'envies'
+                    ? 'Aucune envie : ajoute-les dans Expériences.'
+                    : 'Rien d’autre à proposer.'}
             </div>
           )}
           {g.cards.map((c) => (

@@ -98,16 +98,19 @@ function common(ctx: Ctx) {
  */
 export function weekData(ctx: Ctx, isoWeek: string, withFolded = false) {
   const page = getPlanningPage(ctx, isoWeek);
-  const tasks = page.groups.flatMap((g) =>
-    g.cards.flatMap((c) =>
-      [...c.tasks, ...(withFolded ? c.hiddenTasks : [])].map((t) => ({
-        ...t,
-        bin: g.key,
-        projectTitle: c.projectId ? c.title : null,
-        domainId: c.domainId,
-      })),
-    ),
-  );
+  // D-178: the envies are chosen by hand only: never sent to the AI as candidates.
+  const tasks = page.groups
+    .filter((g) => g.key !== 'envies')
+    .flatMap((g) =>
+      g.cards.flatMap((c) =>
+        [...c.tasks, ...(withFolded ? c.hiddenTasks : [])].map((t) => ({
+          ...t,
+          bin: g.key,
+          projectTitle: c.projectId ? c.title : null,
+          domainId: c.domainId,
+        })),
+      ),
+    );
   const data = {
     ...common(ctx),
     week: page.label,

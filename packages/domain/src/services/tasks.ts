@@ -372,7 +372,10 @@ export function listInbox(ctx: Ctx) {
   const ranks = new Map(listDomains(ctx).map((d) => [d.id, d.priorityRank]));
   const rank = (t: { domainId: string | null }) =>
     (t.domainId ? ranks.get(t.domainId) : undefined) ?? Number.MAX_SAFE_INTEGER;
-  const all = listTasks(ctx, { projectId: 'inbox', status: 'todo,done' }).sort((a, b) => rank(a) - rank(b));
+  // D-178: the envies (experience tasks) live in Expériences, never in the Inbox.
+  const all = listTasks(ctx, { projectId: 'inbox', status: 'todo,done' })
+    .filter((t) => !t.isExperience)
+    .sort((a, b) => rank(a) - rank(b));
   const later = (t: (typeof all)[number]) => !!t.recurrenceRule && !!t.dueDate && t.dueDate > horizon;
   const month = today.slice(0, 7);
   return {

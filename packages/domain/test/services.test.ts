@@ -388,7 +388,12 @@ describe('L3 planification', () => {
   it('builds the 3 bins in order, pre-checks only mandatory tasks, reveals the next task when chosen', () => {
     const { ctx, pv, inbox } = world();
     const page = proposeWeek(ctx, '2026-W45');
-    expect(page.groups.map((g) => g.name)).toEqual(['Inbox', 'Projets du mois', 'À considérer aussi']);
+    expect(page.groups.map((g) => g.name)).toEqual([
+      'Inbox',
+      'Projets du mois',
+      'À considérer aussi',
+      'Envies', // D-178
+    ]);
     const inboxRow = page.groups[0].cards[0].tasks.find((t) => t.taskId === inbox.id)!;
     expect(inboxRow.selection).toBe('week');
     expect(inboxRow.why).toMatch(/Deadline jeudi/);
