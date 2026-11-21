@@ -3,6 +3,26 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.4.0 — 2026-11
+
+Un cap clair pour la semaine, et des retours iPhone / iPad.
+
+- **Cap de la semaine** : en haut de Ma semaine et de Planifier › Semaine, les **2 grandes actions** de la semaine
+  (« Poser le **carrelage** de la salle de bain »), écrites par l'IA **le lundi matin** d'après le temps prévu par
+  projet, puis gardées. **↻** dans Planifier › Semaine pour les réécrire ; un clic pour les modifier à la main. Sans
+  IA : les 2 projets qui ont le plus de temps prévu. Remplace les « pourquoi » qui tournaient (et leur réglage de
+  vitesse) ; la page Cap ne change pas. Prompt « Cap de la semaine » en Configuration › IA (D-175).
+- **Dupliquer une tâche** depuis sa fiche : copie à faire, juste sous l'originale, sans deadline ni semaine (D-174).
+- **Dates** : un ✕ efface chaque date facultative (le « Réinitialiser » de l'iPad ne vidait rien) (D-174).
+- **Envie avec lieu** : « + Envie » ouvre un panneau Quoi / Où / Durée / Domaine ; le lieu va dans la description
+  avec un lien de carte (D-174).
+- **+ iPhone sur Expériences** : « + Souvenir (photos) », « + Envie » ou « Vécue sans photo », quel que soit
+  l'onglet (D-174).
+- API : `GET` / `PUT /week-plans/{week}/focus`, `POST /week-plans/{week}/focus/refresh` (interface),
+  `POST /tasks/{id}/duplicate`, `placeId` dans `POST /experiences`. MCP : `get_week_focus`, `set_week_focus`,
+  `duplicate_task`.
+- Données : migration `0012` (colonne `focus` de la semaine).
+
 ## 1.3.0 — 2026-11
 
 Expériences et souvenirs : ce qu'on a vécu (photos, lieux, personnes), ce qu'on aimerait vivre (envies), un
