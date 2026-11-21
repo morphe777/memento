@@ -3,6 +3,12 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.4.1 — 2026-11
+
+- **+ iPhone** : « + Envie » depuis Ma semaine (avec « + Tâche ») et Idées (avec « + Idée de projet ») (D-176).
+- **Envie** : une seule façon de l'ajouter, le panneau avec **Où** ; le champ rapide sans lieu d'À vivre est
+  remplacé par un bouton « + Envie » (D-176).
+
 ## 1.4.0 — 2026-11
 
 Un cap clair pour la semaine, et des retours iPhone / iPad.
