@@ -1,7 +1,7 @@
 // Configuration › Souvenirs (EX-30, D-161, D-162, D-168): people, home, places.
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ConfirmDialog, Empty, Field, InfoTip, Loading, Section } from '../components/ui.tsx';
+import { ConfirmDialog, DateInput, Empty, Field, InfoTip, Loading, Section } from '../components/ui.tsx';
 import { del, get, patch, post } from '../lib/api.ts';
 import { toast, useAction, useSettings } from '../lib/hooks.ts';
 import { fmtAddress } from '../lib/souvenirs.ts';
@@ -194,11 +194,7 @@ function PersonLine({ p, others }: { p: PersonRow; others: PersonRow[] }) {
       <div className="flex flex-wrap items-center gap-3 text-[13px]" style={{ color: 'var(--text-muted)' }}>
         <label className="flex items-center gap-1">
           Naissance
-          <input
-            type="date"
-            value={f.birthDate ?? ''}
-            onChange={(e) => setF({ ...f, birthDate: e.target.value || null })}
-          />
+          <DateInput value={f.birthDate ?? ''} onChange={(v) => setF({ ...f, birthDate: v || null })} />
         </label>
         <label className="flex items-center gap-1">
           Alerte douce après

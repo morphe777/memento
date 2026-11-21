@@ -11,6 +11,7 @@ import { openTask, useSortSensors } from '../components/tasks.tsx';
 import {
   AiDots,
   ConfirmDialog,
+  DateInput,
   Empty,
   Field,
   InfoTip,
@@ -1423,16 +1424,10 @@ function VacationsConfig() {
       )}
       <div className="flex items-end gap-2 flex-wrap">
         <Field label="Du">
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} style={DATE_W} />
+          <DateInput value={from} onChange={setFrom} style={DATE_W} />
         </Field>
         <Field label="Au (inclus)">
-          <input
-            type="date"
-            value={to}
-            min={from || undefined}
-            onChange={(e) => setTo(e.target.value)}
-            style={DATE_W}
-          />
+          <DateInput value={to} min={from || undefined} onChange={setTo} style={DATE_W} />
         </Field>
         <button type="button" className="btn" onClick={add} disabled={!from}>
           Ajouter

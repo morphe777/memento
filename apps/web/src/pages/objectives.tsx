@@ -20,6 +20,7 @@ import {
 } from '../components/tasks.tsx';
 import {
   ConfirmDialog,
+  DateInput,
   Empty,
   ErrorBox,
   Field,
@@ -458,12 +459,7 @@ export function ObjectivePanel({
               </div>
               <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
                 <Field label="Deadline (dans le trimestre)">
-                  <input
-                    type="date"
-                    value={f.deadline}
-                    min={me.data?.today}
-                    onChange={(e) => set('deadline', e.target.value)}
-                  />
+                  <DateInput value={f.deadline} min={me.data?.today} onChange={(v) => set('deadline', v)} />
                 </Field>
                 <Field
                   label="Récurrence"
@@ -547,12 +543,7 @@ export function ObjectivePanel({
           </div>
           <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
             <Field label="Deadline (dans le trimestre)">
-              <input
-                type="date"
-                value={f.deadline}
-                min={me.data?.today}
-                onChange={(e) => set('deadline', e.target.value)}
-              />
+              <DateInput value={f.deadline} min={me.data?.today} onChange={(v) => set('deadline', v)} />
             </Field>
             <Field
               label="Récurrence"
@@ -782,7 +773,7 @@ export function MetaPanel({
       </Field>
       <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))' }}>
         <Field label="Horizon" info="Date visée, en général un an ou plus. Facultatif.">
-          <input type="date" value={horizonDate} onChange={(e) => setHorizon(e.target.value)} />
+          <DateInput value={horizonDate} onChange={setHorizon} />
         </Field>
         {meta && (
           <Field label="Statut">

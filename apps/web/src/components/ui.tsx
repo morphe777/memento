@@ -1,6 +1,6 @@
 // Shared components (dossier de dev §11), values copied from the validated mockups.
 import { Link } from '@tanstack/react-router';
-import { type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { fmtDateShort, fmtMin, isoWeekMonday } from '../lib/format.ts';
 import { useDomainLookup, useMe } from '../lib/hooks.ts';
@@ -886,6 +886,57 @@ export function AiDots() {
       <span />
       <span />
       <span />
+    </span>
+  );
+}
+
+/**
+ * Every date field (user request 21/11/2026, D-174): a ✕ empties it. On iPad / iPhone, the « Réinitialiser » of
+ * the native picker gives back the field's default value, which React keeps equal to the current one: it never
+ * empties it. `required`: no ✕ (a souvenir's first day, the start of a holiday).
+ */
+export function DateInput({
+  value,
+  onChange,
+  required,
+  ...rest
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+  min?: string;
+  max?: string;
+  title?: string;
+  style?: CSSProperties;
+  'aria-label'?: string;
+}) {
+  const clearable = !required && !!value;
+  return (
+    <span className="date-input" style={rest.style}>
+      <input
+        type="date"
+        value={value}
+        min={rest.min}
+        max={rest.max}
+        title={rest.title}
+        aria-label={rest['aria-label']}
+        onChange={(e) => (e.target.value || !required) && onChange(e.target.value)}
+        style={clearable ? { paddingRight: 34 } : undefined}
+      />
+      {clearable && (
+        <button
+          type="button"
+          className="date-clear"
+          aria-label="Effacer la date"
+          title="Effacer la date"
+          onClick={(e) => {
+            e.preventDefault();
+            onChange('');
+          }}
+        >
+          ✕
+        </button>
+      )}
     </span>
   );
 }

@@ -203,6 +203,8 @@ export const experienceIdea = z.object({
   description: text.optional(),
   durationMin: taskFields.durationMin,
   domainId: taskFields.domainId,
+  /** D-174: a remembered place (POST /places), written in the description with a map link. */
+  placeId: uuid.optional(),
 });
 /**
  * D-153: an experience lived, recorded done. doneAt = Paris time (now when absent). Without a project, its domain

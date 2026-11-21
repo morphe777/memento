@@ -2,6 +2,7 @@
 // page reader (EXA-08, SSRF guard). Fictional data only: the « Théâtre des Tilleuls » of Valbourg, « Chez Lucette ».
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  addExperienceIdea,
   getExperiencesPage,
   getTask,
   ideaFromPlace,
@@ -10,6 +11,7 @@ import {
   parseHtml,
   parseMapsUrl,
   readUrl,
+  savePlace,
 } from '../src/index.ts';
 import { lookups } from './helpers.ts';
 import { html, LUCETTE, osmRoutes, resetNetwork, souvenirCtx, stubNetwork } from './souvenirs-helpers.ts';
@@ -152,5 +154,41 @@ describe('envies from a share (D-171)', () => {
     expect(calls).toEqual([]);
     const found = await ideaFromPlace(ctx, LUCETTE);
     expect(getTask(ctx, found.task.id)).toMatchObject({ title: 'Chez Lucette', isExperience: true });
+  });
+});
+
+describe('envie with a place (user request 21/11/2026, D-174)', () => {
+  it('an envie created by hand can name a remembered place: it goes in its description with a map link', () => {
+    const ctx = souvenirCtx();
+    const place = savePlace(ctx, {
+      name: 'Chez Lucette',
+      category: 'restaurant',
+      lat: 46.5,
+      lng: 3,
+      address: '3 place du Marché',
+      city: 'Valbourg',
+      provider: 'manual',
+    });
+    const t = addExperienceIdea(ctx, {
+      title: 'Dîner en terrasse',
+      description: 'Réserver avant',
+      durationMin: 120,
+      domainId: null,
+      placeId: place.id,
+    });
+    expect(getTask(ctx, t.id).description).toBe(
+      'Réserver avant\nLieu : Chez Lucette, 3 place du Marché, Valbourg\nhttps://www.openstreetmap.org/?mlat=46.5&mlon=3#map=18/46.5/3',
+    );
+  });
+  it('an unknown place is refused', () => {
+    const ctx = souvenirCtx();
+    expect(() =>
+      addExperienceIdea(ctx, {
+        title: 'X',
+        durationMin: null,
+        domainId: null,
+        placeId: '00000000-0000-4000-8000-000000000000',
+      }),
+    ).toThrow();
   });
 });

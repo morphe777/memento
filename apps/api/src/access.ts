@@ -100,6 +100,7 @@ export const TOKEN_ROUTES: Readonly<Record<string, TokenAccess>> = {
   'PUT /api/v1/tasks/:id/current-week': 'write',
   'POST /api/v1/tasks/:id/dependencies': 'write',
   'DELETE /api/v1/tasks/:id/dependencies/:dependsOnId': 'write',
+  'POST /api/v1/tasks/:id/duplicate': 'write',
   'POST /api/v1/tasks/:id/move': 'write',
   'POST /api/v1/tasks/:id/uncomplete': 'write',
   'POST /api/v1/tasks/batch': 'write',

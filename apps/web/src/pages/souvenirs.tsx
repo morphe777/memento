@@ -18,6 +18,7 @@ import {
 } from '../components/souvenir-ui.tsx';
 import {
   ConfirmDialog,
+  DateInput,
   Empty,
   ErrorBox,
   Field,
@@ -181,17 +182,16 @@ function SouvenirFields({
           Quand · {fmtSpan(f.startDate, f.endDate || null)}
         </Label>
         <div className="grid gap-2" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <input
-            type="date"
+          <DateInput
+            required
             value={f.startDate}
-            onChange={(e) => e.target.value && set('startDate', e.target.value)}
+            onChange={(v) => set('startDate', v)}
             aria-label="Premier jour"
           />
-          <input
-            type="date"
+          <DateInput
             value={f.endDate}
             min={f.startDate}
-            onChange={(e) => set('endDate', e.target.value)}
+            onChange={(v) => set('endDate', v)}
             aria-label="Dernier jour (plusieurs jours)"
             title="Dernier jour, pour un souvenir sur plusieurs jours"
           />

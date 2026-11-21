@@ -27,6 +27,7 @@ import { DescriptionBlock } from './markdown.tsx';
 import { NaturalBar, useNaturalTask } from './natural.tsx';
 import {
   ConfirmDialog,
+  DateInput,
   Duration,
   ExperienceBadge,
   Field,
@@ -407,11 +408,10 @@ export function QuickAdd({
         </select>
         {withSchedule && (
           <>
-            <input
-              type="date"
+            <DateInput
               value={parsed?.dueDate ?? dueDate}
-              onChange={(e) => {
-                setDueDate(e.target.value);
+              onChange={(v) => {
+                setDueDate(v);
                 if (parsed?.dueDate) nat.undo(parsed.recurrenceRule ? 'recurrence' : 'date');
               }}
               aria-label="Deadline"
@@ -585,6 +585,20 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
   });
   const [deleting, setDeleting] = useState(false);
   const remove = useAction(() => del(`/tasks/${t.id}`), { onSuccess: onClose, toast: 'Tâche supprimée.' });
+  // D-174: like a project (D-109), the copy is made from what is saved: pending changes are saved first.
+  const duplicate = useAction(
+    async () => {
+      const b = body();
+      if (JSON.stringify(b) !== initial.current && b.title.trim()) await save.mutateAsync(b);
+      return post<Task>(`/tasks/${t.id}/duplicate`);
+    },
+    {
+      onSuccess: (copy) => {
+        onClose();
+        toast(`Copie créée : « ${copy.title} ».`);
+      },
+    },
+  );
   const projects = useQuery({
     queryKey: ['projects', 'movable'],
     queryFn: () => get<Project[]>('/projects?status=idea,active,paused'),
@@ -621,7 +635,7 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
           <DurationSelect value={f.durationMin} onChange={(v) => set('durationMin', v)} />
         </Field>
         <Field label="Deadline">
-          <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+          <DateInput value={f.dueDate} onChange={(v) => set('dueDate', v)} />
         </Field>
       </div>
       {t.status === 'done' && (
@@ -706,6 +720,15 @@ function TaskForm({ t, onClose }: { t: TaskDetail; onClose: () => void }) {
         )}
         <button type="button" className="btn" onClick={() => cancel.mutate(undefined)}>
           {t.status === 'cancelled' ? 'Réactiver' : 'Annuler la tâche'}
+        </button>
+        <button
+          type="button"
+          className="btn"
+          disabled={duplicate.isPending}
+          onClick={() => duplicate.mutate(undefined)}
+          title="Une copie à faire, juste sous celle-ci, sans deadline ni semaine"
+        >
+          Dupliquer
         </button>
         <button
           type="button"

@@ -24,6 +24,7 @@ import {
   describeWithAi,
   duplicateObjective,
   duplicateProject,
+  duplicateTask,
   exportData,
   findReport,
   generateReport,
@@ -1382,6 +1383,42 @@ describe('D-109 duplication', () => {
       ['Salle de bain 1', 'todo'],
       ['Salle de bain 2', 'todo'],
     ]);
+  });
+
+  it('D-174: a task copy stays in its project or the Inbox, to do, without date, recurrence nor week', () => {
+    const ctx = makeCtx();
+    const { project: p, tasks } = activeProject(ctx, 'Salle de bain', 'Travaux', 2);
+    updateTask(ctx, tasks[0]!.id, { description: 'Carrelage', dueDate: '2026-12-01', isExperience: true });
+    completeTask(ctx, tasks[0]!.id, { actualMin: 90 });
+    const copy = duplicateTask(ctx, tasks[0]!.id);
+    expect(copy).toMatchObject({
+      title: 'Salle de bain 1 (copie)',
+      description: 'Carrelage',
+      projectId: p.id,
+      status: 'todo',
+      dueDate: null,
+      actualMin: null,
+      isExperience: true,
+      durationMin: tasks[0]!.durationMin,
+    });
+    expect(listTasks(ctx, { projectId: p.id }).map((t) => t.title)).toEqual([
+      'Salle de bain 1',
+      'Salle de bain 1 (copie)',
+      'Salle de bain 2',
+    ]);
+    const { domain } = lookups(ctx);
+    const inbox = createTask(ctx, {
+      title: 'Vidange',
+      durationMin: 60,
+      domainId: domain('Famille').id,
+      recurrenceRule: 'FREQ=MONTHLY',
+    });
+    expect(duplicateTask(ctx, inbox.id)).toMatchObject({
+      title: 'Vidange (copie)',
+      projectId: null,
+      domainId: domain('Famille').id,
+      recurrenceRule: null,
+    });
   });
 
   it('an objective copy brings its projects and rebuilds their path', () => {

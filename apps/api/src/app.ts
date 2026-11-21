@@ -696,6 +696,9 @@ export async function buildApp(opts: AppOptions) {
       r.post('/tasks/reorder', { schema: { ...tag('Tâches'), body: D.taskReorderBody } }, async (req) =>
         D.reorderTasks(ctx(req), req.body.projectId, req.body.ids),
       );
+      r.post('/tasks/:id/duplicate', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) =>
+        D.duplicateTask(ctx(req), req.params.id),
+      );
       r.post(
         '/tasks/:id/move',
         { schema: { ...tag('Tâches'), params: D.idParam, body: D.taskMoveBody } },

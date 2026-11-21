@@ -96,19 +96,34 @@ const TABS = [
  * iPhone « + » (user request 01/11/2026): what it creates depends on the page (an idea in Idées, a task in
  * Tâches…). A page registers its action with `usePageFab`; without one (Rapports, Cap…) there is no « + ».
  */
-interface FabAction {
+interface FabChoice {
   label: string;
   run: () => void;
 }
+interface FabAction {
+  label: string;
+  run: () => void;
+  /** D-174: several things to create (Expériences: souvenir, envie…): the « + » opens a short menu. */
+  choices?: FabChoice[];
+}
 const FabContext = createContext<(a: FabAction | null) => void>(() => {});
-export function usePageFab(label: string, run: () => void) {
+export function usePageFab(label: string, run: (() => void) | FabChoice[]) {
   const set = useContext(FabContext);
   const latest = useRef(run);
   latest.current = run;
+  const key = Array.isArray(run) ? run.map((c) => c.label).join('|') : '';
   useEffect(() => {
-    set({ label, run: () => latest.current() });
+    const at = (i: number) => () => {
+      const r = latest.current;
+      (Array.isArray(r) ? r[i]!.run : r)();
+    };
+    set({
+      label,
+      run: at(0),
+      choices: key ? key.split('|').map((l, i) => ({ label: l, run: at(i) })) : undefined,
+    });
     return () => set(null);
-  }, [set, label]);
+  }, [set, label, key]);
 }
 
 const MORE = NAV.flatMap((s) => s.items.filter((i) => i.more));
@@ -127,6 +142,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => new URLSearchParams(window.location.search).get('capturer') === '1',
   );
   const [fab, setFab] = useState<FabAction | null>(null);
+  const [fabMenu, setFabMenu] = useState(false);
+  useEffect(() => setFabMenu(false), [fab]);
   const [menuOpen, setMenuOpen] = useState(false);
   const settings = useSettings();
   useEffect(() => {
@@ -221,7 +238,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           className="fixed z-30 grid place-items-center rounded-full border-0 shadow-lg"
           aria-label={fab.label}
           title={fab.label}
-          onClick={fab.run}
+          aria-expanded={fab.choices ? fabMenu : undefined}
+          onClick={() => (fab.choices ? setFabMenu(!fabMenu) : fab.run())}
           style={{
             right: 16,
             bottom: 'calc(var(--tabs-h) + 14px)',
@@ -233,6 +251,37 @@ export function AppShell({ children }: { children: ReactNode }) {
         >
           <PlusIcon />
         </button>
+      )}
+      {phone && fab?.choices && fabMenu && (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-30 border-0 bg-transparent"
+            aria-label="Fermer"
+            onClick={() => setFabMenu(false)}
+          />
+          <div
+            className="fixed z-30 flex flex-col items-end gap-2"
+            role="menu"
+            style={{ right: 16, bottom: 'calc(var(--tabs-h) + 76px)' }}
+          >
+            {fab.choices.map((c) => (
+              <button
+                key={c.label}
+                type="button"
+                role="menuitem"
+                className="btn shadow-lg"
+                style={{ background: 'var(--surface)' }}
+                onClick={() => {
+                  setFabMenu(false);
+                  c.run();
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </>
       )}
       {phone && (
         <PhoneMenu

@@ -19,6 +19,8 @@ Priorité en cas de conflit : décisions datées (Specs §9.0, puis `docs/DECISI
 
 ## Règles de travail
 
+- **Réponses succinctes** : puces, peu de texte à lire, pas de blabla. Pour une idée nouvelle : un résumé court de
+  la solution envisagée avant d'écrire du code.
 - Développer **lot par lot** (dossier de dev §13). À la fin de chaque lot : tests verts, courte démo, puis **s'arrêter et attendre ma validation** avant le lot suivant.
 - Toute la logique métier est dans `packages/domain`. Le front et le MCP passent par l'API (F-26) ; le worker appelle
   `packages/domain` directement (mêmes règles, pas d'appel HTTP).

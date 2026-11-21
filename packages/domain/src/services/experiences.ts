@@ -7,7 +7,7 @@ import { type Ctx, ctxNow, tx } from '../context.ts';
 import type { ExperienceIdea, ExperienceLived } from '../schemas.ts';
 import { getSettings } from '../settings.ts';
 import { monthOf, parisDate } from '../time.ts';
-import { placesNearby } from './places.ts';
+import { getPlace, placesNearby } from './places.ts';
 import { serializeProjects } from './projects.ts';
 import { readUrl } from './read-url.ts';
 import { listDomains } from './referential.ts';
@@ -107,8 +107,22 @@ export function getExperiencesPage(ctx: Ctx) {
 
 /** « + Envie » (D-171): an experience idea is an Inbox task flagged as experience (no date). */
 export function addExperienceIdea(ctx: Ctx, input: ExperienceIdea) {
-  return createTask(ctx, { ...input, isExperience: true });
+  const { placeId, ...fields } = input;
+  if (!placeId) return createTask(ctx, { ...fields, isExperience: true });
+  // D-174: an envie = a possible experience; its place goes in the description, like a place shared (CE-32).
+  const p = getPlace(ctx, placeId);
+  const lines = [
+    fields.description,
+    ...placeLines([p.name, p.address, p.city].filter(Boolean).join(', '), p),
+  ];
+  return createTask(ctx, { ...fields, description: lines.filter(Boolean).join('\n'), isExperience: true });
 }
+
+/** « Lieu : … » and a map link, the lines an envie keeps of its place (CE-32, D-174). */
+const placeLines = (where: string, p: { lat: number; lng: number }) => [
+  where && `Lieu : ${where}`,
+  `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=18/${p.lat}/${p.lng}`,
+];
 
 /** D-171: a shared idea goes to the envies, in Famille like « + Envie » (found by its name, none without it). */
 const shareIdea = (ctx: Ctx, title: string, lines: (string | null | undefined)[]) =>
@@ -150,10 +164,7 @@ export async function ideaFromPlace(ctx: Ctx, p: { lat: number; lng: number; nam
     name = named?.name ?? 'Lieu partagé';
     where = named ? [named.address, named.city].filter(Boolean).join(', ') : '';
   }
-  const t = shareIdea(ctx, name, [
-    where && `Lieu : ${where}`,
-    `https://www.openstreetmap.org/?mlat=${p.lat}&mlon=${p.lng}#map=18/${p.lat}/${p.lng}`,
-  ]);
+  const t = shareIdea(ctx, name, placeLines(where, p));
   return { task: t, warnings };
 }
 

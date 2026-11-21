@@ -220,6 +220,35 @@ input[type="time"],
 input[type="month"] {
   min-width: 0;
 }
+/* D-174: a date field with its ✕ (DateInput). */
+.date-input {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+.date-input > input {
+  width: 100%;
+}
+.date-clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-ghost);
+  font-size: 13px;
+  cursor: pointer;
+}
+.date-clear:hover {
+  background: var(--bin);
+  color: var(--text);
+}
 /* iPad / iPhone Safari: the native date field ignores its width (overflows its cell) and its height. */
 @supports (-webkit-touch-callout: none) {
   input[type="date"],

@@ -349,6 +349,12 @@ export function buildServer(call: Call, canWrite = true) {
     ({ id, ...rest }) => call('POST', p`/projects/${id}/duplicate`, rest),
   );
   tool(
+    'duplicate_task',
+    'Duplique une tâche (D-174) : même projet (ou Inbox et domaine), « … (copie) », description, durée, Expérience, Libre ; à faire, sans deadline, récurrence, semaine ni lien. Placée juste sous l’originale.',
+    { id: S.uuid },
+    ({ id }) => call('POST', p`/tasks/${id}/duplicate`),
+  );
+  tool(
     'duplicate_objective',
     'Duplique un objectif (D-109) : mêmes champs, mesure remise à 0, même trimestre ; avec ses projets (hors abandonnés) et l’ordre de leur chemin, sauf withProjects: false.',
     { id: S.uuid, ...S.objectiveDuplicateBody.shape },

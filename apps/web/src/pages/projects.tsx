@@ -21,6 +21,7 @@ import {
 } from '../components/tasks.tsx';
 import {
   ConfirmDialog,
+  DateInput,
   DomainFilter,
   Empty,
   ErrorBox,
@@ -1332,13 +1333,13 @@ export function ProjectEditPanel({
       <FormSection title="Calendrier">
         <div className="grid gap-3" style={three}>
           <Field label="Début">
-            <input type="date" value={f.startDate} onChange={(e) => set('startDate', e.target.value)} />
+            <DateInput value={f.startDate} onChange={(v) => set('startDate', v)} />
           </Field>
           <Field
             label="Fin"
             info="Facultative : le mois sert de limite au projet du mois. Si les deux dates sont posées, la fin doit suivre le début."
           >
-            <input type="date" value={f.dueDate} onChange={(e) => set('dueDate', e.target.value)} />
+            <DateInput value={f.dueDate} onChange={(v) => set('dueDate', v)} />
           </Field>
           <Field
             label="Récurrence"

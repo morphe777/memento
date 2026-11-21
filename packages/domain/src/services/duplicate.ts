@@ -7,7 +7,7 @@ import { type Ctx, tx } from '../context.ts';
 import { setProjectDependencies } from './dependencies.ts';
 import { createProject, getProject, getProjectRow, promoteProject } from './projects.ts';
 import { createObjective, getObjective, refreshObjectiveProgress } from './referential.ts';
-import { addTaskDependency, createTask } from './tasks.ts';
+import { addTaskDependency, createTask, getTask, getTaskRow, listTasks, reorderTasks } from './tasks.ts';
 
 const { project, projectGroup, projectDependency, task, taskDependency } = schema;
 
@@ -75,6 +75,32 @@ export function duplicateProject(
     }
     if (p.status !== 'idea') promoteProject(ctx, copy.id);
     return getProject(ctx, copy.id);
+  });
+}
+
+/**
+ * D-174 (user request 21/11/2026): duplicate a task like a project (D-109): same project (or Inbox and domain),
+ * same title + « (copie) », description, duration, flags; it starts fresh: to do, no date, no recurrence, no week,
+ * no time spent, no links. It goes right under the original.
+ */
+export function duplicateTask(ctx: Ctx, id: string) {
+  return tx(ctx, () => {
+    const t = getTaskRow(ctx, id);
+    const copy = createTask(ctx, {
+      projectId: t.projectId,
+      domainId: t.domainId,
+      title: copyTitle(t.title),
+      description: t.description,
+      durationMin: t.durationMin,
+      isExperience: t.isExperience,
+      isFree: t.isFree,
+    });
+    const ids = listTasks(ctx, { projectId: t.projectId ?? 'inbox' })
+      .map((x) => x.id)
+      .filter((x) => x !== copy.id);
+    ids.splice(ids.indexOf(id) + 1, 0, copy.id);
+    reorderTasks(ctx, t.projectId, ids);
+    return getTask(ctx, copy.id);
   });
 }
 

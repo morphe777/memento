@@ -94,6 +94,8 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 - `GET /tasks?projectId=<id|inbox>` : `locked` = attend une tâche précédente ou un prérequis ; `inPlan` = dans le
   plan de la semaine en cours ; `plannedWeek` = première semaine, en cours ou à venir, dont le plan contient la tâche
   (`null` sinon, D-151).
+- Dupliquer : `POST /tasks/{id}/duplicate` (D-174) : copie à faire sous l'originale, sans deadline, récurrence ni
+  semaine.
 - Cocher : `POST /tasks/{id}/complete` (une tâche Inbox récurrente crée sa prochaine occurrence) ; décocher :
   `/uncomplete`. Annuler sans supprimer : `PATCH { status: "cancelled" }`.
 - Date de fin d'une tâche faite (D-152) : `PATCH /tasks/{id} { doneAt: "AAAA-MM-JJTHH:MM" }` (heure de Paris, jamais
@@ -145,8 +147,9 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
 - **Suites de tâches** (RB-06, D-101) : dans un projet séquentiel, une tâche `isFree` n'attend rien et **démarre une
   nouvelle suite** : les tâches non libres placées dessous la suivent, pas celles du dessus.
 - Expériences : `GET /experiences` (cible du mois, souvenirs, prévues, et `reserve` : les **envies**) ;
-  `POST /experiences { title, durationMin?, domainId?, description? }` ajoute une **envie** (D-171 : une tâche Inbox
-  marquée Expérience, sans date ; le moteur en propose quand la cible du mois n'est pas tenue) ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
+  `POST /experiences { title, durationMin?, domainId?, description?, placeId? }` ajoute une **envie** (D-171 : une tâche Inbox
+  marquée Expérience, sans date ; `placeId` = un lieu mémorisé (`POST /places`), écrit dans la description avec un
+  lien de carte, D-174 ; le moteur en propose quand la cible du mois n'est pas tenue) ; `POST /experiences/lived { title, doneAt?, domainId?, projectId?, durationMin?, description? }` trace une
   expérience **déjà vécue** (D-153) : faite à `doneAt` (maintenant si absent), dans le projet donné (durée alors
   obligatoire) ou dans le domaine (Famille si absent, aucun si `null`).
 
@@ -281,7 +284,7 @@ l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
   `get_cap`, `get_week_plan`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`, `list_souvenirs`, `get_souvenir`,
   `search_places`, `list_persons`, `get_living_report`.
 - **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
-  en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `promote_idea`, `add_experience_idea`,
+  en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `duplicate_task`, `promote_idea`, `add_experience_idea`,
   `log_experience`, `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`,
   `update_meta_objective`, `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`,
   `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
