@@ -212,7 +212,9 @@ Règles en bref :
   `PATCH /souvenirs/{id}` met à jour. Décocher la tâche cache le souvenir, le supprimer l'emporte avec ses photos.
 - **Capture** (`POST /captures`) : des photos donnent un brouillon de souvenir déjà compté comme vécu, sans lieu
   choisi d'office (sauf à moins de 100 m du domicile : lieu « Maison », D-173), que l'utilisateur vérifie dans l'application (`editUrl`, `kind: 'souvenir'`) ; rejouer le même `clientCaptureId`
-  (8 caractères ou plus) renvoie la première capture, sans doublon. Un lien ou un lieu donne une **envie**
+  (8 caractères ou plus) renvoie la première capture ; s'il porte des photos, elles **s'ajoutent** à son souvenir
+  (D-179 : le Raccourci de l'iPhone envoie ses photos une par une, le numéro dans un champ texte `captureId` du
+  formulaire), dont les jours suivent toutes les photos tant qu'il est en brouillon. Un lien ou un lieu donne une **envie**
   (`kind: 'idea'`, D-171) : titre lu sur la page, texte, lien, dates, prix et lieu dans la description. Un
   jeton « capture » n'appelle que les trois routes de capture ; partout ailleurs 403 `CAPTURE_ONLY`.
 - **Lieux** : cherche par nom avec `search_places` (OpenStreetMap, autour de `near` ou de la maison), pas par

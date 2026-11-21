@@ -7,7 +7,10 @@ sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
 - **Envies à part** : elles ne sont plus dans l'Inbox et le moteur ne les propose plus (ni l'IA). Dans Planifier ›
   Semaine, un groupe **« Envies »** en bas : « + Semaine » pour en vivre une cette semaine, hors budget (D-178).
-- Guide du Raccourci iPhone réécrit : deux Raccourcis simples (photos, liens), vérifiés côté serveur (D-177).
+- **Partage de plusieurs photos depuis l'iPhone** : seule la première arrivait. Le Raccourci les envoie une par
+  une avec un même numéro (`captureId`) et Mémento les range dans le même souvenir ; dates et titre automatique
+  suivent toutes les photos (D-179). Guide du Raccourci réécrit pas à pas
+  ([docs/raccourci-iphone.md](docs/raccourci-iphone.md), D-177, D-179).
 
 ## 1.4.1 — 2026-11
 

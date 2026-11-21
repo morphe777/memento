@@ -27,13 +27,19 @@ function absolute(req: FastifyRequest, ctx: D.Ctx, path: string) {
   return `${base.replace(/\/$/, '')}${path}`;
 }
 
-/** The files and the `meta` field (JSON) of a multipart request. */
+/**
+ * The files, the `meta` field (JSON) and the `captureId` field (plain text: D-179, the iPhone Shortcut sends its
+ * photos one by one with one id, typed without JSON quotes) of a multipart request.
+ */
 async function readMultipart(req: FastifyRequest) {
   const files: { buf: Buffer; name: string; mime: string }[] = [];
   let meta: unknown = {};
+  let captureId: string | null = null;
   for await (const part of req.parts()) {
     if (part.type === 'file')
       files.push({ buf: await part.toBuffer(), name: part.filename, mime: part.mimetype });
+    else if (part.fieldname === 'captureId' && typeof part.value === 'string' && part.value.trim())
+      captureId = part.value.trim();
     else if (part.fieldname === 'meta' && typeof part.value === 'string' && part.value.trim()) {
       try {
         meta = JSON.parse(part.value);
@@ -42,6 +48,7 @@ async function readMultipart(req: FastifyRequest) {
       }
     }
   }
+  if (captureId) meta = { ...(meta as object), clientCaptureId: captureId };
   return { files, meta };
 }
 

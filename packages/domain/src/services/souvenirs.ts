@@ -193,6 +193,33 @@ export function prefillFromPhotos(metas: PhotoMeta[], now: Date) {
   return { doneAt: first, startDate, endDate: endDay > startDate ? endDay : null, point };
 }
 
+/**
+ * D-179: photos sent after the first one of a capture are added to its souvenir; while it is a draft, its days
+ * follow all its photos again (the oldest and the most recent, as at the capture), and so does the automatic title.
+ */
+async function appendToCapture(ctx: Ctx, souvenirId: string, files: CaptureFile[]) {
+  for (const f of files) await addPhoto(ctx, souvenirId, f.buf, f.meta ?? {});
+  const row = getSouvenirRow(ctx, souvenirId);
+  if (row.status !== 'draft') return;
+  const metas = ctx.db
+    .select()
+    .from(photo)
+    .where(eq(photo.souvenirId, souvenirId))
+    .all()
+    .map((p) => ({ takenAt: p.takenAt, lat: p.lat, lng: p.lng }));
+  const pre = prefillFromPhotos(metas, ctxNow(ctx));
+  const t = getTaskRow(ctx, row.taskId);
+  // The automatic title (« Sortie du … ») follows the first day; a title typed or from a place stays.
+  const auto = !!t.doneAt && t.title === outingTitle(parisDate(new Date(t.doneAt)));
+  tx(ctx, () => {
+    updateTask(ctx, row.taskId, {
+      doneAt: localOf(pre.doneAt),
+      ...(auto ? { title: outingTitle(pre.startDate) } : {}),
+    });
+    ctx.db.update(souvenir).set({ endDate: pre.endDate }).where(eq(souvenir.id, souvenirId)).run();
+  });
+}
+
 /** « Sortie du 15 novembre » (« 1er » for the first day): the title when no place is named. */
 export function outingTitle(day: string) {
   const d = Number(day.slice(8, 10));
@@ -231,6 +258,8 @@ export async function createCapture(
   const cid = body.clientCaptureId ?? null;
   if (cid) {
     const s = ctx.db.select().from(souvenir).where(eq(souvenir.clientCaptureId, cid)).get();
+    // D-179: the iPhone Shortcut sends its photos one by one with one capture id: each one joins the souvenir.
+    if (s && files.length) await appendToCapture(ctx, s.id, files);
     if (s)
       return {
         kind: 'souvenir',

@@ -201,6 +201,29 @@ describe('capture (EX-10, EXA-01)', () => {
     expect(listSouvenirs(ctx)).toHaveLength(1);
   });
 
+  it('D-179: the Shortcut sends the photos one by one with one capture id: one souvenir, all its photos and days', async () => {
+    const ctx = souvenirCtx();
+    stubNetwork(osmRoutes);
+    const send = async (at: string) =>
+      createCapture(
+        ctx,
+        { clientCaptureId: '48151623', photos: [] },
+        await photosOf([{ at, ...LUCETTE }]),
+        'share',
+      );
+    const a = await send('2026-11-15T12:40:00');
+    const b = await send('2026-11-16T10:00:00');
+    const c = await send('2026-11-14T18:00:00'); // an older one: the souvenir starts earlier
+    expect([b.id, c.id]).toEqual([a.id, a.id]);
+    expect(b.existing).toBe(true);
+    expect(listSouvenirs(ctx)).toHaveLength(1);
+    const s = getSouvenir(ctx, a.id);
+    expect(s.photos).toHaveLength(3);
+    expect(s.coverPhotoId).toBe(s.photos[0].id); // the first one sent
+    expect([s.startDate, s.endDate]).toEqual(['2026-11-14', '2026-11-16']);
+    expect(s.title).toBe('Sortie du 14 novembre'); // the automatic title follows its first day
+  });
+
   it('no position: « Sortie du … »; the provider down never blocks (warning with the proposals)', async () => {
     const ctx = souvenirCtx();
     stubNetwork(() => new Response('down', { status: 503 }));

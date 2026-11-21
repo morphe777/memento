@@ -22,9 +22,11 @@ let iphone: string;
 let reader: string;
 
 /** A multipart body by hand (what the Shortcut sends): `meta` then the files. */
-function multipart(files: Buffer[], meta?: unknown) {
+function multipart(files: Buffer[], meta?: unknown, text: Record<string, string> = {}) {
   const boundary = `----memento${Math.random().toString(16).slice(2)}`;
   const parts: Buffer[] = [];
+  for (const [k, v] of Object.entries(text))
+    parts.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
   if (meta !== undefined)
     parts.push(
       Buffer.from(
@@ -95,12 +97,15 @@ describe('capture over HTTP (EXA-01)', () => {
       kind: 'souvenir',
       editUrl: `http://memento.example.lan/souvenirs/${out.id}/verifier`,
     });
-    // CE-11: sent again (the Shortcut retried): the same souvenir.
+    // D-179: the Shortcut sends its photos one by one, the capture id in a plain text field: the same souvenir.
+    const one = multipart([await jpeg({ at: '2026-11-15T13:20:00' })], undefined, {
+      captureId: 'raccourci-0001',
+    });
     const again = await app.inject({
       method: 'POST',
       url: '/api/v1/captures',
-      payload: body.payload,
-      headers: { ...body.headers, authorization: `Bearer ${iphone}` },
+      payload: one.payload,
+      headers: { ...one.headers, authorization: `Bearer ${iphone}` },
     });
     expect(again.json()).toMatchObject({ id: out.id, existing: true });
     // The capture token reads nothing (D-168), the user sees the draft.
@@ -118,7 +123,7 @@ describe('capture over HTTP (EXA-01)', () => {
       source: 'share',
       title: 'Sortie du 15 novembre',
       place: null,
-      photoCount: 4,
+      photoCount: 5,
     });
     // The photo files: WebP, private cache.
     const thumb = await app.inject({

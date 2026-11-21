@@ -1,87 +1,124 @@
 # Partager vers Mémento depuis l'iPhone (Raccourcis)
 
-Une app web (PWA) n'apparaît jamais dans la feuille de partage d'iOS. On passe donc par l'app **Raccourcis** (gratuite,
-déjà installée) : un Raccourci réglé « Afficher dans la feuille de partage » apparaît dans la liste quand on touche
-**Partager**. Deux Raccourcis, un par usage :
+Une app web (PWA) n'apparaît jamais dans la feuille de partage d'iOS. On passe par l'app **Raccourcis** (gratuite,
+déjà installée) : un raccourci réglé « Afficher dans la feuille de partage » apparaît quand on touche **Partager**.
 
 | Raccourci | Depuis | Résultat |
 |---|---|---|
 | **Souvenir Mémento** | Photos (une ou plusieurs photos) | un souvenir, puis l'écran de vérification s'ouvre |
-| **Envie Mémento** | Safari, Instagram, Plans, Google Maps (un lien) | une envie (Expériences › À vivre) |
+| **Envie Mémento** | Safari, Instagram, Plans, Google Maps (un lien) | une envie (Expériences › Envies) |
 
-Décisions : D-158, D-160, D-168, D-171, D-177.
+Décisions : D-158, D-168, D-171, D-177, D-179.
 
-## 1. Une fois : le jeton
+## 1. Le jeton (une fois, dans Mémento sur l'iPhone)
 
-1. Dans Mémento : **Configuration › Accès**, en bas : nom `iphone-raccourci` (lettres, chiffres, `-` ou `_`, sans
-   espace), portée **Capture (iPhone)**, **Créer un jeton**.
-2. Copier le jeton (`mem_…`) : il n'est montré qu'une fois. Il ne sert qu'à envoyer des photos et des liens.
-3. Noter l'adresse de Mémento telle que l'iPhone la joint (ex. `https://memento.example.lan`). Hors de la maison,
-   le VPN du homelab doit être actif, sinon le Raccourci échoue.
+1. Mémento › ☰ › **Configuration** › onglet **Accès**.
+2. En bas : nom `iphone-raccourci` (sans espace), choix **Capture (iPhone)**, **Créer un jeton**.
+3. Touche le jeton affiché (`mem_…`) › **Copier**. Il n'est montré qu'une fois.
+
+Hors de la maison, le VPN du homelab doit être actif, sinon le raccourci échoue.
 
 ## 2. Raccourci « Souvenir Mémento »
 
-App Raccourcis › **+** (nouveau raccourci), nommé `Souvenir Mémento`. Ajouter ces 4 actions dans l'ordre (barre de
-recherche des actions en bas) :
+### À quoi il doit ressembler à la fin
 
-1. **Convertir l'image**
-   - Image : **Entrée du raccourci** (variable proposée en touchant le champ).
-   - Format : **JPEG**. Activer l'option des **métadonnées** (« Conserver les métadonnées ») : c'est elle qui garde
-     la date et la position de la photo.
-   - Pourquoi : Photos donne des HEIC, que Mémento refuse.
-2. **Obtenir le contenu de l'URL**
-   - URL : `https://memento.example.lan/api/v1/captures` (ton adresse + `/api/v1/captures`).
-   - Toucher **›** (Afficher plus) :
-     - Méthode : **POST**.
-     - En-têtes : **+ Ajouter un en-tête**, clé `Authorization`, valeur `Bearer mem_…` (le mot `Bearer`, une
-       espace, le jeton).
-     - Corps de la requête : **Formulaire**, **+ Ajouter un champ** › **Fichier**, clé `photo`, valeur **Image
-       convertie** (la sortie de l'action 1).
-3. **Obtenir la valeur du dictionnaire** : Valeur pour la clé `editUrl` dans **Contenu de l'URL**.
-4. **Ouvrir les URL** : **Valeur du dictionnaire**.
+```
+Recevoir  Images  de  Feuille de partage
+Nombre aléatoire entre 10000000 et 99999999
+Répéter avec chaque élément dans  Entrée du raccourci
+    Convertir  Élément répété  en  JPEG                     (› Conserver les métadonnées : activé)
+    Obtenir le contenu de  https://<ton adresse>/api/v1/captures
+        (› Méthode POST · En-tête Authorization = Bearer mem_…
+           · Corps Formulaire : photo (Fichier) = Image convertie, captureId (Texte) = Nombre aléatoire)
+    Obtenir  Valeur  pour  editUrl  dans  Contenu de l'URL
+Fin de la répétition
+Obtenir  Premier élément  de  Résultats répétés
+Ouvrir  Élément de la liste
+```
 
-Puis, en bas de l'éditeur, **ⓘ** (Détails du raccourci) : activer **Afficher dans la feuille de partage**. Le haut
-du raccourci affiche alors « Recevoir … de la feuille de partage » : toucher le type et ne garder que **Images**.
+Pourquoi une boucle : iOS n'envoie que la première photo d'un champ de formulaire. Le raccourci envoie donc les
+photos **une par une**, avec le même numéro (`captureId`) : Mémento les range toutes dans le même souvenir.
 
-Utilisation : Photos › sélectionner une ou plusieurs photos › **Partager** › **Souvenir Mémento**. L'écran de
-vérification s'ouvre (date, lieux proches, titre, personnes) : le souvenir est déjà créé, « Annuler » le supprime.
+### Gestes de base dans l'app Raccourcis
+
+- **Ajouter une action** : champ **Rechercher dans les actions** en bas, taper son nom, la toucher. Elle s'ajoute
+  **tout en bas**.
+- **Déplacer une action** : garder le doigt appuyé sur le bloc, le faire glisser, lâcher.
+- **Remplir un mot bleu** : le toucher ; pour une variable (« Entrée du raccourci », « Image convertie »…), la
+  toucher dans la barre qui apparaît au-dessus du clavier, ou **Sélectionner une variable**.
+- **Options cachées d'une action** : la petite flèche **›** à droite du bloc.
+- **Supprimer une action** : son **✕**, ou glisser le bloc vers la gauche.
+
+### Pas à pas (nouveau raccourci)
+
+1. App Raccourcis › onglet **Raccourcis** › **+** en haut à droite.
+2. Touche le nom en haut › **Renommer** › `Souvenir Mémento`.
+3. **ⓘ** en bas › active **Afficher dans la feuille de partage** › **OK**. En haut apparaît « Recevoir **Tout**… » :
+   touche **Tout**, ne garde que **Images**.
+4. Ajoute **Nombre aléatoire** : Minimum `10000000`, Maximum `99999999`.
+5. Ajoute **Répéter avec chaque élément**. Le bloc doit dire « dans **Entrée du raccourci** » (sinon touche le mot
+   bleu et choisis-la). Il a sa ligne **Fin de la répétition**.
+6. Ajoute **Convertir l'image** (elle arrive sous « Fin de la répétition ») et **glisse-la entre « Répéter… » et
+   « Fin de la répétition »**. Son premier mot bleu : **Élément répété**. Format : **JPEG**. **›** : active
+   **Conserver les métadonnées** (date et lieu de la photo).
+7. Ajoute **Obtenir le contenu de l'URL**, glisse-la **dans la boucle, sous « Convertir l'image »** :
+   - Touche le mot bleu (URL) : tape `https://<ton adresse Mémento>/api/v1/captures`.
+   - **›** : **Méthode** › **POST**.
+   - **En-têtes** › **Ajouter un nouvel en-tête** : clé `Authorization`, texte `Bearer ` (avec une espace) puis
+     colle le jeton.
+   - **Corps de la requête** › **Formulaire** :
+     - **Ajouter un nouveau champ** › **Fichier** : clé `photo`, valeur **Image convertie**.
+     - **Ajouter un nouveau champ** › **Texte** : clé `captureId`, valeur **Nombre aléatoire**.
+8. Ajoute **Obtenir la valeur du dictionnaire**, glisse-la **dans la boucle, sous l'action 7**. Touche **Clé** ›
+   tape `editUrl`. Elle doit finir par « dans **Contenu de l'URL** ».
+9. Ajoute **Obtenir l'élément de la liste** (elle reste **sous** « Fin de la répétition ») : « **Premier élément**
+   de **Résultats répétés** ».
+10. Ajoute **Ouvrir les URL** : « Ouvrir **Élément de la liste** ». **OK**.
+
+### Modifier le raccourci déjà fait (version sans boucle)
+
+Ouvre-le, puis :
+1. Supprime **Ouvrir les URL**.
+2. Étapes 4 et 5 ci-dessus (Nombre aléatoire, puis glisse-le juste sous « Recevoir… » ; Répéter avec chaque
+   élément).
+3. Glisse **Convertir l'image**, **Obtenir le contenu de l'URL** et **Obtenir la valeur du dictionnaire** entre
+   « Répéter… » et « Fin de la répétition », dans cet ordre.
+4. Dans **Convertir l'image** : remplace « Entrée du raccourci » par **Élément répété**.
+5. Dans **Obtenir le contenu de l'URL** › **›** › Corps : ajoute le champ **Texte** `captureId` = **Nombre
+   aléatoire**.
+6. Étapes 9 et 10 ci-dessus.
+
+### Utilisation
+
+Photos › **Sélectionner** › les photos › **Partager** › en bas de la liste **Souvenir Mémento**. La première fois,
+iOS demande d'autoriser la connexion : **Toujours autoriser**. Les photos partent une par une, puis l'écran de
+vérification s'ouvre (dates de la plus ancienne à la plus récente, lieux proches, titre). « Annuler » y supprime
+le souvenir.
 
 ## 3. Raccourci « Envie Mémento »
 
-Nouveau raccourci nommé `Envie Mémento`, 3 actions :
-
-1. **Obtenir le contenu de l'URL**
-   - URL : `https://memento.example.lan/api/v1/captures`.
-   - Méthode **POST**, même en-tête `Authorization: Bearer mem_…`.
-   - Corps de la requête : **JSON**, **+ Ajouter un champ** › **Texte**, clé `url`, valeur **Entrée du raccourci**.
-2. **Obtenir la valeur du dictionnaire** : `editUrl` dans **Contenu de l'URL**.
-3. **Ouvrir les URL** : **Valeur du dictionnaire**.
-
-**ⓘ** › **Afficher dans la feuille de partage**, types reçus : **URL** et **Pages web Safari**.
-
-Utilisation : Safari, Instagram, Plans ou Google Maps › **Partager** › **Envie Mémento**. Mémento lit la page (titre,
-texte, dates, prix, lieu) et crée l'envie ; un lien de carte donne le nom du lieu et ses coordonnées.
+1. Nouveau raccourci `Envie Mémento`. **ⓘ** › **Afficher dans la feuille de partage** ; dans « Recevoir… », ne
+   garde que **URL** et **Pages web Safari**.
+2. **Obtenir le contenu de l'URL** : `https://<ton adresse>/api/v1/captures`, **›** › **POST**, même en-tête
+   `Authorization`, **Corps de la requête** › **JSON** › **Ajouter un nouveau champ** › **Texte** : clé `url`,
+   valeur **Entrée du raccourci**.
+3. **Obtenir la valeur du dictionnaire** : clé `editUrl`.
+4. **Ouvrir les URL**.
 
 ## 4. Si ça ne marche pas
 
-Pour voir ce que Mémento reçoit sans rien créer : dupliquer « Souvenir Mémento », remplacer `/captures` par
-`/captures/test` et l'action 4 par **Afficher le résultat**. Partager 3 photos :
+- **Voir ce qui arrive sans rien créer** : dans l'URL, remplace `/captures` par `/captures/test` et remplace
+  « Ouvrir les URL » par **Afficher le résultat**. `"read"` montre la date et la position lues ; sans `lat`, touche
+  **Options** en haut de la feuille de partage de Photos et active **Localisation**.
+- Réponses d'erreur : `UNAUTHENTICATED` = en-tête ou jeton faux ; `UNSUPPORTED_MEDIA` = l'action « Convertir
+  l'image » en JPEG manque ; `PHOTO_TOO_LARGE` = photo de plus de 40 Mo ; aucune réponse = Mémento injoignable
+  (VPN).
 
-- `"files": 3` : les 3 photos sont arrivées. Si `"files": 1` pour 3 photos, iOS n'envoie que la première : me le
-  dire, le Raccourci passera par une boucle.
-- `"read": { "takenAt": …, "lat": …, "lng": … }` : date et position lues. Sans `lat` : dans la feuille de partage
-  de Photos, toucher **Options** (en haut) et activer **Localisation** ; vérifier aussi l'option des métadonnées
-  de l'action 1.
-- `"ok": false, "error": "UNSUPPORTED_MEDIA"` : l'action 1 (JPEG) manque.
+## Ce qui est vérifié
 
-Réponses d'erreur de l'action 2 : `UNAUTHENTICATED` (401) = en-tête ou jeton faux ; `CAPTURE_ONLY` (403) = mauvaise
-adresse ; `PHOTO_TOO_LARGE` (413) = photo de plus de 40 Mo ; aucune réponse = Mémento injoignable (VPN).
-
-## Ce qui est vérifié, et ce qui ne l'est pas
-
-- Vérifié sur une instance de test (le 21/11/2026) en envoyant exactement ces requêtes : 3 JPEG dans le seul champ
-  `photo`, sans autre champ → 1 souvenir de 3 photos, dates et positions lues dans les fichiers, `editUrl` complète ;
+- Le 21/11/2026, sur l'iPhone de Mehdi : un raccourci sans boucle envoie bien la photo, mais une seule quand on en
+  partage plusieurs. D'où la boucle (D-179).
+- Sur une instance de test, en envoyant exactement les requêtes de la boucle (une photo par requête, même
+  `captureId`) : 1 souvenir avec toutes les photos, du jour de la plus ancienne à celui de la plus récente ;
   `{ "url": … }` → une envie ; le jeton capture refusé ailleurs (403).
-- **Pas vérifiable hors d'un iPhone** : qu'iOS envoie bien toutes les photos d'un même champ dans une seule requête,
-  et qu'il garde la position avec « Conserver les métadonnées ». C'est ce que le test de la section 4 montre en une
-  minute.
+- Non vérifié ici : les libellés exacts d'iOS, qui peuvent varier un peu selon sa version.
