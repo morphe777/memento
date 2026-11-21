@@ -1,9 +1,11 @@
 // "Ma semaine" (V-06, V-13, V-18) — mockups ma-semaine.dc.html and ma-semaine-iphone.dc.html.
+
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { WeekFocusLine } from '../components/cap.tsx';
 import { CaptureSheet } from '../components/capture.tsx';
+import { EnviePanel } from '../components/envie.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { ActualTime, openTask } from '../components/tasks.tsx';
 import {
@@ -595,7 +597,12 @@ function WeekPhone({ ex }: { ex: Execution }) {
   const [showBonus, setShowBonus] = useState(false);
   const [adding, setAdding] = useState(false);
   const [unplannedOpen, setUnplannedOpen] = useState(false);
-  usePageFab('Ajouter une tâche', () => setAdding(true)); // Inbox or week plan (user request 01/11/2026)
+  // Inbox or week plan (user request 01/11/2026); D-176: or an envie.
+  const [envie, setEnvie] = useState(false);
+  usePageFab('Ajouter', [
+    { label: '+ Tâche', run: () => setAdding(true) },
+    { label: '+ Envie', run: () => setEnvie(true) },
+  ]);
   const view = useWeekView();
   const tasks = useSortedTasks(ex, view);
   return (
@@ -754,6 +761,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
         onUnplanned={() => setUnplannedOpen(true)}
       />
       <UnplannedPanel open={unplannedOpen} onClose={() => setUnplannedOpen(false)} />
+      {envie && <EnviePanel onClose={() => setEnvie(false)} />}
     </div>
   );
 }

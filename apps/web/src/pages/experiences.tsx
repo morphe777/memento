@@ -3,9 +3,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { type ReactNode, useState } from 'react';
+import { EnviePanel } from '../components/envie.tsx';
 import { LivingView } from '../components/living.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
-import { PlacePicker } from '../components/souvenir-ui.tsx';
 import { DurationOptions, TaskDrawer } from '../components/tasks.tsx';
 import {
   Duration,
@@ -199,7 +199,9 @@ export function ExperiencesPage({
             title="Envies"
             info="Les expériences à vivre un jour, sans date. Le moteur en propose dans le plan de la semaine quand la cible du mois n'est pas tenue. Un lien ou un lieu partagé depuis l'iPhone arrive ici."
           >
-            <AddIdea />
+            <button type="button" className="btn self-start" onClick={newIdea}>
+              + Envie
+            </button>
             {d.reserve.map((t) => (
               <Row key={t.id} t={t} onOpen={open} />
             ))}
@@ -209,7 +211,7 @@ export function ExperiencesPage({
       {onglet === 'bilan' && <YearLiving />}
       <TaskDrawer taskId={tache ?? null} onClose={() => go({ tache: undefined })} />
       {living && <LivedPanel onClose={() => setLiving(false)} />}
-      {idea && <IdeaPanel onClose={() => setIdea(false)} />}
+      {idea && <EnviePanel onClose={() => setIdea(false)} />}
     </div>
   );
 }
@@ -312,147 +314,6 @@ function YearLiving() {
         <Loading />
       )}
     </div>
-  );
-}
-
-function AddIdea() {
-  const dl = useDomainLookup();
-  const [title, setTitle] = useState('');
-  const [duration, setDuration] = useState<TaskDuration | null>(120);
-  // User request 17/11/2026: Famille by default, like « J'ai vécu une expérience » (D-153).
-  const [picked, setDomainId] = useState<string | null>(null);
-  const domainId = picked ?? dl.domains.find((d) => d.name === 'Famille')?.id ?? '';
-  const add = useAction(
-    () => post('/experiences', { title: title.trim(), durationMin: duration, domainId: domainId || null }),
-    { onSuccess: () => setTitle(''), toast: 'Envie ajoutée.' },
-  );
-  return (
-    <form
-      className="flex flex-wrap gap-2"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (title.trim()) add.mutate(undefined);
-      }}
-    >
-      <input
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Une envie (ex. baptême de plongée)"
-        aria-label="Nouvelle envie"
-        style={{ flex: '1 1 220px' }}
-      />
-      <select
-        value={duration ?? ''}
-        onChange={(e) => setDuration(e.target.value ? (Number(e.target.value) as TaskDuration) : null)}
-        aria-label="Durée"
-        style={{ width: 120 }}
-      >
-        <option value="">Durée ?</option>
-        <DurationOptions />
-      </select>
-      <select
-        value={domainId}
-        onChange={(e) => setDomainId(e.target.value)}
-        aria-label="Domaine"
-        style={{ width: 190 }}
-      >
-        <option value="">Aucun domaine</option>
-        {dl.domains.map((d) => (
-          <option key={d.id} value={d.id}>
-            {d.name}
-          </option>
-        ))}
-      </select>
-      <button type="submit" className="btn" disabled={!title.trim() || add.isPending}>
-        Ajouter
-      </button>
-    </form>
-  );
-}
-
-/** D-174: an envie = a possible experience: what, where (a remembered or found place), how long, which domain. */
-function IdeaPanel({ onClose }: { onClose: () => void }) {
-  const dl = useDomainLookup();
-  const [f, setF] = useState({
-    title: '',
-    place: null as { id: string; name: string; category: string | null } | null,
-    durationMin: 120 as TaskDuration | null,
-    domainId: dl.domains.find((d) => d.name === 'Famille')?.id ?? '',
-  });
-  const set = <K extends keyof typeof f>(k: K, v: (typeof f)[K]) => setF((x) => ({ ...x, [k]: v }));
-  const save = useAction(
-    () =>
-      post('/experiences', {
-        title: f.title.trim(),
-        durationMin: f.durationMin,
-        domainId: f.domainId || null,
-        ...(f.place ? { placeId: f.place.id } : {}),
-      }),
-    { onSuccess: onClose, toast: 'Envie ajoutée.' },
-  );
-  return (
-    <Panel open onClose={onClose} title="Nouvelle envie">
-      <form
-        className="flex flex-col gap-4"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (f.title.trim()) save.mutate(undefined);
-        }}
-      >
-        <Field label="Quoi">
-          <input
-            value={f.title}
-            onChange={(e) => set('title', e.target.value)}
-            placeholder="ex. Baptême de plongée"
-            autoFocus
-          />
-        </Field>
-        <div className="field">
-          <span>Où (facultatif)</span>
-          <PlacePicker
-            value={f.place}
-            candidates={[]}
-            point={null}
-            onChange={(p) => {
-              set('place', p);
-              if (p && !f.title.trim() && !['address', 'city'].includes(p.category ?? ''))
-                set('title', p.name);
-            }}
-          />
-        </div>
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
-          <Field label="Durée">
-            <select
-              value={f.durationMin ?? ''}
-              onChange={(e) =>
-                set('durationMin', e.target.value ? (Number(e.target.value) as TaskDuration) : null)
-              }
-            >
-              <option value="">Durée ?</option>
-              <DurationOptions />
-            </select>
-          </Field>
-          <Field label="Domaine">
-            <select value={f.domainId} onChange={(e) => set('domainId', e.target.value)}>
-              <option value="">Aucun domaine</option>
-              {dl.domains.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        </div>
-        <div className="flex gap-2 justify-end">
-          <button type="button" className="btn" onClick={onClose}>
-            Annuler
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={!f.title.trim() || save.isPending}>
-            Ajouter aux envies
-          </button>
-        </div>
-      </form>
-    </Panel>
   );
 }
 

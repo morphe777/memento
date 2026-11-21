@@ -1,4 +1,5 @@
 // Projets (V-04, V-05, V-10), Projet (V-03), Idées (DM-90). No mockup: built from the mockups' components.
+
 import { DndContext, type DragEndEvent, useDraggable, useDroppable } from '@dnd-kit/core';
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
@@ -7,6 +8,7 @@ import { AiFill, type AiRequest, WithWand } from '../components/ai-fill.tsx';
 import { BreakdownButton } from '../components/breakdown.tsx';
 import { MotiveField } from '../components/cap.tsx';
 import { CaptureSheet } from '../components/capture.tsx';
+import { EnviePanel } from '../components/envie.tsx';
 import { AiDescribe, DescriptionBlock, PencilIcon } from '../components/markdown.tsx';
 import { pathDefaultGroups, rememberGroups } from '../components/path.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
@@ -1490,7 +1492,12 @@ export function IdeasPage() {
   const [domains, setDomains] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
   const phone = useIsPhone();
-  usePageFab('Nouvelle idée', () => setCreating(true));
+  // D-176: an idea of project, or an envie (an idea of experience).
+  const [envie, setEnvie] = useState(false);
+  usePageFab('Ajouter', [
+    { label: '+ Idée de projet', run: () => setCreating(true) },
+    { label: '+ Envie', run: () => setEnvie(true) },
+  ]);
   const q = useQuery({ queryKey: ['ideas'], queryFn: () => get<Project[]>('/ideas') });
   const dl = useDomainLookup();
   const promote = useAction((id: string) => post(`/projects/${id}/promote`), {
@@ -1577,6 +1584,7 @@ export function IdeasPage() {
         {q.data && rows.length === 0 && <Empty>Aucune idée.</Empty>}
       </div>
       <NewProjectPanel open={creating} onClose={() => setCreating(false)} />
+      {envie && <EnviePanel onClose={() => setEnvie(false)} />}
     </div>
   );
 }
