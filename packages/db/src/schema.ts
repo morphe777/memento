@@ -234,6 +234,12 @@ export const weekPlan = sqliteTable(
     proposedAt: text('proposed_at'),
     validatedAt: text('validated_at'),
     closedAt: text('closed_at'), // RB-10 carry-over done
+    // D-175: the 2 aims of the week (« Cap de la semaine »), written on Monday morning or on demand.
+    focus: text('focus', { mode: 'json' }).$type<{
+      items: { text: string; projectId: string | null }[];
+      source: 'ai' | 'plain' | 'me';
+      at: string;
+    }>(),
   },
   (t) => [uniqueIndex('week_plan_week_uq').on(t.isoWeek)],
 );

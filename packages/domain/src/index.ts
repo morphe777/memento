@@ -45,6 +45,7 @@ export * from './services/search.ts';
 export * from './services/souvenir-core.ts';
 export * from './services/souvenirs.ts';
 export * from './services/tasks.ts';
+export * from './services/week-focus.ts';
 export * from './settings.ts';
 export * from './time.ts';
 export * from './version.ts';

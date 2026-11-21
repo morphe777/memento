@@ -81,4 +81,25 @@ describe('API v1.2', () => {
     });
     expect(denied.statusCode).toBe(403);
   });
+
+  it('D-175: Cap de la semaine read and written by hand with a token; ↻ (AI) for the interface only', async () => {
+    const llm = async () => ({ text: '{"items":[]}', model: 'fake' });
+    const { app, db, h } = await setup(llm);
+    const t = createToken(db, 'bot', 'read_write');
+    const bot = { authorization: `Bearer ${t.token}` };
+    const url = '/api/v1/week-plans/2026-W47/focus';
+    expect((await app.inject({ method: 'GET', url, headers: bot })).json()).toEqual({ focus: null });
+    const put = await app.inject({
+      method: 'PUT',
+      url,
+      headers: bot,
+      payload: { items: ['Poser le **carrelage**'] },
+    });
+    expect(put.json()).toMatchObject({
+      focus: { source: 'me', items: [{ text: 'Poser le **carrelage**' }] },
+    });
+    expect((await app.inject({ method: 'POST', url: `${url}/refresh`, headers: bot })).statusCode).toBe(403);
+    const refresh = await app.inject({ method: 'POST', url: `${url}/refresh`, headers: h });
+    expect(refresh.json()).toMatchObject({ focus: { source: 'plain', items: [] } }); // nothing planned
+  });
 });

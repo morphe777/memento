@@ -47,5 +47,6 @@ export type PlanGraph = ReturnType<typeof D.getPlanGraph>;
 export type PlanPreview = ReturnType<typeof D.previewPlanChanges>;
 export type ExperiencesPage = ReturnType<typeof D.getExperiencesPage>;
 export type Cap = ReturnType<typeof D.getCap>;
+export type WeekFocus = D.WeekFocus; // D-175
 export type ParsedTask = ReturnType<typeof D.parseTask>;
 export type NaturalKind = D.NaturalKind;

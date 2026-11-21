@@ -644,6 +644,19 @@ export function buildServer(call: Call, canWrite = true) {
     async (a) => call('GET', p`/week-plans/${a.isoWeek ?? (await currentWeek(call))}`),
   );
   tool(
+    'get_week_focus',
+    'Cap de la semaine (D-175) : les 2 grandes actions de la semaine (texte court, mot clé entre **…**), écrites le lundi matin d’après le temps prévu par projet, ou à la main. Null si rien n’est encore écrit.',
+    { isoWeek: S.isoWeek.optional() },
+    async (a) => call('GET', p`/week-plans/${a.isoWeek ?? (await currentWeek(call))}/focus`),
+  );
+  tool(
+    'set_week_focus',
+    'Écrit le Cap de la semaine (D-175) : 2 lignes au plus, quelques mots chacune (« Poser le **carrelage** »). Remplace celui du lundi.',
+    { isoWeek: S.isoWeek.optional(), items: S.weekFocusBody.shape.items },
+    async (a) =>
+      call('PUT', p`/week-plans/${a.isoWeek ?? (await currentWeek(call))}/focus`, { items: a.items }),
+  );
+  tool(
     'propose_week_plan',
     'Relance le moteur de proposition pour une semaine.',
     { isoWeek: S.isoWeek },

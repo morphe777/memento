@@ -2,7 +2,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { CapLine } from '../components/cap.tsx';
+import { WeekFocusLine } from '../components/cap.tsx';
 import { CaptureSheet } from '../components/capture.tsx';
 import { Breadcrumb, usePageFab } from '../components/shell.tsx';
 import { ActualTime, openTask } from '../components/tasks.tsx';
@@ -172,7 +172,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
           <Breadcrumb items={[{ label: 'Ma semaine' }]} />
           <PageHeader eyebrow={eyebrow(ex)} title="Ma semaine" />
         </div>
-        <CapLine />
+        <WeekFocusLine week={ex.isoWeek} />
       </div>
 
       {/* User request 02/11/2026: Fait and Expériences between Cap and the list (iPhone keeps the list on top). */}
@@ -607,7 +607,7 @@ function WeekPhone({ ex }: { ex: Execution }) {
         <h1 className="m-0 font-bold" style={{ fontSize: 28 }}>
           Ma semaine
         </h1>
-        <CapLine compact />
+        <WeekFocusLine week={ex.isoWeek} compact />
       </div>
       <div
         className="grid gap-2"

@@ -4,6 +4,7 @@
 import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, copyDb, eq, schema } from '@memento/db';
+import { aiStatus, getAiKey, type Llm, makeLlm } from '../ai/providers.ts';
 import { type Ctx, ctxNow, newId, tx } from '../context.ts';
 import { escapeHtml, isOnVacation } from '../rules/daily.ts';
 import { reportFreezableFrom } from '../rules/reports.ts';
@@ -26,6 +27,7 @@ import { rollMonth } from './projects.ts';
 import type { PushSender } from './push.ts';
 import { closeRecurringObjectives } from './recurrence.ts';
 import { generateReport } from './reports.ts';
+import { refreshWeekFocus } from './week-focus.ts';
 
 const JOB_LABELS: Record<string, string> = {
   month: 'Bascule des projets du mois',
@@ -34,6 +36,7 @@ const JOB_LABELS: Record<string, string> = {
   week: 'Clôture de la semaine et proposition du plan',
   quarter: 'Rapport du trimestre et objectifs récurrents',
   backup: 'Sauvegarde de la nuit',
+  week_focus: 'Cap de la semaine',
 };
 
 /** Records the outcome of a job for its period (one job_run row, updated on a retry); returns the row it found. */
@@ -179,6 +182,32 @@ export function runDueJobs(ctx: Ctx): Record<string, string> {
     });
   }
   return out;
+}
+
+/**
+ * D-175: « Cap de la semaine », once per week, right after the week's plan is proposed (Monday morning): the AI
+ * when it is configured, else (or when it fails) the plain aims. Like the other jobs (C-07): retried at every tick
+ * until written, first failure announced. `llm`: replaces the configured AI (tests); null = no AI.
+ */
+export async function runWeekFocusJob(
+  ctx: Ctx,
+  env: Record<string, string | undefined>,
+  llm?: Llm | null,
+): Promise<'done' | 'skipped' | 'failed'> {
+  const week = isoWeekOf(parisClock(ctxNow(ctx)).date);
+  if (!lastRun(ctx, 'week', week)?.ok || lastRun(ctx, 'week_focus', week)?.ok) return 'skipped';
+  try {
+    const s = getSettings(ctx);
+    const key = getAiKey(ctx, s['ai.provider']);
+    // AI not configured: the plain aims.
+    const ai = llm !== undefined ? llm : aiStatus(s, env, key).configured ? makeLlm(s, env, key) : null;
+    await refreshWeekFocus(ctx, week, ai);
+    saveRun(ctx, 'week_focus', week, true, null);
+    return 'done';
+  } catch (e) {
+    recordFailure(ctx, 'week_focus', week, (e as Error).message);
+    return 'failed';
+  }
 }
 
 /**

@@ -270,7 +270,6 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ui.show_recalculate',
       'inbox.recurring_horizon_days',
       'ui.projects_default_view',
-      'ui.cap_turn_s',
     ],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
     seuils: [
@@ -294,6 +293,7 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ai.prompt.system',
       'ai.prompt.week',
       'ai.prompt.fill_week',
+      'ai.prompt.week_focus',
       'ai.prompt.month',
       'ai.prompt.quarter',
       'ai.prompt.describe',
@@ -373,18 +373,6 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               max={365}
               value={s['inbox.recurring_horizon_days']}
               onChange={(e) => setS({ ...s, 'inbox.recurring_horizon_days': Number(e.target.value) })}
-            />
-          </Field>
-          <Field
-            label="Cap : changer de pourquoi toutes les (secondes)"
-            info="Dans Ma semaine, la ligne Cap passe seule aux pourquoi suivants (3 à la fois sur PC et iPad, 1 sur iPhone) à ce rythme, le même partout."
-          >
-            <input
-              type="number"
-              min={2}
-              max={120}
-              value={s['ui.cap_turn_s']}
-              onChange={(e) => setS({ ...s, 'ui.cap_turn_s': Number(e.target.value) })}
             />
           </Field>
           <label className="flex items-center gap-2 text-[14px]">
@@ -1113,6 +1101,11 @@ const AI_PROMPTS = [
     'ai.prompt.fill_week',
     'Prompt Compléter le budget',
     '« Compléter le budget » dans Planifier › Semaine : 1 à 3 tâches à ajouter dans le temps qui reste, sans toucher à la sélection ; une étiquette, une raison courte et ses mots clés.',
+  ],
+  [
+    'ai.prompt.week_focus',
+    'Prompt Cap de la semaine',
+    'Les 2 grandes actions de la semaine, écrites le lundi matin (et par ↻ dans Planifier › Semaine) d’après le temps prévu par projet.',
   ],
   ['ai.prompt.month', 'Prompt Mois', 'Comment choisir les projets du mois.'],
   ['ai.prompt.quarter', 'Prompt Trimestre', 'Comment choisir les objectifs du trimestre.'],

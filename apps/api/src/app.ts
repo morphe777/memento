@@ -755,6 +755,29 @@ export async function buildApp(opts: AppOptions) {
         { schema: { ...tag('Planification'), params: D.isoWeekParam, body: D.weekPatchBody } },
         async (req) => D.patchWeek(ctx(req), req.params.isoWeek, req.body.budgetMin, req.body.budgetReason),
       );
+      // D-175: « Cap de la semaine » (written on Monday morning by the worker; ↻ and by hand here).
+      r.get(
+        '/week-plans/:isoWeek/focus',
+        { schema: { ...tag('Planification'), params: D.isoWeekParam } },
+        async (req) => ({ focus: D.getWeekFocus(ctx(req), req.params.isoWeek) }),
+      );
+      r.put(
+        '/week-plans/:isoWeek/focus',
+        { schema: { ...tag('Planification'), params: D.isoWeekParam, body: D.weekFocusBody } },
+        async (req) => ({ focus: D.setWeekFocus(ctx(req), req.params.isoWeek, req.body.items) }),
+      );
+      r.post(
+        '/week-plans/:isoWeek/focus/refresh',
+        { schema: { ...tag('Planification'), params: D.isoWeekParam } },
+        async (req) => {
+          const c = ctx(req);
+          const s = D.getSettings(c);
+          let llm: D.Llm | null = opts.llm ?? null;
+          if (!llm && D.aiStatus(s, process.env, D.getAiKey(c, s['ai.provider'])).configured)
+            llm = D.makeLlm(s, process.env, D.getAiKey(c, s['ai.provider']));
+          return D.refreshWeekFocus(c, req.params.isoWeek, llm);
+        },
+      );
       r.post(
         '/week-plans/:isoWeek/validate',
         { schema: { ...tag('Planification'), params: D.isoWeekParam } },

@@ -197,6 +197,9 @@ export const projectListQuery = z.object({
   objectiveId: uuid.optional(),
 });
 
+/** D-175: « Cap de la semaine » written by hand: 2 lines kept (longer ones cut at 80 characters). */
+export const weekFocusBody = z.object({ items: z.array(z.string().max(200)).max(5) });
+
 /** D-54: an experience idea for the reserve (an Inbox task flagged as experience). */
 export const experienceIdea = z.object({
   title,

@@ -850,18 +850,18 @@ input[type="checkbox"] {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
 }
 
-/* Cap line: the next « why » fade in at each turn (ui.cap_turn_s, D-110). */
-.cap-turn {
-  animation: cap-turn 0.5s ease-out;
+/* D-175: the ↻ of « Cap de la semaine » turns while the aims are written again. */
+.spin {
+  display: inline-block;
+  animation: spin 1s linear infinite;
 }
-@keyframes cap-turn {
-  from {
-    opacity: 0;
-    transform: translateY(3px);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .cap-turn {
+  .spin {
     animation: none;
   }
 }

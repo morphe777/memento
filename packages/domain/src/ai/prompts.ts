@@ -23,6 +23,11 @@ Règles :
 - angle : la raison principale du choix, parmi "month" (projet du mois), "balance" (équilibre des domaines), "deadline" (échéance), "experience" (expérience), "momentum" (suite de ce qui est prévu).
 - reason : 15 mots au plus, un fait concret tiré des données, sans formule creuse. key : 2 à 4 mots repris tels quels de reason, ceux qui portent l'argument.
 - summary : une seule phrase de 15 mots au plus.`,
+  week_focus: `Écris le Cap de la semaine : les 2 grandes actions que l'utilisateur s'est fixées à travers son plan (où il a mis son temps). Il le lit d'un coup d'œil en haut de Ma semaine pour se rappeler son objectif.
+- 2 lignes au plus, la plus importante d'abord ; une seule si un projet porte presque toute la semaine.
+- Pars des projets qui ont le plus de temps prévu (plannedMin). Leur pourquoi (motive), critère de réussite, objectif et tâches prévues (tasks) disent le résultat visé.
+- Chaque ligne : un verbe d'action + le résultat à sortir cette semaine (le projet n'a pas à être fini), 8 mots au plus, le mot clé entre ** ** (ex. « Poser le **carrelage** de la salle de bain »).
+- Pas de phrase, pas de chiffre, pas de durée. projectId : l'id du projet de la ligne, sinon null.`,
   month: `Propose les projets du mois : la liste COMPLÈTE des projets à mener ce mois-ci (ceux déjà choisis à garder + ceux à ajouter).
 - Seul un projet sans "gaps" (complet) peut devenir projet du mois.
 - La charge (remainingMin des projets + inboxReserveMin) doit tenir dans availableMin, sans dépasser maxProjects projets menés de front.

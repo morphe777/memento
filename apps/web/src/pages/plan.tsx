@@ -1,9 +1,11 @@
 // "Planifier la semaine" (V-16, V-17) — mockup planifier-la-semaine.dc.html. Everything is computed by the API
 // (GET /week-plans/{week}); the page only sends the selection back.
+
 import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { AiFillWeekButton, AiProposeButton } from '../components/ai.tsx';
+import { WeekFocusLine } from '../components/cap.tsx';
 import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { openTask } from '../components/tasks.tsx';
@@ -161,6 +163,7 @@ function Plan({ page, tabs }: { page: PlanningPage; tabs: React.ReactNode }) {
             </>
           }
         />
+        <WeekFocusLine week={w} refresh />
       </div>
 
       <WeekTime page={page} onBudget={() => setBudgetOpen(true)} />

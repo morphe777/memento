@@ -1,0 +1,1 @@
+ALTER TABLE `week_plan` ADD `focus` text;

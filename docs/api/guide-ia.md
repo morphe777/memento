@@ -118,6 +118,10 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   - Le dépassement de budget n'est **jamais bloquant** : il est signalé (alerte `BUDGET_OVER`).
   - `PATCH /week-plans/{semaine}` `{ budgetMin, budgetReason }` : budget ponctuel + **contexte** (fatigue,
     maladie, congés…). Le contexte est journalisé et figé dans le rapport de la semaine.
+  - **Cap de la semaine** (D-175) : `GET /week-plans/{semaine}/focus` → `{ focus: { items: [{ text, projectId }],
+    source: "ai"|"plain"|"me", at } | null }` : les 2 grandes actions de la semaine (quelques mots, mot clé entre
+    `**…**`), écrites le lundi matin d'après le temps prévu par projet. `PUT /week-plans/{semaine}/focus
+    { items: [texte, texte] }` les remplace (2 au plus). La réécriture par l'IA (↻) est réservée à l'interface.
 - **Vue Plan → mois → semaine** (D-07) : on dessine le plan à long terme dans la Vue Plan (`GET /plan-graph`), puis on
   choisit les projets du mois, puis la semaine. **Les prérequis ne bloquent jamais** le mois ni la semaine : le
   moteur de semaine propose simplement les tâches des projets prérequis d'abord.
@@ -281,13 +285,13 @@ l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
 - **Lecture** : `get_context` (vue d'ensemble), `get_guide` (ce document), `search`, `list_objectives`, `get_objective`,
   `list_projects`, `get_project`, `get_templates`, `get_experiences`, `list_meta_objectives`, `get_meta_objective`,
   `get_plan_graph`, `preview_plan_changes`, `list_tasks`, `list_inbox`, `get_task`, `get_calendar`, `parse_task`,
-  `get_cap`, `get_week_plan`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`, `list_souvenirs`, `get_souvenir`,
+  `get_cap`, `get_week_plan`, `get_week_focus`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`, `list_souvenirs`, `get_souvenir`,
   `search_places`, `list_persons`, `get_living_report`.
 - **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
   en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `duplicate_task`, `promote_idea`, `add_experience_idea`,
   `log_experience`, `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`,
   `update_meta_objective`, `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`,
-  `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
+  `set_week_focus`, `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
   `add_vacation`, `add_resource`, `update_souvenir`.
 - **Suppression ou remplacement** : `set_project_dependencies`, `remove_project_dependency`, `apply_plan_changes`,
   `set_week_plan_items`, `remove_vacation`, `delete_task`, `delete_project`, `delete_objective`, `delete_meta_objective`.

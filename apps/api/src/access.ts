@@ -117,6 +117,8 @@ export const TOKEN_ROUTES: Readonly<Record<string, TokenAccess>> = {
   'PUT /api/v1/week-plans/:isoWeek/items': 'write',
   'POST /api/v1/week-plans/:isoWeek/propose': 'write',
   'POST /api/v1/week-plans/:isoWeek/validate': 'write',
+  'GET /api/v1/week-plans/:isoWeek/focus': 'read', // D-175
+  'PUT /api/v1/week-plans/:isoWeek/focus': 'write', // D-175 (the ↻ calls the AI: interface only)
   'GET /api/v1/weeks/:isoWeek/execution': 'read',
 };
 
