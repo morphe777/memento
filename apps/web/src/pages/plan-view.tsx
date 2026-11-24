@@ -6,7 +6,7 @@ import { Link, useBlocker } from '@tanstack/react-router';
 import { type ReactNode, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { DomainFilter, ErrorBox, InfoTip, Loading, PageHeader, Panel } from '../components/ui.tsx';
 import { ApiError, get, post } from '../lib/api.ts';
-import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
+import { CLOSED_STYLE, fmtDate, fmtMin, isClosed, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useDomainLookup, useIsPhone, useMe } from '../lib/hooks.ts';
 import {
   type Box,
@@ -1102,7 +1102,13 @@ function PlanEditor({
                 return (
                   <g
                     key={f.objectiveId}
-                    opacity={drag?.kind === 'objective' && drag.id === o.id && drag.moved ? 0.4 : 1}
+                    opacity={
+                      drag?.kind === 'objective' && drag.id === o.id && drag.moved
+                        ? 0.4
+                        : isClosed(o.status)
+                          ? CLOSED_STYLE.opacity // D-181
+                          : 1
+                    }
                   >
                     <rect
                       x={f.x}

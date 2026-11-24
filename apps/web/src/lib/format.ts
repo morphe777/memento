@@ -91,6 +91,10 @@ export const STATUS_LABEL: Record<string, string> = {
   todo: 'À faire',
   cancelled: 'Annulée',
 };
+/** D-181: an objective or meta-objective is closed (atteint, partiel, raté, abandonné): greyed wherever it shows. */
+export const isClosed = (status: string) => status !== 'active' && status !== 'paused';
+export const CLOSED_STYLE = { opacity: 0.55 } as const;
+
 export const ENTITY_LABEL: Record<string, string> = {
   project: 'Projet',
   objective: 'Objectif',

@@ -33,7 +33,7 @@ import {
   StatusPill,
 } from '../components/ui.tsx';
 import { ApiError, del, get, patch, post } from '../lib/api.ts';
-import { fmtDate, fmtMin, STATUS_LABEL } from '../lib/format.ts';
+import { CLOSED_STYLE, fmtDate, fmtMin, isClosed, STATUS_LABEL } from '../lib/format.ts';
 import { toast, useAction, useDomainLookup, useLeaveDeleted, useMe, useSettings } from '../lib/hooks.ts';
 import type {
   MetaObjective,
@@ -128,7 +128,11 @@ export function ObjectivesPage() {
       {objectives.isError && <ErrorBox error={objectives.error} />}
       {groups.map(({ meta, items }) =>
         items.length || meta ? (
-          <section key={meta?.id ?? 'none'} className="bin flex flex-col gap-3">
+          <section
+            key={meta?.id ?? 'none'}
+            className="bin flex flex-col gap-3"
+            style={meta && isClosed(meta.status) ? CLOSED_STYLE : undefined}
+          >
             <div className="flex flex-wrap items-baseline gap-2.5">
               <h2 className="h2-bin">
                 {meta ? (
@@ -186,7 +190,7 @@ export function ObjectivesPage() {
                     to="/objectifs/$id"
                     params={{ id: o.id }}
                     className="card flex flex-col gap-2.5 hover:no-underline"
-                    style={{ padding: '16px 18px' }}
+                    style={{ padding: '16px 18px', ...(isClosed(o.status) ? CLOSED_STYLE : {}) }}
                   >
                     <div className="flex justify-between items-start gap-3">
                       <span className="text-[16px] font-semibold hover:underline">{o.title}</span>
@@ -1092,11 +1096,14 @@ export function ObjectivePage({ id }: { id: string }) {
         />
         <PageHeader
           eyebrow={`${o.data.quarter} · deadline ${fmtDate(o.data.deadline)} · criticité ${o.data.criticality}/3 · ${STATUS_LABEL[o.data.status]}`}
-          title={o.data.title}
+          title={<span style={isClosed(o.data.status) ? CLOSED_STYLE : undefined}>{o.data.title}</span>}
           actions={
-            <button type="button" className="btn" onClick={() => setEditing(true)}>
-              <PencilIcon /> Modifier
-            </button>
+            <>
+              <CloseButton kind="objective" id={o.data.id} status={o.data.status} />
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                <PencilIcon /> Modifier
+              </button>
+            </>
           }
         />
       </div>
@@ -1371,6 +1378,7 @@ function MapObjective({
       style={{
         padding: '12px 14px 12px 12px',
         borderLeft: `4px solid ${dl.color(o.domainId)}`,
+        ...(isClosed(o.status) ? CLOSED_STYLE : {}),
       }}
     >
       <div className="flex items-start justify-between gap-2">
@@ -1478,6 +1486,71 @@ function quarterChoices(today: string | undefined, deadline: string) {
   return out;
 }
 
+/**
+ * D-181 (user request 24/11/2026): « Clore… » on the page of an objective or a meta-objective, at any time of the
+ * quarter: one choice closes it (a recurring objective starts again, D-62). Closed: « Rouvrir » sets it active.
+ */
+const CLOSE_CHOICES = {
+  objective: [
+    { status: 'achieved', label: 'Atteint', hint: 'le but est atteint' },
+    { status: 'partial', label: 'Partiel', hint: 'en partie seulement' },
+    { status: 'failed', label: 'Raté', hint: 'pas atteint' },
+    { status: 'abandoned', label: 'Abandonné', hint: 'il ne compte plus' },
+  ],
+  meta: [
+    { status: 'achieved', label: 'Atteint', hint: 'le cap est atteint' },
+    { status: 'abandoned', label: 'Abandonné', hint: 'il ne compte plus' },
+  ],
+} as const;
+
+function CloseButton({ kind, id, status }: { kind: 'objective' | 'meta'; id: string; status: string }) {
+  const [open, setOpen] = useState(false);
+  const url = kind === 'objective' ? `/objectives/${id}` : `/meta-objectives/${id}`;
+  const set = useAction(async (next: string) => {
+    await patch(url, { status: next });
+    toast(next === 'active' ? 'Rouvert.' : `Clos : ${STATUS_LABEL[next].toLowerCase()}.`);
+  });
+  if (isClosed(status))
+    return (
+      <button type="button" className="btn" disabled={set.isPending} onClick={() => set.mutate('active')}>
+        Rouvrir
+      </button>
+    );
+  return (
+    <>
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        Clore…
+      </button>
+      <Panel
+        open={open}
+        onClose={() => setOpen(false)}
+        title={kind === 'objective' ? "Clore l'objectif" : 'Clore le méta-objectif'}
+        width={420}
+      >
+        <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
+          Il sort des listes ouvertes et reste visible, grisé. « Rouvrir » le remet actif.
+        </p>
+        <div className="flex flex-col gap-2">
+          {CLOSE_CHOICES[kind].map((c) => (
+            <button
+              key={c.status}
+              type="button"
+              className="btn justify-between"
+              disabled={set.isPending}
+              onClick={() => set.mutate(c.status, { onSuccess: () => setOpen(false) })}
+            >
+              <span className="font-semibold">{c.label}</span>
+              <span className="text-[13px]" style={{ color: 'var(--text-faint)' }}>
+                {c.hint}
+              </span>
+            </button>
+          ))}
+        </div>
+      </Panel>
+    </>
+  );
+}
+
 /** Méta-objectif page: description under the title (the heart of the long-term goal), its objectives. */
 export function MetaObjectivePage({ id }: { id: string }) {
   const meta = useQuery({
@@ -1506,11 +1579,14 @@ export function MetaObjectivePage({ id }: { id: string }) {
         <Breadcrumb items={[{ label: 'Objectifs', to: '/objectifs' }, { label: m.title }]} />
         <PageHeader
           eyebrow={`Méta-objectif${m.horizonDate ? ` · horizon ${fmtDate(m.horizonDate)}` : ''} · ${STATUS_LABEL[m.status]}`}
-          title={m.title}
+          title={<span style={isClosed(m.status) ? CLOSED_STYLE : undefined}>{m.title}</span>}
           actions={
-            <button type="button" className="btn" onClick={() => setEditing(true)}>
-              <PencilIcon /> Modifier
-            </button>
+            <>
+              <CloseButton kind="meta" id={m.id} status={m.status} />
+              <button type="button" className="btn" onClick={() => setEditing(true)}>
+                <PencilIcon /> Modifier
+              </button>
+            </>
           }
         />
       </div>

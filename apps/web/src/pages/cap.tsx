@@ -8,6 +8,7 @@ import { MOTIVE_HELP, MotiveText } from '../components/cap.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
 import { ErrorBox, InfoTip, Loading, PageHeader } from '../components/ui.tsx';
 import { get, patch } from '../lib/api.ts';
+import { CLOSED_STYLE, isClosed, STATUS_LABEL } from '../lib/format.ts';
 import { useAction, useDomainLookup, useMe } from '../lib/hooks.ts';
 import type { Cap } from '../lib/types.ts';
 
@@ -56,7 +57,11 @@ export function CapPage() {
                 <div
                   key={o.id}
                   className="flex flex-col gap-1"
-                  style={{ paddingLeft: 12, borderLeft: '2px solid var(--divider)' }}
+                  style={{
+                    paddingLeft: 12,
+                    borderLeft: '2px solid var(--divider)',
+                    ...(isClosed(o.status) ? CLOSED_STYLE : {}), // D-181
+                  }}
                 >
                   {o.motive.trim() && <Motive kind="objective" id={o.id} value={o.motive} size={19} />}
                   <span className="text-[13px] flex flex-wrap gap-x-2" style={{ color: 'var(--text-faint)' }}>
@@ -65,9 +70,7 @@ export function CapPage() {
                     </Link>
                     <span>· {o.progressPct} %</span>
                     {o.smart && <span>· {o.smart}</span>}
-                    {o.status !== 'active' && (
-                      <span>· {o.status === 'achieved' ? 'atteint' : 'en pause'}</span>
-                    )}
+                    {o.status !== 'active' && <span>· {STATUS_LABEL[o.status].toLowerCase()}</span>}
                   </span>
                   {!o.motive.trim() && <Motive kind="objective" id={o.id} value="" size={19} />}
                 </div>
