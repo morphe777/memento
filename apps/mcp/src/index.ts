@@ -355,6 +355,12 @@ export function buildServer(call: Call, canWrite = true) {
     ({ id }) => call('POST', p`/tasks/${id}/duplicate`),
   );
   tool(
+    'keep_task',
+    'Garde une tâche de l’Inbox qui attend depuis longtemps (D-182) : son âge (`age` : « stale » puis « question » selon inbox.stale_days / inbox.question_days) repart de zéro. Seulement une tâche de l’Inbox à faire, sans échéance ni récurrence (sinon NOT_KEEPABLE). Pour s’en débarrasser : delete_task.',
+    { id: S.uuid },
+    ({ id }) => call('POST', p`/tasks/${id}/keep`),
+  );
+  tool(
     'duplicate_objective',
     'Duplique un objectif (D-109) : mêmes champs, mesure remise à 0, même trimestre ; avec ses projets (hors abandonnés) et l’ordre de leur chemin, sauf withProjects: false.',
     { id: S.uuid, ...S.objectiveDuplicateBody.shape },

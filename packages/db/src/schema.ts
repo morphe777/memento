@@ -165,6 +165,8 @@ export const task = sqliteTable(
     recurrenceRule: text('recurrence_rule'),
     domainId: text('domain_id').references(() => domain.id), // Inbox tasks only
     postponeCount: integer('postpone_count').notNull().default(0),
+    // D-182: « Garder » on an Inbox task that waits too long: its age counts from here instead of its creation.
+    keptAt: text('kept_at'),
     doneAt: text('done_at'),
     // D-61: time actually spent (minutes), entered when it differs from the estimate. Null = as estimated.
     actualMin: integer('actual_min'),

@@ -344,6 +344,7 @@ function WeekDesktop({ ex }: { ex: Execution }) {
               deltaMin={p.deltaMin}
               done={p.status === 'done'}
               to={{ id: p.projectId }}
+              progress={p}
             />
           ))}
         </section>
@@ -559,20 +560,20 @@ function ReplanPanel({
 }) {
   const dl = useDomainLookup();
   const replan = useAction((id: string) => post(`/projects/${id}/replan`, {}), {
-    toast: 'Projet replanifié : la barre revient au centre.',
+    toast: 'Projet replanifié : le trait rejoint le fait.',
   });
   return (
     <Panel open={open} onClose={onClose} title="Replanifier" side={false} width={520}>
       <p className="m-0 text-[14px]" style={{ color: 'var(--text-muted)' }}>
-        J'accepte le retard : le plan du projet est recalé sur le réel, la barre revient au centre. Les
-        rapports passés gardent la trace.
+        J'accepte le retard : le plan du projet est recalé sur le réel, le trait rejoint le fait. Les rapports
+        passés gardent la trace.
       </p>
       {projects
         .filter((p) => p.status !== 'done')
         .map((p) => (
           <div key={p.projectId} className="card flex items-center gap-3 p-3">
             <div className="flex-1 min-w-0">
-              <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} />
+              <DelayBar title={p.title} color={dl.color(p.domainId)} deltaMin={p.deltaMin} progress={p} />
             </div>
             <button
               type="button"

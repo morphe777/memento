@@ -269,6 +269,8 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
       'ui.breadcrumb',
       'ui.show_recalculate',
       'inbox.recurring_horizon_days',
+      'inbox.stale_days',
+      'inbox.question_days',
       'ui.projects_default_view',
     ],
     moteur: ['engine.weights', 'engine.bonus_count', 'engine.consider_also_count'],
@@ -373,6 +375,30 @@ function SettingsForm({ tab, settings }: { tab: ConfigTab; settings: Settings })
               max={365}
               value={s['inbox.recurring_horizon_days']}
               onChange={(e) => setS({ ...s, 'inbox.recurring_horizon_days': Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Inbox : tâche en attente signalée après (jours)"
+            info="Une tâche de l'Inbox sans deadline ni récurrence, pas faite depuis ce nombre de jours (depuis sa création ou « Garder ») : bord orange et « En attente depuis … », dans l'Inbox et dans Planifier, jamais repliée."
+          >
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={s['inbox.stale_days']}
+              onChange={(e) => setS({ ...s, 'inbox.stale_days': Number(e.target.value) })}
+            />
+          </Field>
+          <Field
+            label="Inbox : « Toujours utile ? » après (jours)"
+            info="Au-delà, bord rouge et la question « Toujours utile ? », avec « Garder » (le compteur repart de zéro) ou « Supprimer »."
+          >
+            <input
+              type="number"
+              min={1}
+              max={730}
+              value={s['inbox.question_days']}
+              onChange={(e) => setS({ ...s, 'inbox.question_days': Number(e.target.value) })}
             />
           </Field>
           <label className="flex items-center gap-2 text-[14px]">
@@ -999,6 +1025,10 @@ function AccessConfig() {
     },
   });
   const revoke = useAction((id: string) => del(`/tokens/${id}`), { toast: 'Jeton révoqué.' });
+  // D-183: a revoked token can be deleted: its name is free again.
+  const remove = useAction((id: string) => del(`/tokens/${id}`), {
+    toast: 'Jeton supprimé : son nom est libre.',
+  });
   return (
     <Section
       title="Jetons API / MCP"
@@ -1025,18 +1055,29 @@ function AccessConfig() {
           <div
             key={t.id}
             className="row-line flex flex-wrap items-center gap-3"
-            style={{
-              padding: '10px 12px',
-              opacity: t.revokedAt ? 0.5 : 1,
-            }}
+            style={{ padding: '10px 12px' }}
           >
-            <span className="mono text-[14px] flex-1">ai:{t.name}</span>
-            <span className="text-[12px]" style={{ color: 'var(--text-faint)' }}>
+            <span className="mono text-[14px] flex-1" style={{ opacity: t.revokedAt ? 0.5 : 1 }}>
+              ai:{t.name}
+            </span>
+            <span
+              className="text-[12px]"
+              style={{ color: 'var(--text-faint)', opacity: t.revokedAt ? 0.5 : 1 }}
+            >
               {SCOPE_LABEL[t.scopes] ?? t.scopes} ·{' '}
               {t.lastUsedAt ? `utilisé ${fmtDateTime(t.lastUsedAt)}` : 'jamais utilisé'}
               {t.revokedAt ? ' · révoqué' : ''}
             </span>
-            {!t.revokedAt && (
+            {t.revokedAt ? (
+              <button
+                type="button"
+                className="btn btn-sm"
+                title="Efface la ligne ; un nouveau jeton peut reprendre ce nom."
+                onClick={() => remove.mutate(t.id)}
+              >
+                Supprimer
+              </button>
+            ) : (
               <button type="button" className="btn btn-sm" onClick={() => revoke.mutate(t.id)}>
                 Révoquer
               </button>

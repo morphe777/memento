@@ -192,6 +192,68 @@ export function useSortSensors() {
 }
 
 /** Ordered task list of a project or the Inbox; order = implicit prerequisite in sequential projects (DM-51). */
+/** D-182: the age of an Inbox task waiting too long (null = nothing to show). */
+export type TaskAge = { level: 'stale' | 'question'; days: number } | null;
+
+export const AGE_COLOR = { stale: 'var(--status-orange)', question: 'var(--status-red)' } as const;
+
+/** « 5 sem. » under 2 months, then « 2 mois ». */
+const ageText = (days: number) =>
+  days < 60 ? `${Math.floor(days / 7)} sem.` : `${Math.floor(days / 30)} mois`;
+
+/** D-182: the inset left accent of a row waiting too long (no layout shift). */
+export const ageAccent = (age: TaskAge) =>
+  age ? { boxShadow: `inset 3px 0 0 ${AGE_COLOR[age.level]}` } : undefined;
+
+/** D-182: « En attente depuis 5 sem. », then « Toujours utile ? En attente depuis 2 mois. » */
+export function AgeLabel({ age }: { age: TaskAge }) {
+  if (!age) return null;
+  return (
+    <span style={{ color: age.level === 'question' ? 'var(--late-text)' : 'var(--text-muted)' }}>
+      {age.level === 'question' && <b>Toujours utile ? </b>}
+      En attente depuis {ageText(age.days)}
+    </span>
+  );
+}
+
+/** D-182: on a questioned task, « Garder » (the count starts again) or « Supprimer » (confirmed). */
+export function AgeActions({ id, title, age }: { id: string; title: string; age: TaskAge }) {
+  const [deleting, setDeleting] = useState(false);
+  const keep = useAction(() => post(`/tasks/${id}/keep`, {}), {
+    toast: 'Gardée : le compteur repart de zéro.',
+  });
+  const remove = useAction(() => del(`/tasks/${id}`), {
+    onSuccess: () => setDeleting(false),
+    toast: 'Tâche supprimée.',
+  });
+  if (age?.level !== 'question') return null;
+  return (
+    <span className="flex items-center gap-1.5 flex-none">
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={keep.isPending}
+        title="Elle reste dans l'Inbox ; le compteur repart de zéro."
+        onClick={() => keep.mutate(undefined)}
+      >
+        Garder
+      </button>
+      <button type="button" className="btn btn-sm" onClick={() => setDeleting(true)}>
+        Supprimer
+      </button>
+      <ConfirmDialog
+        open={deleting}
+        title="Supprimer la tâche ?"
+        busy={remove.isPending}
+        onClose={() => setDeleting(false)}
+        onConfirm={() => remove.mutate(undefined)}
+      >
+        <p className="m-0">« {title} » sera supprimée définitivement.</p>
+      </ConfirmDialog>
+    </span>
+  );
+}
+
 export function TaskList({
   tasks,
   projectId,
@@ -243,6 +305,7 @@ export function TaskList({
                   padding: '12px 16px 12px 6px',
                   opacity: t.status === 'done' ? 0.5 : t.locked ? 0.55 : 1,
                   background: 'var(--surface)',
+                  ...ageAccent(t.age), // D-182
                   // D-101: a free task opens a new chain: a visible break above it.
                   borderTop: sequential && t.isFree && i > 0 ? '2px dashed var(--divider)' : undefined,
                 }}
@@ -298,8 +361,10 @@ export function TaskList({
                     {t.recurrenceRule && <span>Récurrente</span>}
                     {t.postponeCount > 0 && <span>Reportée {t.postponeCount} fois</span>}
                     {t.locked && <span>Après la tâche précédente</span>}
+                    <AgeLabel age={t.age} />
                   </span>
                 </button>
+                <AgeActions id={t.id} title={t.title} age={t.age} />
                 <Duration min={t.durationMin} />
               </div>
             )}

@@ -140,40 +140,85 @@ export const DELAY_HELP = (
       <span className="tip-li tip-dim">une tâche sans durée compte 0.</span>
     </span>
     <span className="tip-p">
-      <b>Lecture</b>
-      <span className="tip-li">moins de 15 min d'écart : dans les temps ;</span>
-      <span className="tip-li">barre pleine à ±4 h.</span>
+      <b>Lecture de la barre</b>
+      <span className="tip-li">toute la barre = tout le travail du projet ; le % = la part faite ;</span>
+      <span className="tip-li">le trait = ce qui devrait être fait à ce jour ;</span>
+      <span className="tip-li">
+        en bleu, l'avance au-delà du trait ; en orange, le retard jusqu'au trait ;
+      </span>
+      <span className="tip-li">moins de 15 min d'écart : dans les temps.</span>
     </span>
     <span className="tip-p">
-      <b>Replanifier</b> repart du jour du recalage et du temps déjà fait : la barre revient au centre.
+      <b>Replanifier</b> repart du jour du recalage et du temps déjà fait : le trait rejoint le fait.
     </span>
   </>
 );
 
 /** Columns of the one-line delay bars: title, bar, value (user request 02/11/2026, compact like DomainBars). */
-const DELAY_LABEL_W = 'clamp(90px, 36%, 190px)';
-const DELAY_VALUE_W = 64;
+const DELAY_LABEL_W = 'clamp(90px, 32%, 190px)';
+const DELAY_VALUE_W = 104;
 
-/** The legend of the delay bars, written once above them (user request 01/11/2026), over the bar column. */
-export function DelayLegend() {
+/** What a D-180 bar draws (absent from reports frozen before 1.5.0, drawn as the old centred bar). */
+export interface DelayProgress {
+  totalMin?: number;
+  doneMin?: number;
+  expectedMin?: number;
+}
+
+/**
+ * The legend of the delay bars, written once above them (user request 01/11/2026). D-180: the progress bars
+ * read « done · ahead · late · expected today »; the old centred bars (frozen reports) keep their legend.
+ */
+export function DelayLegend({ progress = true }: { progress?: boolean }) {
+  const chip = (bg: string) => (
+    <span
+      className="inline-block flex-none"
+      style={{ width: 10, height: 6, borderRadius: 999, background: bg }}
+    />
+  );
   return (
     <div className="flex items-center gap-2.5 text-[11px]" style={{ color: 'var(--text-faint)' }}>
       <span className="flex-none" style={{ width: DELAY_LABEL_W }} />
-      <span className="flex-1 min-w-0 flex justify-between items-center gap-1">
-        <span style={{ color: 'var(--late-text)' }}>← retard</span>
-        <span>dans les temps</span>
-        <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
-      </span>
+      {progress ? (
+        <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+          <span className="flex items-center gap-1">{chip('var(--done-bar)')}fait</span>
+          <span className="flex items-center gap-1" style={{ color: 'var(--ahead-text)' }}>
+            {chip('var(--ahead-bar)')}avance
+          </span>
+          <span className="flex items-center gap-1" style={{ color: 'var(--late-text)' }}>
+            {chip('var(--late-bar)')}retard
+          </span>
+          <span className="flex items-center gap-1">
+            <span
+              className="inline-block flex-none"
+              style={{ width: 2, height: 10, background: 'var(--text)' }}
+            />
+            attendu à ce jour
+          </span>
+        </span>
+      ) : (
+        <span className="flex-1 min-w-0 flex justify-between items-center gap-1">
+          <span style={{ color: 'var(--late-text)' }}>← retard</span>
+          <span>dans les temps</span>
+          <span style={{ color: 'var(--ahead-text)' }}>avance →</span>
+        </span>
+      )}
       <span className="flex-none" style={{ width: DELAY_VALUE_W }} />
     </div>
   );
 }
 
+/** True when the bar can draw the progress of the project (D-180). */
+export const hasProgress = (p: DelayProgress) =>
+  typeof p.totalMin === 'number' && typeof p.doneMin === 'number' && typeof p.expectedMin === 'number';
+
 /**
- * Centred delay bar (R-06): centre = on time, left = late (orange), right = ahead (blue); ±4 h = half bar.
- * One line: title, bar, value (user request 02/11/2026).
- * D-139 (user request 08/11/2026): nothing written when on time; a finished project is never « ahead »: the line
- * and its bar are greyed and say « terminé ».
+ * Delay bar of a month project (R-06), one line: title, bar, value (user request 02/11/2026).
+ * D-180 (user request 24/11/2026): the bar is the progress of the project, 0 → 100 % of its work; a vertical
+ * line marks what the calendar expects at that date. Done beyond the line: blue (ahead); short of it: orange
+ * up to the line (late), with the gap written. Less than 15 min apart: on time, nothing coloured.
+ * D-139: a finished project is never « ahead »: greyed, full, « terminé ».
+ * Without the progress (reports frozen before 1.5.0): the old centred bar, ±4 h = half bar.
  */
 export function DelayBar({
   title,
@@ -181,17 +226,30 @@ export function DelayBar({
   deltaMin,
   done = false,
   to,
+  progress,
 }: {
   title: string;
   color: string;
   deltaMin: number;
   done?: boolean;
   to?: { id: string };
+  progress?: DelayProgress;
 }) {
-  const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   const late = deltaMin < 0;
   const onTime = Math.abs(deltaMin) < 15;
-  const label = done ? 'terminé' : onTime ? '' : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
+  const gap = onTime ? '' : `${late ? '−' : '+'}${fmtMin(Math.abs(deltaMin))}`;
+  const drawn = progress && hasProgress(progress) && progress.totalMin! > 0 ? progress : null;
+  const pct = (m: number) => Math.min(100, Math.max(0, (m / drawn!.totalMin!) * 100));
+  const donePct = done ? 100 : drawn ? pct(drawn.doneMin!) : 0;
+  const expPct = drawn ? pct(drawn.expectedMin!) : 50;
+  const seg = (from: number, to: number, bg: string) =>
+    to > from && (
+      <div
+        className="absolute top-0"
+        style={{ height: 8, left: `${from}%`, width: `${to - from}%`, background: bg }}
+      />
+    );
+  const a = (Math.min(Math.abs(deltaMin), 240) / 240) * 50;
   return (
     <div className="flex items-center gap-2.5 text-[13px]" style={done ? { opacity: 0.55 } : undefined}>
       <span className="flex-none flex items-center gap-2 min-w-0" style={{ width: DELAY_LABEL_W }}>
@@ -212,39 +270,62 @@ export function DelayBar({
           </span>
         )}
       </span>
-      <div className="relative flex-1" style={{ height: 8, background: 'var(--track)', borderRadius: 999 }}>
-        {!onTime && !done && (
+      <div
+        className="relative flex-1 overflow-visible"
+        style={{ height: 8, background: 'var(--track)', borderRadius: 999 }}
+        title={
+          drawn && !done
+            ? `Fait ${fmtMin(drawn.doneMin!)} sur ${fmtMin(drawn.totalMin!)} · attendu à ce jour ${fmtMin(drawn.expectedMin!)}`
+            : undefined
+        }
+      >
+        {drawn || done ? (
+          <div className="absolute inset-0 overflow-hidden" style={{ borderRadius: 999 }}>
+            {done
+              ? seg(0, 100, 'var(--done-bar)')
+              : onTime
+                ? seg(0, donePct, 'var(--done-bar)')
+                : late
+                  ? [seg(0, donePct, 'var(--done-bar)'), seg(donePct, expPct, 'var(--late-bar)')]
+                  : [seg(0, expPct, 'var(--done-bar)'), seg(expPct, donePct, 'var(--ahead-bar)')]}
+          </div>
+        ) : (
+          !onTime && (
+            <div
+              className="absolute top-0"
+              style={{
+                height: 8,
+                left: late ? `${50 - a}%` : '50%',
+                width: `${a}%`,
+                background: late ? 'var(--late-bar)' : 'var(--ahead-bar)',
+                borderRadius: 999,
+              }}
+            />
+          )
+        )}
+        {!done && (
           <div
-            className="absolute top-0"
+            className="absolute"
             style={{
-              height: 8,
-              left: late ? `${50 - a}%` : '50%',
-              width: `${a}%`,
-              background: late ? 'var(--late-bar)' : 'var(--ahead-bar)',
-              borderRadius: 999,
+              top: -3,
+              left: `${expPct}%`,
+              width: 2,
+              height: 14,
+              background: 'var(--text)',
+              transform: 'translateX(-1px)',
             }}
           />
         )}
-        <div
-          className="absolute"
-          style={{
-            top: -3,
-            left: '50%',
-            width: 2,
-            height: 14,
-            background: 'var(--text)',
-            transform: 'translateX(-1px)',
-          }}
-        />
       </div>
-      <span
-        className="mono text-right flex-none"
-        style={{
-          width: DELAY_VALUE_W,
-          color: done || onTime ? 'var(--text-muted)' : late ? 'var(--late-text)' : 'var(--ahead-text)',
-        }}
-      >
-        {label}
+      <span className="mono text-right flex-none flex justify-end gap-2" style={{ width: DELAY_VALUE_W }}>
+        {done ? (
+          <span style={{ color: 'var(--text-muted)' }}>terminé</span>
+        ) : (
+          <>
+            {drawn && <span style={{ color: 'var(--text-muted)' }}>{Math.round(donePct)} %</span>}
+            {gap && <span style={{ color: late ? 'var(--late-text)' : 'var(--ahead-text)' }}>{gap}</span>}
+          </>
+        )}
       </span>
     </div>
   );

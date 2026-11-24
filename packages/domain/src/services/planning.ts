@@ -10,12 +10,13 @@ import {
   type EngineInput,
   type EngineProject,
   type EngineTask,
-  projectDelayMin,
+  projectProgress,
   projectWeekToDoMin,
   propose,
   type Selection,
   scoreCandidates,
 } from '../rules/engine.ts';
+import { ageSince } from '../rules/inbox-age.ts';
 import { waitingOnIds } from '../rules/plan.ts';
 import { budgetMinutes, budgetStatus } from '../rules/tasks.ts';
 import { getSettings } from '../settings.ts';
@@ -188,6 +189,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     postponeCount: t.postponeCount,
     doneAt: t.doneAt,
     recurring: !!t.recurrenceRule,
+    since: ageSince(t), // D-182
   }));
   const expMonth = monthOfWeek(isoWeek); // R-02 (D-154)
   return {
@@ -197,6 +199,7 @@ export function buildEngineInput(ctx: Ctx, isoWeek: string, budgetMin?: number):
     bonusCount: s['engine.bonus_count'],
     considerAlsoCount: s['engine.consider_also_count'],
     budgetMin: budgetMin ?? s['budget.weekly_min'],
+    inboxAge: { staleDays: s['inbox.stale_days'], questionDays: s['inbox.question_days'] }, // D-182
     experienceTarget: s['experience.target'],
     experienceMonth: expMonth,
     experiencesDone: experiencesInMonth(ctx, expMonth),
@@ -655,7 +658,7 @@ export function getExecution(ctx: Ctx, isoWeek: string) {
       title: p.title,
       domainId: p.domainIds[0] ?? null,
       status: p.status,
-      deltaMin: projectDelayMin(ep as EngineProject, ptasks, today, calendar),
+      ...projectProgress(ep as EngineProject, ptasks, today, calendar), // D-180: totalMin, doneMin, expectedMin, deltaMin
       // D-118: left to do this week to be on time on Sunday evening (none for a finished or paused project).
       weekToDoMin:
         p.status === 'active' ? projectWeekToDoMin(ep as EngineProject, ptasks, today, calendar) : 0,

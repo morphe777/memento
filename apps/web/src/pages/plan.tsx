@@ -8,7 +8,7 @@ import { AiFillWeekButton, AiProposeButton } from '../components/ai.tsx';
 import { WeekFocusLine } from '../components/cap.tsx';
 import { FoldButton, PlanAlerts, PlanTime, useFold } from '../components/plan-parts.tsx';
 import { Breadcrumb } from '../components/shell.tsx';
-import { openTask } from '../components/tasks.tsx';
+import { AgeActions, AgeLabel, ageAccent, openTask } from '../components/tasks.tsx';
 import {
   DomainBars,
   Duration,
@@ -497,6 +497,7 @@ function PlanTaskRow({
         padding: '8px 16px',
         background: week ? 'var(--row-week)' : bonus ? 'var(--row-bonus)' : 'var(--surface)',
         opacity: t.locked ? 0.45 : 1,
+        ...ageAccent(t.age), // D-182
       }}
     >
       <div className="min-w-0 flex flex-col gap-0.5" style={{ flex: '1 1 260px' }}>
@@ -529,7 +530,13 @@ function PlanTaskRow({
             {t.why}
           </span>
         )}
+        {t.age && (
+          <span className="text-[12px]">
+            <AgeLabel age={t.age} />
+          </span>
+        )}
       </div>
+      <AgeActions id={t.taskId} title={t.title} age={t.age} />
       <Duration min={t.durationMin} />
       <button
         type="button"

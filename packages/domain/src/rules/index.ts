@@ -3,6 +3,7 @@ export * from './daily.ts';
 export * from './delay.ts';
 export * from './engine.ts';
 export * from './graph.ts';
+export * from './inbox-age.ts';
 export * from './natural.ts';
 export * from './objectives.ts';
 export * from './plan.ts';

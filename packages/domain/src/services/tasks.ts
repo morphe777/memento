@@ -4,6 +4,7 @@ import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
 import { availableTaskIds } from '../rules/availability.ts';
 import { assertNoCycle } from '../rules/graph.ts';
+import { ageable, ageSince, inboxAge } from '../rules/inbox-age.ts';
 import { checkRecurrenceRule, nextOccurrence } from '../rules/recurrence.ts';
 import { checkTaskDuration } from '../rules/tasks.ts';
 import type { TaskCreate, TaskPatch } from '../schemas.ts';
@@ -97,6 +98,7 @@ export function listTasks(
     .all();
   const deps = taskDependencies(ctx);
   const planned = plannedWeeks(ctx);
+  const ageOf = taskAge(ctx);
   const week = currentWeek(ctxNow(ctx));
   // Tasks of the current week plan count as "chosen" for RB-06 display.
   const chosen = new Set([...planned].filter(([, w]) => w === week).map(([id]) => id));
@@ -115,7 +117,32 @@ export function listTasks(
     plannedWeek: planned.get(t.id) ?? null, // D-151
     locked: t.status === 'todo' && !!t.projectId && !available.has(t.id),
     dependsOn: deps.filter((d) => d.taskId === t.id).map((d) => d.dependsOnTaskId),
+    age: ageOf(t), // D-182
   }));
+}
+
+/** D-182: the age of each task (null when the rule does not concern it), thresholds from the settings. */
+export function taskAge(ctx: Ctx) {
+  const s = getSettings(ctx);
+  const th = { staleDays: s['inbox.stale_days'], questionDays: s['inbox.question_days'] };
+  const today = parisDate(ctxNow(ctx));
+  return (t: TaskRow) => inboxAge({ ...t, recurring: !!t.recurrenceRule, since: ageSince(t) }, today, th);
+}
+
+/** D-182: « Garder » an Inbox task that waits too long: its age counts again from today. */
+export function keepTask(ctx: Ctx, id: string) {
+  return tx(ctx, () => {
+    const before = getTaskRow(ctx, id);
+    if (!ageable({ ...before, recurring: !!before.recurrenceRule }))
+      throw new DomainError(
+        'NOT_KEEPABLE',
+        'Seule une tâche de l’Inbox à faire, sans échéance ni récurrence, peut être gardée.',
+      );
+    const at = ctxNowIso(ctx);
+    ctx.db.update(task).set({ keptAt: at, updatedAt: at }).where(eq(task.id, id)).run();
+    audit(ctx, 'task', id, 'keep', before, getTaskRow(ctx, id));
+    return getTask(ctx, id);
+  });
 }
 
 export const getTask = (ctx: Ctx, id: string) => {
@@ -142,6 +169,8 @@ export function createTask(ctx: Ctx, input: TaskCreate) {
       .insert(task)
       .values({
         id,
+        createdAt: ctxNowIso(ctx), // D-182: the age of an Inbox task counts from here (the ctx clock)
+        updatedAt: ctxNowIso(ctx),
         createdBy: ctx.actor,
         ...fields,
         description: fields.description ?? '', // D-119: the template only guides the AI

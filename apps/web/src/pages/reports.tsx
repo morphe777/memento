@@ -11,6 +11,7 @@ import {
   DomainBars,
   Empty,
   ErrorBox,
+  hasProgress,
   InfoTip,
   Loading,
   PageHeader,
@@ -389,7 +390,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
               <InfoTip>{DELAY_HELP}</InfoTip>
             </h2>
           </div>
-          {p.delays.length > 0 && <DelayLegend />}
+          {p.delays.length > 0 && <DelayLegend progress={p.delays.every(hasProgress)} />}
           {p.delays.length === 0 && (
             <div className="text-[14px]" style={{ color: 'var(--text-faint)' }}>
               Aucun projet du mois.
@@ -403,6 +404,7 @@ function WeekReport({ r, p }: { r: Report; p: WeekPayload }) {
               deltaMin={d.deltaMin}
               done={'done' in d && !!d.done}
               to={{ id: d.projectId }}
+              progress={d}
             />
           ))}
         </section>

@@ -443,11 +443,13 @@ export async function buildApp(opts: AppOptions) {
       );
       r.delete('/tokens/:id', { schema: { ...tag('Accès'), params: D.idParam } }, async (req) => {
         const c = ctx(req);
-        D.tx(c, () => {
-          A.revokeToken(db, req.params.id);
-          D.audit(c, 'api_token', req.params.id, 'revoke', null, { revoked: true });
+        // D-183: a live token is revoked; a revoked one is deleted (its name can be used again).
+        const deleted = D.tx(c, () => {
+          const gone = A.revokeToken(db, req.params.id);
+          D.audit(c, 'api_token', req.params.id, gone ? 'delete' : 'revoke', null, { revoked: true });
+          return gone;
         });
-        return { ok: true };
+        return { ok: true, deleted };
       });
 
       // ---------- Domains ----------
@@ -698,6 +700,10 @@ export async function buildApp(opts: AppOptions) {
       );
       r.post('/tasks/:id/duplicate', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) =>
         D.duplicateTask(ctx(req), req.params.id),
+      );
+      // D-182: « Garder » an Inbox task that waits too long: its age counts again from today.
+      r.post('/tasks/:id/keep', { schema: { ...tag('Tâches'), params: D.idParam } }, async (req) =>
+        D.keepTask(ctx(req), req.params.id),
       );
       r.post(
         '/tasks/:id/move',

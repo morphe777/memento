@@ -2,7 +2,7 @@ import { and, asc, desc, eq, gte, inArray, lt, or, schema } from '@memento/db';
 // Frozen reports (WF-08, dossier de dev §7). The payload holds every displayed value; it is never recomputed.
 import { audit, type Ctx, ctxNow, ctxNowIso, newId, tx } from '../context.ts';
 import { assertFound, DomainError } from '../errors.ts';
-import { type EngineProject, type EngineTask, projectDelayMin } from '../rules/engine.ts';
+import { type EngineProject, type EngineTask, projectProgress } from '../rules/engine.ts';
 import {
   type DoneTask,
   estimationOf,
@@ -268,7 +268,7 @@ export function buildWeekPayload(ctx: Ctx, isoWeek: string) {
       title: p.title,
       done: p.status === 'done', // D-139: shown « terminé », never « ahead »
       ...domainView(domains.find((d) => d.id === p.domainIds[0])),
-      deltaMin: projectDelayMin(
+      ...projectProgress(
         {
           ...p,
           objectiveTitle: null,

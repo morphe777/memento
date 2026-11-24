@@ -101,6 +101,7 @@ export const TOKEN_ROUTES: Readonly<Record<string, TokenAccess>> = {
   'POST /api/v1/tasks/:id/dependencies': 'write',
   'DELETE /api/v1/tasks/:id/dependencies/:dependsOnId': 'write',
   'POST /api/v1/tasks/:id/duplicate': 'write',
+  'POST /api/v1/tasks/:id/keep': 'write', // D-182
   'POST /api/v1/tasks/:id/move': 'write',
   'POST /api/v1/tasks/:id/uncomplete': 'write',
   'POST /api/v1/tasks/batch': 'write',

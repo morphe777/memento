@@ -13,7 +13,8 @@ import {
   weekSunday,
 } from '../time.ts';
 import { availableTaskIds } from './availability.ts';
-import { delayMin, type PaceCalendar, weekToDoMin } from './delay.ts';
+import { delayMin, type PaceCalendar, plannedToDateMin, weekToDoMin } from './delay.ts';
+import { type InboxAge, type InboxAgeThresholds, inboxAge } from './inbox-age.ts';
 import { budgetMinutes, budgetStatus } from './tasks.ts';
 
 /** CH-05 guard-rail domains (by name, see docs/DECISIONS.md D-15). */
@@ -68,6 +69,8 @@ export interface EngineTask {
   doneAt: string | null; // ISO timestamp
   /** D-116: an Inbox task with a recurrence rule (its next occurrence is created when it is done). */
   recurring?: boolean;
+  /** D-182: the Paris day its age counts from (creation or last « Garder »); absent = no age. */
+  since?: string;
 }
 
 export interface EngineWeights {
@@ -100,6 +103,8 @@ export interface EngineInput {
   paceCalendar?: PaceCalendar;
   /** F2 (D-137): what is already done in the planned week; it counts in its load. Absent = nothing done. */
   doneInWeek?: DoneInWeek;
+  /** D-182: thresholds of the age of Inbox tasks; absent = no age shown. */
+  inboxAge?: InboxAgeThresholds;
 }
 
 export interface DoneInWeek {
@@ -163,6 +168,21 @@ export function projectDelayMin(
   calendar?: PaceCalendar,
 ): number {
   return delayMin(delayInput(p, tasks, today, calendar));
+}
+
+/**
+ * D-180: what the delay bar draws: the work of the project (`totalMin`), what is done (`doneMin`), what the
+ * calendar expects at that date (`expectedMin`); `deltaMin` = done − expected, as R-06.
+ */
+export function projectProgress(
+  p: EngineProject,
+  tasks: EngineTask[],
+  today: string,
+  calendar?: PaceCalendar,
+): { totalMin: number; doneMin: number; expectedMin: number; deltaMin: number } {
+  const i = delayInput(p, tasks, today, calendar);
+  const expectedMin = plannedToDateMin(i);
+  return { totalMin: i.totalMin, doneMin: i.doneMin, expectedMin, deltaMin: i.doneMin - expectedMin };
 }
 
 /** D-118: minutes left to do this week for the project to be on time on Sunday evening. */
@@ -368,6 +388,8 @@ export interface PageTask {
   selection: Selection | null;
   /** D-116: discreet icon on the row. */
   recurring: boolean;
+  /** D-182: an Inbox task waiting too long (shown, never folded). */
+  age: InboxAge;
 }
 
 export interface PageCard {
@@ -485,6 +507,10 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
       locked,
       selection: locked ? null : (chosen.get(t.id) ?? null),
       recurring: !!t.recurring,
+      age:
+        input.inboxAge && t.since
+          ? inboxAge({ ...t, recurring: !!t.recurring, since: t.since }, input.today, input.inboxAge)
+          : null,
     };
   };
 
@@ -502,8 +528,9 @@ export function buildPlanningPage(input: EngineInput, chosen: Map<string, Select
     !!t.recurring && !!t.dueDate && t.dueDate > P.sunday && !chosen.has(t.id);
   const laterRecurring = inboxSorted.filter(isLater).map((t) => row(t, false));
   const inboxRows = inboxSorted.filter((t) => !isLater(t)).map((t) => row(t, false));
-  const inboxShown = inboxRows.filter((r, i) => i < INBOX_VISIBLE || r.selection);
-  const inboxFolded = inboxRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection));
+  // D-182: a task waiting too long is never folded.
+  const inboxShown = inboxRows.filter((r, i) => i < INBOX_VISIBLE || r.selection || r.age);
+  const inboxFolded = inboxRows.filter((r, i) => !(i < INBOX_VISIBLE || r.selection || r.age));
   const dueById = new Map(inboxSorted.map((t) => [t.id, t.dueDate]));
   // D-178: the envies, by title, no score nor reason (the engine never proposes them); folded like the Inbox.
   const envieRows = P.envies

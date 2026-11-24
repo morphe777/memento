@@ -132,6 +132,10 @@ export interface DelayBar {
   title: string;
   domainId: string | null;
   deltaMin: number; // > 0 ahead, < 0 late
+  /** D-180: the progress drawn by the bar (absent from reports frozen before 1.5.0: centred bar). */
+  totalMin?: number;
+  doneMin?: number;
+  expectedMin?: number;
 }
 
 /** DelayBar geometry shared by Ma semaine and reports (mockups: ±4 h fills half the bar). */

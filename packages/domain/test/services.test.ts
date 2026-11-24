@@ -560,6 +560,9 @@ describe('L4 exécution', () => {
     setProjectMonth(ctx, p.id, '2026-11');
     const delta = () => getExecution(ctx, '2026-W46').monthProjects[0].deltaMin;
     expect(delta()).toBeLessThan(0);
+    // D-180: the bar shows the progress of the project (done / total) and where the calendar expects it.
+    const mp = getExecution(ctx, '2026-W46').monthProjects[0];
+    expect(mp).toMatchObject({ totalMin: 480, doneMin: 0, expectedMin: -mp.deltaMin });
     replanProject(ctx, p.id);
     expect(delta()).toBe(0);
   });
