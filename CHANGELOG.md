@@ -3,6 +3,16 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.5.0 — 2026-11
+
+- **Barres d'avancement** des projets du mois (Ma semaine, rapports) : la partie remplie = le travail fait (%), un
+  trait = ce qui devrait être fait à ce jour ; bleu au-delà (avance), orange jusqu'au trait (retard) (D-180).
+- **Clore un objectif ou un méta-objectif** : bouton « Clore… » (Atteint, Partiel, Raté, Abandonné), « Rouvrir ».
+  Un objectif clos est grisé partout (D-181).
+- **Tâches de l'Inbox qui attendent** (sans deadline ni récurrence) : orange après 30 jours, « Toujours utile ? »
+  après 60, avec « Garder » ou « Supprimer ». Seuils dans Configuration (D-182). Migration : colonne `task.kept_at`.
+- **Jetons** : un jeton révoqué peut être supprimé, son nom est à nouveau libre (D-183).
+
 ## 1.4.2 — 2026-11
 
 - **Envies à part** : elles ne sont plus dans l'Inbox et le moteur ne les propose plus (ni l'IA). Dans Planifier ›

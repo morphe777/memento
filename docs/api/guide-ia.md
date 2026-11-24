@@ -96,6 +96,11 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   (`null` sinon, D-151).
 - Dupliquer : `POST /tasks/{id}/duplicate` (D-174) : copie à faire sous l'originale, sans deadline, récurrence ni
   semaine.
+- **Âge** (D-182) : `age` sur chaque tâche (et sur les lignes de Planifier) : `null`, ou `{ level: 'stale' | 'question',
+  days }` pour une tâche de l'Inbox à faire, sans deadline ni récurrence, qui attend depuis `inbox.stale_days` (30)
+  puis `inbox.question_days` (60) jours, comptés depuis sa création ou le dernier « Garder ». `POST /tasks/{id}/keep`
+  (outil `keep_task`) remet le compteur à zéro (`NOT_KEEPABLE` sur une autre tâche). Ne pas garder ni supprimer à la
+  place de l'utilisateur sans le lui demander.
 - Cocher : `POST /tasks/{id}/complete` (une tâche Inbox récurrente crée sa prochaine occurrence) ; décocher :
   `/uncomplete`. Annuler sans supprimer : `PATCH { status: "cancelled" }`.
 - Date de fin d'une tâche faite (D-152) : `PATCH /tasks/{id} { doneAt: "AAAA-MM-JJTHH:MM" }` (heure de Paris, jamais
@@ -141,7 +146,8 @@ ce qui y entre et ce qui n'y entre pas. Choisis ensuite les groupes (`GET /group
   objectifs ouverts d'autres trimestres, méta-objectifs couverts. Déplacer : `POST /objectives/{id}/quarter`
   `{ quarter }` (la deadline est ramenée dans le trimestre si besoin).
 - Exécution : `GET /weeks/{semaine}/execution` (ce que voit « Ma semaine » ; `drift` = tâches prévues faites et
-  travail **hors planification**, D-99).
+  travail **hors planification**, D-99). `monthProjects[]` : `deltaMin` (R-06, > 0 avance) et, D-180, `totalMin`,
+  `doneMin`, `expectedMin` (travail du projet, fait, attendu à ce jour) : la barre d'avancement.
 - **Hors planification** (D-99) : une tâche cochée alors qu'elle n'était prévue ni cette semaine ni la précédente est
   tracée `kind: 'unplanned'` dans la semaine. `POST /tasks/done { title, projectId, durationMin, actualMin? }` crée
   une tâche déjà faite (« Fait hors plan »). Les rapports (semaine, mois, trimestre) ont un bloc `drift`.
@@ -292,7 +298,7 @@ l'utilisateur). Un jeton « lecture » ne voit que les outils de lecture.
   `get_cap`, `get_week_plan`, `get_week_focus`, `list_reports`, `get_report`, `get_daily_recap`, `list_vacations`, `list_changes`, `list_souvenirs`, `get_souvenir`,
   `search_places`, `list_persons`, `get_living_report`.
 - **Écriture** : `create_objective`, `update_objective`, `create_idea`, `create_project` (projet, tâches et promotion
-  en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `duplicate_task`, `promote_idea`, `add_experience_idea`,
+  en un appel), `update_project`, `duplicate_project`, `duplicate_objective`, `duplicate_task`, `keep_task`, `promote_idea`, `add_experience_idea`,
   `log_experience`, `set_objective_quarter`, `set_project_month`, `complete_project`, `create_meta_objective`,
   `update_meta_objective`, `set_objective_meta`, `add_project_dependency`, `reorder_objectives`, `create_tasks`,
   `set_week_focus`, `update_task`, `complete_task`, `reorder_tasks`, `log_done_task`, `add_inbox_task`, `propose_week_plan`,
