@@ -141,12 +141,13 @@ export const DELAY_HELP = (
     </span>
     <span className="tip-p">
       <b>Lecture de la barre</b>
-      <span className="tip-li">toute la barre = tout le travail du projet ; le % = la part faite ;</span>
-      <span className="tip-li">le trait = ce qui devrait être fait à ce jour ;</span>
       <span className="tip-li">
-        en bleu, l'avance au-delà du trait ; en orange, le retard jusqu'au trait ;
+        toute la barre = tout le travail du projet ; le remplissage = la part faite (%) ;
       </span>
-      <span className="tip-li">moins de 15 min d'écart : dans les temps.</span>
+      <span className="tip-li">le trait = ce qui devrait être fait à ce jour ;</span>
+      <span className="tip-li">bleu : le remplissage dépasse le trait (avance) ;</span>
+      <span className="tip-li">orange : il ne l'atteint pas (retard, l'écart est écrit) ;</span>
+      <span className="tip-li">vert : moins de 15 min d'écart, dans les temps.</span>
     </span>
     <span className="tip-p">
       <b>Replanifier</b> repart du jour du recalage et du temps déjà fait : le trait rejoint le fait.
@@ -181,10 +182,10 @@ export function DelayLegend({ progress = true }: { progress?: boolean }) {
       <span className="flex-none" style={{ width: DELAY_LABEL_W }} />
       {progress ? (
         <span className="flex-1 min-w-0 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-          <span className="flex items-center gap-1">{chip('var(--done-bar)')}fait</span>
           <span className="flex items-center gap-1" style={{ color: 'var(--ahead-text)' }}>
             {chip('var(--ahead-bar)')}avance
           </span>
+          <span className="flex items-center gap-1">{chip('var(--ontime-bar)')}dans les temps</span>
           <span className="flex items-center gap-1" style={{ color: 'var(--late-text)' }}>
             {chip('var(--late-bar)')}retard
           </span>
@@ -214,10 +215,10 @@ export const hasProgress = (p: DelayProgress) =>
 
 /**
  * Delay bar of a month project (R-06), one line: title, bar, value (user request 02/11/2026).
- * D-180 (user request 24/11/2026): the bar is the progress of the project, 0 → 100 % of its work; a vertical
- * line marks what the calendar expects at that date. Done beyond the line: blue (ahead); short of it: orange
- * up to the line (late), with the gap written. Less than 15 min apart: on time, nothing coloured.
- * D-139: a finished project is never « ahead »: greyed, full, « terminé ».
+ * D-180 (user request 24/11/2026): the bar is the progress of the project, filled from the left, 0 → 100 % of
+ * its work; a vertical line marks what the calendar expects at that date. One colour for the fill (user request
+ * 25/11/2026): blue past the line (ahead), orange short of it (late, the gap written), green within 15 min.
+ * D-139: a finished project is never « ahead »: full, greyed, « terminé ».
  * Without the progress (reports frozen before 1.5.0): the old centred bar, ±4 h = half bar.
  */
 export function DelayBar({
@@ -281,13 +282,11 @@ export function DelayBar({
       >
         {drawn || done ? (
           <div className="absolute inset-0 overflow-hidden" style={{ borderRadius: 999 }}>
-            {done
-              ? seg(0, 100, 'var(--done-bar)')
-              : onTime
-                ? seg(0, donePct, 'var(--done-bar)')
-                : late
-                  ? [seg(0, donePct, 'var(--done-bar)'), seg(donePct, expPct, 'var(--late-bar)')]
-                  : [seg(0, expPct, 'var(--done-bar)'), seg(expPct, donePct, 'var(--ahead-bar)')]}
+            {seg(
+              0,
+              donePct,
+              done || onTime ? 'var(--ontime-bar)' : late ? 'var(--late-bar)' : 'var(--ahead-bar)',
+            )}
           </div>
         ) : (
           !onTime && (

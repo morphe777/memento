@@ -25,7 +25,7 @@
   --late-bar: #e0a27a;
   --late-text: #9a4a17;
   --ahead-bar: #8fb3e8;
-  --done-bar: #c9c6ba; /* D-180: the work done, up to where the calendar expects it */
+  --ontime-bar: #93c9a9; /* D-180: a month project on time */
   --ahead-text: #2456a8;
   --warn: #e08a2e;
   --ok: #2f7a55;
@@ -65,7 +65,7 @@
   --late-bar: #b9784f;
   --late-text: #f0b08a;
   --ahead-bar: #5d86c4;
-  --done-bar: #5c5a53;
+  --ontime-bar: #4f9a73;
   --ahead-text: #a9c6f2;
   --warn: #f0a04b;
   --ok: #5cc08d;
