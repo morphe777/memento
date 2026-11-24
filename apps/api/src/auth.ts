@@ -192,12 +192,21 @@ export const listTokens = (db: Db) =>
     .from(schema.apiToken)
     .all();
 
-export function revokeToken(db: Db, id: string) {
+/**
+ * Revokes a token; D-183 (user request 24/11/2026): a token already revoked is deleted, which frees its name (a
+ * new token can take it). Two steps, so a live token is never deleted by mistake. Returns true when deleted.
+ */
+export function revokeToken(db: Db, id: string): boolean {
   // M-16: an unknown token is a 404, not a silent success.
-  if (!db.select().from(schema.apiToken).where(eq(schema.apiToken.id, id)).get())
-    throw new NotFoundError('token', id);
+  const t = db.select().from(schema.apiToken).where(eq(schema.apiToken.id, id)).get();
+  if (!t) throw new NotFoundError('token', id);
+  if (t.revokedAt) {
+    db.delete(schema.apiToken).where(eq(schema.apiToken.id, id)).run();
+    return true;
+  }
   db.update(schema.apiToken)
     .set({ revokedAt: new Date().toISOString() })
     .where(eq(schema.apiToken.id, id))
     .run();
+  return false;
 }

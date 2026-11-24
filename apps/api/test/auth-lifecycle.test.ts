@@ -71,4 +71,15 @@ describe('H-14 sessions and tokens end', () => {
       db.select().from(schema.apiToken).where(eq(schema.apiToken.id, t.id)).get()?.revokedAt,
     ).toBeTruthy();
   });
+
+  it('D-183: a revoked token can then be deleted, and its name used again', async () => {
+    const { db, app, login } = await start();
+    const t = createToken(db, 'iphone-raccourci', 'capture');
+    const cookie = await login();
+    const del = () => app.inject({ method: 'DELETE', url: `/api/v1/tokens/${t.id}`, headers: { cookie } });
+    expect((await del()).json()).toEqual({ ok: true, deleted: false }); // 1st: revoked, the line stays
+    expect((await del()).json()).toEqual({ ok: true, deleted: true }); // 2nd: the line is deleted
+    expect(db.select().from(schema.apiToken).where(eq(schema.apiToken.id, t.id)).get()).toBeUndefined();
+    expect(createToken(db, 'iphone-raccourci', 'capture').name).toBe('iphone-raccourci');
+  });
 });
