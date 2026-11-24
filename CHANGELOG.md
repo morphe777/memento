@@ -3,6 +3,11 @@
 Format : une entrée par version publiée (tag `vX.Y.Z`, image `morphe777/memento:X.Y.Z`). Les décisions détaillées
 sont dans [`docs/DECISIONS.md`](docs/DECISIONS.md).
 
+## 1.5.1 — 2026-11
+
+- **Barres d'avancement** : le remplissage part de la gauche, d'une seule couleur (bleu avance, vert dans les
+  temps, orange retard), sans gris en plus ; le trait reste « attendu à ce jour » (D-180).
+
 ## 1.5.0 — 2026-11
 
 - **Barres d'avancement** des projets du mois (Ma semaine, rapports) : la partie remplie = le travail fait (%), un
